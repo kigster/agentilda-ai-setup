@@ -8,15 +8,11 @@ After that we built the first proper email marketing platform with click and ope
 
 By that time I was already writing Java for a security company Red Seal Systems, with a strong team, but I didn't not like the commute to San Mateo, so after six months I switched to Blurb.com where with four otther engineers we learnt Ruby and Rails pre-1.0 and built a full e-commerce marketplace in less than 4 months, which included migration from a PHP-based storefront. I was blown away and instantly in love with a language that was so compact, and the framework that used convention over configuration (the exact opposite of Hibernate ORM which I hate).
 
-At the moment I am unemployed and working with my wife Elena on Equilibris: the real time tax estimation engine that she wants to raise money on. I am currently very stressed because we have dipped into credit cards and are out of cash. I am trying to actively interview after Fractional fired me because my boss could not deal with sometimes unreliable ADHD programmer.
+### State of Things as of August 2026
+
+At the moment I am still unemployed because I am working with my wife Elena on Equilibris: the real time tax estimation engine that we want to raise money on. I am currently very stressed because we have dipped into credit cards and are out of cash. I am trying to actively interview after Fractional fired me because my boss could not deal with sometimes unreliable ADHD programmer.
 
 The plan is to learn multi-agent programming, become a powerhouse of applied AI engineering and look for work after building the MVP for Equilibris.
-
-### Some less than fun things about me
-
-I have personal problems with motivation, time management, task consistency and todo lists, of which I have at least five separate apps. Same for note taking: I use Bear for quick note taking, rarely attachments and mostly markdown text. I use Evernote as an archive or scanned paper documents and some other notes. At some point I used it as a diary. I also use rarely DayOne diary app where I have mostly negative writings about past breakups and other sad stories.
-
-I have no routine, I don't exercise right now, and I have an 1 year old old baby named Anna Bella that I love to pieces but I am worried I don't give her enough attention. I always had such a high opinion of myself and now that I am 52, despite still measuring 132 on IQ test I currently feel like a failure.
 
 My wife is ramping up her business in tax preparation.
 
