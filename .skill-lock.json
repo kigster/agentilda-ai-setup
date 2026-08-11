@@ -1,0 +1,1351 @@
+{
+  "version": 3,
+  "skills": {
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/vercel-labs/agent-skills.git",
+      "skillPath": "skills/web-design-guidelines/SKILL.md",
+      "skillFolderHash": "3116f3e62dbd02b44a598b1aa690d2a8938e8f89",
+      "installedAt": "2026-02-13T01:51:35.628Z",
+      "updatedAt": "2026-02-13T01:51:35.628Z"
+    },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/vercel-labs/skills.git",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "skillFolderHash": "c2f31172b6f256272305a5e6e7228b258446899f",
+      "installedAt": "2026-02-13T01:51:40.341Z",
+      "updatedAt": "2026-02-13T01:51:40.341Z"
+    },
+    "frontend-design": {
+      "source": "anthropics/claude-code",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/anthropics/claude-code.git",
+      "skillPath": "plugins/frontend-design/skills/frontend-design/SKILL.md",
+      "skillFolderHash": "3bd61bab4d6b858c5d3af8adf14b917ce853e4c5",
+      "installedAt": "2026-02-13T01:52:34.232Z",
+      "updatedAt": "2026-02-13T01:58:12.409Z"
+    },
+    "theme-factory": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/anthropics/skills.git",
+      "skillPath": "skills/theme-factory/SKILL.md",
+      "skillFolderHash": "007940e80de6ae577a87b2b343b1a5eae715df2b",
+      "installedAt": "2026-02-13T01:56:52.207Z",
+      "updatedAt": "2026-02-13T01:56:52.207Z"
+    },
+    "mermaid-diagrams": {
+      "source": "softaworks/agent-toolkit",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/softaworks/agent-toolkit.git",
+      "skillPath": "skills/mermaid-diagrams/SKILL.md",
+      "skillFolderHash": "1b7a962715838d762fe4b34701d797d1d57496cd",
+      "installedAt": "2026-02-13T01:59:18.510Z",
+      "updatedAt": "2026-02-13T01:59:18.510Z"
+    },
+    "fastapi-python": {
+      "source": "mindrally/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mindrally/skills.git",
+      "skillPath": "fastapi-python/SKILL.md",
+      "skillFolderHash": "e56436295fccaae0044ec74983246e25e3e4d900",
+      "installedAt": "2026-06-15T19:33:38.834Z",
+      "updatedAt": "2026-06-15T19:33:38.834Z"
+    },
+    "ask-matt": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/ask-matt/SKILL.md",
+      "skillFolderHash": "affab2673308aa529084e8cfe19b8f335b8a1bce",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.277Z",
+      "updatedAt": "2026-07-10T03:38:48.277Z"
+    },
+    "code-review": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/code-review/SKILL.md",
+      "skillFolderHash": "9df6fdac9c49f20944411ee45e1582e718d9a657",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.279Z",
+      "updatedAt": "2026-07-10T03:38:48.279Z"
+    },
+    "codebase-design": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/codebase-design/SKILL.md",
+      "skillFolderHash": "c5dfc023e5ae146a4ceb9c509024f6ffe13db4a3",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.279Z",
+      "updatedAt": "2026-07-10T03:38:48.279Z"
+    },
+    "diagnosing-bugs": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/diagnosing-bugs/SKILL.md",
+      "skillFolderHash": "0ecacff09e31245c34727abe7cb7cff71f615a35",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.280Z",
+      "updatedAt": "2026-07-10T03:38:48.280Z"
+    },
+    "domain-modeling": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/domain-modeling/SKILL.md",
+      "skillFolderHash": "028a0e44b23909cbdd715aa00546d5c1c46ae4d6",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.281Z",
+      "updatedAt": "2026-07-10T03:38:48.281Z"
+    },
+    "grill-me": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/productivity/grill-me/SKILL.md",
+      "skillFolderHash": "8320e7b87f7b208f50ce165b1dd43d1e93c8e801",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.281Z",
+      "updatedAt": "2026-07-10T03:38:48.281Z"
+    },
+    "grill-with-docs": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/grill-with-docs/SKILL.md",
+      "skillFolderHash": "21adba95de7d93065d9fec725ddf37f871e01d05",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.282Z",
+      "updatedAt": "2026-07-10T03:38:48.282Z"
+    },
+    "grilling": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/productivity/grilling/SKILL.md",
+      "skillFolderHash": "0ace40ac10f5c0b1534324e4e109ebfa831fb361",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.282Z",
+      "updatedAt": "2026-07-10T03:38:48.282Z"
+    },
+    "handoff": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/productivity/handoff/SKILL.md",
+      "skillFolderHash": "3f7df8e717e41dfd6eacd03d47319a2e01248ffb",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.283Z",
+      "updatedAt": "2026-07-10T03:38:48.283Z"
+    },
+    "implement": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/implement/SKILL.md",
+      "skillFolderHash": "aa65990650368f020166bc28d6c05b5b34592c97",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.284Z",
+      "updatedAt": "2026-07-10T03:38:48.284Z"
+    },
+    "improve-codebase-architecture": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
+      "skillFolderHash": "e5beae48471adf87c513b5cbcb0ca347467546da",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.284Z",
+      "updatedAt": "2026-07-10T03:38:48.284Z"
+    },
+    "prototype": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/prototype/SKILL.md",
+      "skillFolderHash": "046ef7c3aae3ec1934b075b26dba1cf87c9b1d5a",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.285Z",
+      "updatedAt": "2026-07-10T03:38:48.285Z"
+    },
+    "research": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/research/SKILL.md",
+      "skillFolderHash": "06c848c1a1f3ae7afd88f040f73a8f3efee3494d",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.285Z",
+      "updatedAt": "2026-07-10T03:38:48.285Z"
+    },
+    "setup-matt-pocock-skills": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/setup-matt-pocock-skills/SKILL.md",
+      "skillFolderHash": "3676b312e22e6b615c24e575cf9382a6da3016dd",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.286Z",
+      "updatedAt": "2026-07-10T03:38:48.286Z"
+    },
+    "tdd": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/tdd/SKILL.md",
+      "skillFolderHash": "57e1bee887816ed2af745e5fd388f224f6e61ada",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.286Z",
+      "updatedAt": "2026-07-10T03:38:48.286Z"
+    },
+    "teach": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/productivity/teach/SKILL.md",
+      "skillFolderHash": "3b6a4245e2aaeacb308ba6175ab3e7f2e43b0c47",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.287Z",
+      "updatedAt": "2026-07-10T03:38:48.287Z"
+    },
+    "to-spec": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/to-spec/SKILL.md",
+      "skillFolderHash": "b2f449aa3da9578b08dcea74afd9adee20285586",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.287Z",
+      "updatedAt": "2026-07-10T03:38:48.287Z"
+    },
+    "to-tickets": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/to-tickets/SKILL.md",
+      "skillFolderHash": "b62245172caa8bcc75b490c665566e9ec999cda8",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.288Z",
+      "updatedAt": "2026-07-10T03:38:48.288Z"
+    },
+    "triage": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/triage/SKILL.md",
+      "skillFolderHash": "3e7a49151929d884365035cb322de099c15b33d3",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.288Z",
+      "updatedAt": "2026-07-10T03:38:48.288Z"
+    },
+    "wayfinder": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/wayfinder/SKILL.md",
+      "skillFolderHash": "83a96a4454c069148d8648fd21ca62a58ac15db2",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.288Z",
+      "updatedAt": "2026-07-10T03:38:48.288Z"
+    },
+    "writing-great-skills": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/productivity/writing-great-skills/SKILL.md",
+      "skillFolderHash": "c84411b360fad91b8756e60fa17fd5b5761422dd",
+      "pluginName": "mattpocock-skills",
+      "installedAt": "2026-07-10T03:38:48.289Z",
+      "updatedAt": "2026-07-10T03:38:48.289Z"
+    },
+    "claude-handoff": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/in-progress/claude-handoff/SKILL.md",
+      "skillFolderHash": "4da139722cd74d7be7927f9c70a107cd73e05b0e",
+      "installedAt": "2026-07-10T03:38:48.289Z",
+      "updatedAt": "2026-07-10T03:38:48.289Z"
+    },
+    "design-an-interface": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/deprecated/design-an-interface/SKILL.md",
+      "skillFolderHash": "59d5eca0fd23930d3d3821aa9da507f1bdb8a348",
+      "installedAt": "2026-07-10T03:38:48.290Z",
+      "updatedAt": "2026-07-10T03:38:48.290Z"
+    },
+    "edit-article": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/personal/edit-article/SKILL.md",
+      "skillFolderHash": "d3e748a6f03a951c46f4e3621a850346ede89a87",
+      "installedAt": "2026-07-10T03:38:48.291Z",
+      "updatedAt": "2026-07-10T03:38:48.291Z"
+    },
+    "git-guardrails-claude-code": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/misc/git-guardrails-claude-code/SKILL.md",
+      "skillFolderHash": "f02ae7c2de75270e93a200e11a7e466ece897353",
+      "installedAt": "2026-07-10T03:38:48.291Z",
+      "updatedAt": "2026-07-10T03:38:48.291Z"
+    },
+    "loop-me": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/in-progress/loop-me/SKILL.md",
+      "skillFolderHash": "1cec9deaf4f4ce1b99bd0750f1e34bc1100b1285",
+      "installedAt": "2026-07-10T03:38:48.291Z",
+      "updatedAt": "2026-07-10T03:38:48.291Z"
+    },
+    "migrate-to-shoehorn": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/misc/migrate-to-shoehorn/SKILL.md",
+      "skillFolderHash": "ad722b79beb1c1fb998678d498ba11760d53714b",
+      "installedAt": "2026-07-10T03:38:48.292Z",
+      "updatedAt": "2026-07-10T03:38:48.292Z"
+    },
+    "obsidian-vault": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/personal/obsidian-vault/SKILL.md",
+      "skillFolderHash": "1e814d168a215762391895aee58f4de06c8e3b7f",
+      "installedAt": "2026-07-10T03:38:48.292Z",
+      "updatedAt": "2026-07-10T03:38:48.292Z"
+    },
+    "qa": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/deprecated/qa/SKILL.md",
+      "skillFolderHash": "3eed5beeb18e77776349782ed087ee4560fd69c5",
+      "installedAt": "2026-07-10T03:38:48.293Z",
+      "updatedAt": "2026-07-10T03:38:48.293Z"
+    },
+    "request-refactor-plan": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/deprecated/request-refactor-plan/SKILL.md",
+      "skillFolderHash": "b0617c9cf69ac1e73a6b30f78c82ff81372079fd",
+      "installedAt": "2026-07-10T03:38:48.293Z",
+      "updatedAt": "2026-07-10T03:38:48.293Z"
+    },
+    "resolving-merge-conflicts": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/engineering/resolving-merge-conflicts/SKILL.md",
+      "skillFolderHash": "b601c90446f887a94ec68e5c2301a8919f949a2c",
+      "installedAt": "2026-07-10T03:38:48.293Z",
+      "updatedAt": "2026-07-10T03:38:48.293Z"
+    },
+    "scaffold-exercises": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/misc/scaffold-exercises/SKILL.md",
+      "skillFolderHash": "ef19ca90ec6645b23dc7e68601552ab795e3e6ee",
+      "installedAt": "2026-07-10T03:38:48.294Z",
+      "updatedAt": "2026-07-10T03:38:48.294Z"
+    },
+    "setup-pre-commit": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/misc/setup-pre-commit/SKILL.md",
+      "skillFolderHash": "5e6e9301b4826bd820401ea4114a797adb169f47",
+      "installedAt": "2026-07-10T03:38:48.294Z",
+      "updatedAt": "2026-07-10T03:38:48.294Z"
+    },
+    "ubiquitous-language": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/deprecated/ubiquitous-language/SKILL.md",
+      "skillFolderHash": "483fe10b01bed81b7eba7ee26df3f1bef9540c88",
+      "installedAt": "2026-07-10T03:38:48.294Z",
+      "updatedAt": "2026-07-10T03:38:48.294Z"
+    },
+    "wizard": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/in-progress/wizard/SKILL.md",
+      "skillFolderHash": "651aef462428e4370678733f8c9d9e3723f2cb07",
+      "installedAt": "2026-07-10T03:38:48.295Z",
+      "updatedAt": "2026-07-10T03:38:48.295Z"
+    },
+    "writing-beats": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/in-progress/writing-beats/SKILL.md",
+      "skillFolderHash": "28c4a84a44e1e44b28ce0c45e01892fa3691ace6",
+      "installedAt": "2026-07-10T03:38:48.295Z",
+      "updatedAt": "2026-07-10T03:38:48.295Z"
+    },
+    "writing-fragments": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/in-progress/writing-fragments/SKILL.md",
+      "skillFolderHash": "ae1380aef2436f7a7eb1d62aedcc5f2b8e71d6c5",
+      "installedAt": "2026-07-10T03:38:48.296Z",
+      "updatedAt": "2026-07-10T03:38:48.296Z"
+    },
+    "writing-shape": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/mattpocock/skills.git",
+      "skillPath": "skills/in-progress/writing-shape/SKILL.md",
+      "skillFolderHash": "2ca73419c5762c668a30ae0c160165b9baf5b133",
+      "installedAt": "2026-07-10T03:38:48.296Z",
+      "updatedAt": "2026-07-10T03:38:48.296Z"
+    },
+    "accessibility-audit": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/accessibility-audit/SKILL.md",
+      "skillFolderHash": "fb2481712de5273b1162b916019635ed15089fdf",
+      "installedAt": "2026-08-01T21:12:18.323Z",
+      "updatedAt": "2026-08-01T21:12:18.323Z"
+    },
+    "ads-creative-development": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/ads-creative-development/SKILL.md",
+      "skillFolderHash": "7b9cee52e140d9e7c483c2ff4871eb139275aa3d",
+      "installedAt": "2026-08-01T21:12:18.326Z",
+      "updatedAt": "2026-08-01T21:12:18.326Z"
+    },
+    "ads-performance-analytics": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/ads-performance-analytics/SKILL.md",
+      "skillFolderHash": "765b76b557185d70cbdb818af4813357c060188f",
+      "installedAt": "2026-08-01T21:12:18.328Z",
+      "updatedAt": "2026-08-01T21:12:18.328Z"
+    },
+    "after-action-report": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/after-action-report/SKILL.md",
+      "skillFolderHash": "370ecff6c65b287037192126e59872d7576610e2",
+      "installedAt": "2026-08-01T21:12:18.329Z",
+      "updatedAt": "2026-08-01T21:12:18.329Z"
+    },
+    "ai-content-collaboration": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/ai-content-collaboration/SKILL.md",
+      "skillFolderHash": "08f2210577eb987a3237f164d50a63c0939885d7",
+      "installedAt": "2026-08-01T21:12:18.330Z",
+      "updatedAt": "2026-08-01T21:12:18.330Z"
+    },
+    "analytics-strategy": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/analytics-strategy/SKILL.md",
+      "skillFolderHash": "d818acb2a7c37bbe3f56048ae9a65744777bfad8",
+      "installedAt": "2026-08-01T21:12:18.332Z",
+      "updatedAt": "2026-08-01T21:12:18.332Z"
+    },
+    "art-direction": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/art-direction/SKILL.md",
+      "skillFolderHash": "6f460fd71772eb9bc027954671e08d272aac99b2",
+      "installedAt": "2026-08-01T21:12:18.332Z",
+      "updatedAt": "2026-08-01T21:12:18.332Z"
+    },
+    "backup-and-disaster-recovery": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/backup-and-disaster-recovery/SKILL.md",
+      "skillFolderHash": "c4d49272b74a086f379c605796be702b19bff981",
+      "installedAt": "2026-08-01T21:12:18.333Z",
+      "updatedAt": "2026-08-01T21:12:18.333Z"
+    },
+    "beta-program-management": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/beta-program-management/SKILL.md",
+      "skillFolderHash": "c7d86b36219d274963ff5e2e7245a4a14940370d",
+      "installedAt": "2026-08-01T21:12:18.334Z",
+      "updatedAt": "2026-08-01T21:12:18.334Z"
+    },
+    "brand-archetype-system": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/brand-archetype-system/SKILL.md",
+      "skillFolderHash": "b51457d21120768b0d4bbb3593bd298d1ca514f3",
+      "installedAt": "2026-08-01T21:12:18.336Z",
+      "updatedAt": "2026-08-01T21:12:18.336Z"
+    },
+    "brand-discovery": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/brand-discovery/SKILL.md",
+      "skillFolderHash": "34aca7a0026c2bab78e4f07a3e718679efecada2",
+      "installedAt": "2026-08-01T21:12:18.337Z",
+      "updatedAt": "2026-08-01T21:12:18.337Z"
+    },
+    "brand-ideation": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/brand-ideation/SKILL.md",
+      "skillFolderHash": "dc8f5a321cd9f8a298e35ea58514cd8db2b1369b",
+      "installedAt": "2026-08-01T21:12:18.338Z",
+      "updatedAt": "2026-08-01T21:12:18.338Z"
+    },
+    "brand-identity": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/brand-identity/SKILL.md",
+      "skillFolderHash": "46373ec676f22bf2c15cdaaa5f3a27eeb6c1ee88",
+      "installedAt": "2026-08-01T21:12:18.339Z",
+      "updatedAt": "2026-08-01T21:12:18.339Z"
+    },
+    "brand-style-guide": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/brand-style-guide/SKILL.md",
+      "skillFolderHash": "e989d44ddd1c4dc59aabd3bf145b1fcb6ec1ab96",
+      "installedAt": "2026-08-01T21:12:18.340Z",
+      "updatedAt": "2026-08-01T21:12:18.340Z"
+    },
+    "brand-voice": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/brand-voice/SKILL.md",
+      "skillFolderHash": "4748f661123ebc1002acc953b70fb4ab8d804c49",
+      "installedAt": "2026-08-01T21:12:18.340Z",
+      "updatedAt": "2026-08-01T21:12:18.340Z"
+    },
+    "calculator-design": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/calculator-design/SKILL.md",
+      "skillFolderHash": "2970a7768ec22b7e653da6857863c4bf5538e934",
+      "installedAt": "2026-08-01T21:12:18.341Z",
+      "updatedAt": "2026-08-01T21:12:18.341Z"
+    },
+    "chatbot-flow-design": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/chatbot-flow-design/SKILL.md",
+      "skillFolderHash": "8fa7cc05ef0ba61de7eac0c073831f2009c4c983",
+      "installedAt": "2026-08-01T21:12:18.342Z",
+      "updatedAt": "2026-08-01T21:12:18.342Z"
+    },
+    "code-review-web": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/code-review-web/SKILL.md",
+      "skillFolderHash": "a2cb96d73a11c46fc991603f53ac05cf5fb22422",
+      "installedAt": "2026-08-01T21:12:18.342Z",
+      "updatedAt": "2026-08-01T21:12:18.342Z"
+    },
+    "comparison-tool-design": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/comparison-tool-design/SKILL.md",
+      "skillFolderHash": "a959b6321f3ab1fbbd01e828eb03e2cf16a55803",
+      "installedAt": "2026-08-01T21:12:18.343Z",
+      "updatedAt": "2026-08-01T21:12:18.343Z"
+    },
+    "competitor-experience-audit": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/competitor-experience-audit/SKILL.md",
+      "skillFolderHash": "29fd72849dce1fb9843d533e6b9e727a1aa3ba57",
+      "installedAt": "2026-08-01T21:12:18.344Z",
+      "updatedAt": "2026-08-01T21:12:18.344Z"
+    },
+    "content-and-copy": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/content-and-copy/SKILL.md",
+      "skillFolderHash": "28f77e6a39d95bbf4e8f854615157ae4d70ea782",
+      "installedAt": "2026-08-01T21:12:18.344Z",
+      "updatedAt": "2026-08-01T21:12:18.344Z"
+    },
+    "content-brief-authoring": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/content-brief-authoring/SKILL.md",
+      "skillFolderHash": "6508ee9ddeb01a27d029992679409a3627d7ff1a",
+      "installedAt": "2026-08-01T21:12:18.345Z",
+      "updatedAt": "2026-08-01T21:12:18.345Z"
+    },
+    "content-distribution": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/content-distribution/SKILL.md",
+      "skillFolderHash": "c3b1000387611ec3acef4e6c2f8a3c6d54097e05",
+      "installedAt": "2026-08-01T21:12:18.346Z",
+      "updatedAt": "2026-08-01T21:12:18.346Z"
+    },
+    "content-migration": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/content-migration/SKILL.md",
+      "skillFolderHash": "d8cd68c98a9bf57536ee7c6cdaec37158e320528",
+      "installedAt": "2026-08-01T21:12:18.346Z",
+      "updatedAt": "2026-08-01T21:12:18.346Z"
+    },
+    "content-refresh-system": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/content-refresh-system/SKILL.md",
+      "skillFolderHash": "858126beeefa4c26d959664bbbb3fdcfb694facb",
+      "installedAt": "2026-08-01T21:12:18.347Z",
+      "updatedAt": "2026-08-01T21:12:18.347Z"
+    },
+    "content-repurposing": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/content-repurposing/SKILL.md",
+      "skillFolderHash": "73b191602cbebcf6361f4dc1af7bb6fa6cd47e1a",
+      "installedAt": "2026-08-01T21:12:18.348Z",
+      "updatedAt": "2026-08-01T21:12:18.348Z"
+    },
+    "cost-optimization": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/cost-optimization/SKILL.md",
+      "skillFolderHash": "9a82fa01e87a1d2d27bfaf3306a228b8aa7f9aeb",
+      "installedAt": "2026-08-01T21:12:18.348Z",
+      "updatedAt": "2026-08-01T21:12:18.348Z"
+    },
+    "creative-brief": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/creative-brief/SKILL.md",
+      "skillFolderHash": "4dff8fcfd96ef8ad095c64bf571a828e6916111c",
+      "installedAt": "2026-08-01T21:12:18.349Z",
+      "updatedAt": "2026-08-01T21:12:18.349Z"
+    },
+    "creative-brief-selector": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/creative-brief-selector/SKILL.md",
+      "skillFolderHash": "ddb5e8ba3ab321f686e4bc37bde2df125ec212e7",
+      "installedAt": "2026-08-01T21:12:18.350Z",
+      "updatedAt": "2026-08-01T21:12:18.350Z"
+    },
+    "creative-direction": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/creative-direction/SKILL.md",
+      "skillFolderHash": "4e087c021f02022dac39dec176e52a2ed4c8b55f",
+      "installedAt": "2026-08-01T21:12:18.351Z",
+      "updatedAt": "2026-08-01T21:12:18.351Z"
+    },
+    "cro-optimization": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/cro-optimization/SKILL.md",
+      "skillFolderHash": "4435e6d9b6ef9ca4ce1427ef3dfb9c29370daa5e",
+      "installedAt": "2026-08-01T21:12:18.352Z",
+      "updatedAt": "2026-08-01T21:12:18.352Z"
+    },
+    "data-warehouse-experimentation": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/data-warehouse-experimentation/SKILL.md",
+      "skillFolderHash": "ee5e332bb6ec5d2ca1eae30760f81b05669effa7",
+      "installedAt": "2026-08-01T21:12:18.354Z",
+      "updatedAt": "2026-08-01T21:12:18.354Z"
+    },
+    "dependency-management": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/dependency-management/SKILL.md",
+      "skillFolderHash": "b78ecc26dc0196f121cc90374aa347c9abeed2e4",
+      "installedAt": "2026-08-01T21:12:18.356Z",
+      "updatedAt": "2026-08-01T21:12:18.356Z"
+    },
+    "design-standards": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/design-standards/SKILL.md",
+      "skillFolderHash": "e67f23f32e53de786bae1825d61f90fc1199cd7c",
+      "installedAt": "2026-08-01T21:12:18.356Z",
+      "updatedAt": "2026-08-01T21:12:18.356Z"
+    },
+    "design-system": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/design-system/SKILL.md",
+      "skillFolderHash": "930382e0fb2037daf314b502e2038c17759c2e02",
+      "installedAt": "2026-08-01T21:12:18.357Z",
+      "updatedAt": "2026-08-01T21:12:18.357Z"
+    },
+    "discovery-research-synthesis": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/discovery-research-synthesis/SKILL.md",
+      "skillFolderHash": "f9cb552de697efbbe798fc1d1441c1d6c6ab9877",
+      "installedAt": "2026-08-01T21:12:18.357Z",
+      "updatedAt": "2026-08-01T21:12:18.357Z"
+    },
+    "documentation-strategy": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/documentation-strategy/SKILL.md",
+      "skillFolderHash": "507aeb9e27fb3526290724dd70ac4f9b5f487f95",
+      "installedAt": "2026-08-01T21:12:18.358Z",
+      "updatedAt": "2026-08-01T21:12:18.358Z"
+    },
+    "domain-strategy": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/domain-strategy/SKILL.md",
+      "skillFolderHash": "103be355cd828cfde1cf368e1c734a1c196878e3",
+      "installedAt": "2026-08-01T21:12:18.358Z",
+      "updatedAt": "2026-08-01T21:12:18.358Z"
+    },
+    "editorial-qa": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/editorial-qa/SKILL.md",
+      "skillFolderHash": "12f6cd65825733952274f80f43389e8c1e1cae75",
+      "installedAt": "2026-08-01T21:12:18.359Z",
+      "updatedAt": "2026-08-01T21:12:18.359Z"
+    },
+    "email-deliverability": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/email-deliverability/SKILL.md",
+      "skillFolderHash": "b1c46c8a7614e9c26b8b2ca492f3aa1aec1e8395",
+      "installedAt": "2026-08-01T21:12:18.359Z",
+      "updatedAt": "2026-08-01T21:12:18.359Z"
+    },
+    "email-sequences": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/email-sequences/SKILL.md",
+      "skillFolderHash": "b78dcae885d08e42f1290fe743a2e3db76e70a31",
+      "installedAt": "2026-08-01T21:12:18.360Z",
+      "updatedAt": "2026-08-01T21:12:18.360Z"
+    },
+    "evidence-based-reviews": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/evidence-based-reviews/SKILL.md",
+      "skillFolderHash": "a7700796987d6275a3e1a905b34ca2f79061244d",
+      "installedAt": "2026-08-01T21:12:18.361Z",
+      "updatedAt": "2026-08-01T21:12:18.361Z"
+    },
+    "experiment-design": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/experiment-design/SKILL.md",
+      "skillFolderHash": "99db70b360ab15f97b29daee58afe0df4a415f4d",
+      "installedAt": "2026-08-01T21:12:18.361Z",
+      "updatedAt": "2026-08-01T21:12:18.361Z"
+    },
+    "experimentation-analytics": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/experimentation-analytics/SKILL.md",
+      "skillFolderHash": "ece76df85a8534a51a31f43c761ef9c8853bb605",
+      "installedAt": "2026-08-01T21:12:18.362Z",
+      "updatedAt": "2026-08-01T21:12:18.362Z"
+    },
+    "experimentation-platform-orchestrator": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/experimentation-platform-orchestrator/SKILL.md",
+      "skillFolderHash": "f3ac2ce208e3f8fa532ed28ce64e46d3c7035cda",
+      "installedAt": "2026-08-01T21:12:18.362Z",
+      "updatedAt": "2026-08-01T21:12:18.362Z"
+    },
+    "feature-flagging": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/feature-flagging/SKILL.md",
+      "skillFolderHash": "3ef2d8e81e69a65578538dcb09d9d8c2833b47b9",
+      "installedAt": "2026-08-01T21:12:18.363Z",
+      "updatedAt": "2026-08-01T21:12:18.363Z"
+    },
+    "feature-launch-playbook": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/feature-launch-playbook/SKILL.md",
+      "skillFolderHash": "138ad72003ae7c00e5edff01081eb33c28a1f49f",
+      "installedAt": "2026-08-01T21:12:18.363Z",
+      "updatedAt": "2026-08-01T21:12:18.363Z"
+    },
+    "form-strategy": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/form-strategy/SKILL.md",
+      "skillFolderHash": "553f501c3588186147c1965429e3cf04ecef6e58",
+      "installedAt": "2026-08-01T21:12:18.364Z",
+      "updatedAt": "2026-08-01T21:12:18.364Z"
+    },
+    "frontend-component-build": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/frontend-component-build/SKILL.md",
+      "skillFolderHash": "c5ff3c558501311e8849673875df8651551287c5",
+      "installedAt": "2026-08-01T21:12:18.365Z",
+      "updatedAt": "2026-08-01T21:12:18.365Z"
+    },
+    "funnel-flow-architecture": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/funnel-flow-architecture/SKILL.md",
+      "skillFolderHash": "de9459e93f75e708e765e1b665c2bf486abcc5a7",
+      "installedAt": "2026-08-01T21:12:18.365Z",
+      "updatedAt": "2026-08-01T21:12:18.365Z"
+    },
+    "incident-response": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/incident-response/SKILL.md",
+      "skillFolderHash": "7d16d242b42218b7d113b66fdf0cd425150df5c1",
+      "installedAt": "2026-08-01T21:12:18.366Z",
+      "updatedAt": "2026-08-01T21:12:18.366Z"
+    },
+    "information-architecture": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/information-architecture/SKILL.md",
+      "skillFolderHash": "346314801fec3969e1ac177edd9882228166fdfd",
+      "installedAt": "2026-08-01T21:12:18.366Z",
+      "updatedAt": "2026-08-01T21:12:18.366Z"
+    },
+    "integration-orchestrator": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/integration-orchestrator/SKILL.md",
+      "skillFolderHash": "6ea3910923fd6c599c5fc1d047dc949e805ff3ba",
+      "installedAt": "2026-08-01T21:12:18.367Z",
+      "updatedAt": "2026-08-01T21:12:18.367Z"
+    },
+    "interactive-product-tour": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/interactive-product-tour/SKILL.md",
+      "skillFolderHash": "213575e302c2d4bff554596b3a4c6930aa35f136",
+      "installedAt": "2026-08-01T21:12:18.367Z",
+      "updatedAt": "2026-08-01T21:12:18.367Z"
+    },
+    "internationalization": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/internationalization/SKILL.md",
+      "skillFolderHash": "0ae9dade6b3387ba2b743e174e68a98b7582ee05",
+      "installedAt": "2026-08-01T21:12:18.368Z",
+      "updatedAt": "2026-08-01T21:12:18.368Z"
+    },
+    "journey-mapping": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/journey-mapping/SKILL.md",
+      "skillFolderHash": "dda78540950646b74f87e78b9b53e67ec5f93ae1",
+      "installedAt": "2026-08-01T21:12:18.368Z",
+      "updatedAt": "2026-08-01T21:12:18.368Z"
+    },
+    "jtbd-framing": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/jtbd-framing/SKILL.md",
+      "skillFolderHash": "0f9b9180e6448c8a43a443e1a2ba4e6873fe19e9",
+      "installedAt": "2026-08-01T21:12:18.369Z",
+      "updatedAt": "2026-08-01T21:12:18.369Z"
+    },
+    "landing-page-copy": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/landing-page-copy/SKILL.md",
+      "skillFolderHash": "3c8271b963ce874b5bfc17af37a1424f6dda4dc1",
+      "installedAt": "2026-08-01T21:12:18.369Z",
+      "updatedAt": "2026-08-01T21:12:18.369Z"
+    },
+    "launch-runbook": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/launch-runbook/SKILL.md",
+      "skillFolderHash": "06011a04f8f525a48f1ec3c6d87fa15addf5f9fb",
+      "installedAt": "2026-08-01T21:12:18.370Z",
+      "updatedAt": "2026-08-01T21:12:18.370Z"
+    },
+    "lead-magnet-design": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/lead-magnet-design/SKILL.md",
+      "skillFolderHash": "61a971be047b183b9c505a569244eb203cb59836",
+      "installedAt": "2026-08-01T21:12:18.371Z",
+      "updatedAt": "2026-08-01T21:12:18.371Z"
+    },
+    "logo-design": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/logo-design/SKILL.md",
+      "skillFolderHash": "a711a0e756300c287b454f08d13cbf4c8b586f2f",
+      "installedAt": "2026-08-01T21:12:18.371Z",
+      "updatedAt": "2026-08-01T21:12:18.371Z"
+    },
+    "long-form-content-frameworks": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/long-form-content-frameworks/SKILL.md",
+      "skillFolderHash": "377d4e61dc6b525fd451d14b42fb0d8912822e91",
+      "installedAt": "2026-08-01T21:12:18.372Z",
+      "updatedAt": "2026-08-01T21:12:18.372Z"
+    },
+    "media-asset-management": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/media-asset-management/SKILL.md",
+      "skillFolderHash": "39e5378c45f9369c9737251633f61e65e112e855",
+      "installedAt": "2026-08-01T21:12:18.372Z",
+      "updatedAt": "2026-08-01T21:12:18.372Z"
+    },
+    "monitoring-and-alerting": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/monitoring-and-alerting/SKILL.md",
+      "skillFolderHash": "8d9ede65d2805fca225dff3ea04e9bd4eca7a5ec",
+      "installedAt": "2026-08-01T21:12:18.373Z",
+      "updatedAt": "2026-08-01T21:12:18.373Z"
+    },
+    "multi-step-form-design": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/multi-step-form-design/SKILL.md",
+      "skillFolderHash": "5f88ae1ce27e77f22f6461f9de22d00b9c7c6b5b",
+      "installedAt": "2026-08-01T21:12:18.373Z",
+      "updatedAt": "2026-08-01T21:12:18.373Z"
+    },
+    "okr-design": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/okr-design/SKILL.md",
+      "skillFolderHash": "33541e0344ebb4585441423e07fcbec2fb0c9f16",
+      "installedAt": "2026-08-01T21:12:18.374Z",
+      "updatedAt": "2026-08-01T21:12:18.374Z"
+    },
+    "onboarding-wizard-design": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/onboarding-wizard-design/SKILL.md",
+      "skillFolderHash": "412b3b6d0b05affee9f049a827961ecdaa2c09ac",
+      "installedAt": "2026-08-01T21:12:18.374Z",
+      "updatedAt": "2026-08-01T21:12:18.374Z"
+    },
+    "paid-media-strategy": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/paid-media-strategy/SKILL.md",
+      "skillFolderHash": "d79bb137bb333a7905a8bed631b6b04475de163e",
+      "installedAt": "2026-08-01T21:12:18.375Z",
+      "updatedAt": "2026-08-01T21:12:18.375Z"
+    },
+    "performance-optimization": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/performance-optimization/SKILL.md",
+      "skillFolderHash": "ffe10eb475e78b21b62e4c10d7b837f43e1d436f",
+      "installedAt": "2026-08-01T21:12:18.375Z",
+      "updatedAt": "2026-08-01T21:12:18.375Z"
+    },
+    "pillar-content-architecture": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/pillar-content-architecture/SKILL.md",
+      "skillFolderHash": "8887ba102368735be3dc55b84c9b6c4084bc858a",
+      "installedAt": "2026-08-01T21:12:18.376Z",
+      "updatedAt": "2026-08-01T21:12:18.376Z"
+    },
+    "pm-spec-writing": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/pm-spec-writing/SKILL.md",
+      "skillFolderHash": "1cce3bb5def275fb8a9e0888cc7492fd9ffdcb0d",
+      "installedAt": "2026-08-01T21:12:18.376Z",
+      "updatedAt": "2026-08-01T21:12:18.376Z"
+    },
+    "product-analytics-setup": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/product-analytics-setup/SKILL.md",
+      "skillFolderHash": "e9211799a6f66d381306814cd2c7f21ae7854825",
+      "installedAt": "2026-08-01T21:12:18.377Z",
+      "updatedAt": "2026-08-01T21:12:18.377Z"
+    },
+    "product-configurator-design": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/product-configurator-design/SKILL.md",
+      "skillFolderHash": "73671b8f23cd53796f6570dbd10c29ad56b39330",
+      "installedAt": "2026-08-01T21:12:18.377Z",
+      "updatedAt": "2026-08-01T21:12:18.377Z"
+    },
+    "qa-testing": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/qa-testing/SKILL.md",
+      "skillFolderHash": "c87d426cb047174bb7cbba41c2e4e0d08d7039c1",
+      "installedAt": "2026-08-01T21:12:18.378Z",
+      "updatedAt": "2026-08-01T21:12:18.378Z"
+    },
+    "quiz-and-assessment-design": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/quiz-and-assessment-design/SKILL.md",
+      "skillFolderHash": "b02577d2204d7446e6238f136201b4743615829b",
+      "installedAt": "2026-08-01T21:12:18.378Z",
+      "updatedAt": "2026-08-01T21:12:18.378Z"
+    },
+    "roadmap-planning": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/roadmap-planning/SKILL.md",
+      "skillFolderHash": "98dc6c776fe16e075e5cac0f67f8c5fb642977bf",
+      "installedAt": "2026-08-01T21:12:18.379Z",
+      "updatedAt": "2026-08-01T21:12:18.379Z"
+    },
+    "scheduler-and-booking-design": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/scheduler-and-booking-design/SKILL.md",
+      "skillFolderHash": "b8b618c83725634e5a5d238fd0c25c6941106629",
+      "installedAt": "2026-08-01T21:12:18.380Z",
+      "updatedAt": "2026-08-01T21:12:18.380Z"
+    },
+    "security-baseline": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/security-baseline/SKILL.md",
+      "skillFolderHash": "a2306ef13771403c91b8746fafe53f1306f55929",
+      "installedAt": "2026-08-01T21:12:18.380Z",
+      "updatedAt": "2026-08-01T21:12:18.380Z"
+    },
+    "seo-aeo-geo": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/seo-aeo-geo/SKILL.md",
+      "skillFolderHash": "de70db3065fb8508ca1b5a346dc875e0bee6f598",
+      "installedAt": "2026-08-01T21:12:18.381Z",
+      "updatedAt": "2026-08-01T21:12:18.381Z"
+    },
+    "seo-audit-orchestration": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/seo-audit-orchestration/SKILL.md",
+      "skillFolderHash": "b9e9f77986f17ab9b2f18727958bd2b23b10e7cb",
+      "installedAt": "2026-08-01T21:12:18.381Z",
+      "updatedAt": "2026-08-01T21:12:18.381Z"
+    },
+    "seo-backlink-audit": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/seo-backlink-audit/SKILL.md",
+      "skillFolderHash": "58e46abb531ce1833755a17ce7b1cb4d5d4b43f4",
+      "installedAt": "2026-08-01T21:12:18.382Z",
+      "updatedAt": "2026-08-01T21:12:18.382Z"
+    },
+    "seo-competitor": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/seo-competitor/SKILL.md",
+      "skillFolderHash": "078c9a4d84154138966609a8d41139e1babf1c98",
+      "installedAt": "2026-08-01T21:12:18.382Z",
+      "updatedAt": "2026-08-01T21:12:18.382Z"
+    },
+    "seo-content-audit": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/seo-content-audit/SKILL.md",
+      "skillFolderHash": "4c1483c428439efa43969fb17bcb0c7c02f04c92",
+      "installedAt": "2026-08-01T21:12:18.383Z",
+      "updatedAt": "2026-08-01T21:12:18.383Z"
+    },
+    "seo-content-gap-audit": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/seo-content-gap-audit/SKILL.md",
+      "skillFolderHash": "530171724563f955d5271f5f450467f889cde458",
+      "installedAt": "2026-08-01T21:12:18.383Z",
+      "updatedAt": "2026-08-01T21:12:18.383Z"
+    },
+    "seo-keyword": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/seo-keyword/SKILL.md",
+      "skillFolderHash": "a770f4c5a2d49854b8d5f83281b5799a7e5a93c7",
+      "installedAt": "2026-08-01T21:12:18.384Z",
+      "updatedAt": "2026-08-01T21:12:18.384Z"
+    },
+    "seo-keyword-gap-audit": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/seo-keyword-gap-audit/SKILL.md",
+      "skillFolderHash": "9375aee9ea8a9d9877fe1a33969223386d78f85d",
+      "installedAt": "2026-08-01T21:12:18.384Z",
+      "updatedAt": "2026-08-01T21:12:18.384Z"
+    },
+    "seo-offpage": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/seo-offpage/SKILL.md",
+      "skillFolderHash": "e314ed3ceb0412fad408119347b699884a69d571",
+      "installedAt": "2026-08-01T21:12:18.385Z",
+      "updatedAt": "2026-08-01T21:12:18.385Z"
+    },
+    "seo-onpage": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/seo-onpage/SKILL.md",
+      "skillFolderHash": "5a555b6e1021e611c2d499730ef0585859efecba",
+      "installedAt": "2026-08-01T21:12:18.385Z",
+      "updatedAt": "2026-08-01T21:12:18.385Z"
+    },
+    "seo-rank-tracking": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/seo-rank-tracking/SKILL.md",
+      "skillFolderHash": "bd6c2845514e75fc5b5009f041ba5455153d7012",
+      "installedAt": "2026-08-01T21:12:18.386Z",
+      "updatedAt": "2026-08-01T21:12:18.386Z"
+    },
+    "seo-site-health-audit": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/seo-site-health-audit/SKILL.md",
+      "skillFolderHash": "f977c323c264d9fc0ae5304eda4d94581d57c967",
+      "installedAt": "2026-08-01T21:12:18.386Z",
+      "updatedAt": "2026-08-01T21:12:18.386Z"
+    },
+    "seo-technical": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/seo-technical/SKILL.md",
+      "skillFolderHash": "284435dea419bedaeafaebd9264420cf4298c915",
+      "installedAt": "2026-08-01T21:12:18.387Z",
+      "updatedAt": "2026-08-01T21:12:18.387Z"
+    },
+    "seo-traffic-diagnosis": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/seo-traffic-diagnosis/SKILL.md",
+      "skillFolderHash": "2e2ac701f56871e84d31a7be1aa9ca8719331697",
+      "installedAt": "2026-08-01T21:12:18.387Z",
+      "updatedAt": "2026-08-01T21:12:18.387Z"
+    },
+    "skill-creation-walkthrough": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/skill-creation-walkthrough/SKILL.md",
+      "skillFolderHash": "6ecfb19d7a7aed237e4cb27ce0601954dc548817",
+      "installedAt": "2026-08-01T21:12:18.388Z",
+      "updatedAt": "2026-08-01T21:12:18.388Z"
+    },
+    "stakeholder-communication": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/stakeholder-communication/SKILL.md",
+      "skillFolderHash": "c5d2e7bb23f616e00f96b115e5889013e03322eb",
+      "installedAt": "2026-08-01T21:12:18.388Z",
+      "updatedAt": "2026-08-01T21:12:18.388Z"
+    },
+    "team-onboarding-playbook": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/team-onboarding-playbook/SKILL.md",
+      "skillFolderHash": "f365977daeee3a011a2f3f74cee05d72047b3a43",
+      "installedAt": "2026-08-01T21:12:18.389Z",
+      "updatedAt": "2026-08-01T21:12:18.389Z"
+    },
+    "upgrade-flow-design": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/upgrade-flow-design/SKILL.md",
+      "skillFolderHash": "b9e659e1fc8103704e2d56fc92aab19377b5d045",
+      "installedAt": "2026-08-01T21:12:18.389Z",
+      "updatedAt": "2026-08-01T21:12:18.389Z"
+    },
+    "usability-testing": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/usability-testing/SKILL.md",
+      "skillFolderHash": "b5884139596f0eab25bfa82ab166fc87c037403a",
+      "installedAt": "2026-08-01T21:12:18.389Z",
+      "updatedAt": "2026-08-01T21:12:18.389Z"
+    },
+    "user-feedback-aggregation": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/user-feedback-aggregation/SKILL.md",
+      "skillFolderHash": "53b21d4a92bc8c2082780f423ecd476684a4c19e",
+      "installedAt": "2026-08-01T21:12:18.390Z",
+      "updatedAt": "2026-08-01T21:12:18.390Z"
+    },
+    "ux-research": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/ux-research/SKILL.md",
+      "skillFolderHash": "8260713e17c07d33550e87ff3e52dfe1feb8710f",
+      "installedAt": "2026-08-01T21:12:18.390Z",
+      "updatedAt": "2026-08-01T21:12:18.390Z"
+    },
+    "vendor-evaluation": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/vendor-evaluation/SKILL.md",
+      "skillFolderHash": "5907e92dde992952bb0ddf7442cb5e26a2f13ad2",
+      "installedAt": "2026-08-01T21:12:18.391Z",
+      "updatedAt": "2026-08-01T21:12:18.391Z"
+    },
+    "vertical-site-conventions": {
+      "source": "rampstackco/claude-skills",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/rampstackco/claude-skills.git",
+      "skillPath": "skills/vertical-site-conventions/SKILL.md",
+      "skillFolderHash": "05f9a6b7d375d78554319bba36604c2f2eb35306",
+      "installedAt": "2026-08-01T21:12:18.391Z",
+      "updatedAt": "2026-08-01T21:12:18.391Z"
+    }
+  },
+  "dismissed": {
+    "findSkillsPrompt": true
+  },
+  "lastSelectedAgents": [
+    "amp",
+    "antigravity",
+    "antigravity-cli",
+    "cline",
+    "codex",
+    "cursor",
+    "deepagents",
+    "gemini-cli",
+    "github-copilot",
+    "kimi-code-cli",
+    "opencode",
+    "warp",
+    "zed",
+    "claude-code",
+    "openclaw"
+  ]
+}

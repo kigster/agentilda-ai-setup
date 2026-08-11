@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "nginx-configuration",
+  "owner": "karchtho",
+  "repo": "my-claude-marketplace",
+  "path": "bundles/infra-bundle/skills/nginx-configuration",
+  "branch": "main",
+  "sha": "84ddecfc26f0b32a4741a11ca4920e1e9180173c",
+  "source": "manual"
+}

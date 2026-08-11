@@ -1,0 +1,20 @@
+{
+  "name": "plugins-cli",
+  "interface": {
+    "displayName": "Plugins CLI"
+  },
+  "plugins": [
+    {
+      "name": "prisma",
+      "source": {
+        "source": "local",
+        "path": "./.codex/plugins/cache/prisma/prisma/1cb9b24422d8346274b2d7404b76c9f85828ef10"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Coding"
+    }
+  ]
+}
