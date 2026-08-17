@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+#
+# create-plan-folder — create the next numbered plan folder
+#
+#   create-plan-folder [-D <dir>] <status> <topic words...>
+#
+# Prints the created path on stdout (so `cd "$(create-plan-folder ...)"` works);
+# all chatter goes to stderr.
+#
+# Portable to bash 3.2 — the one Apple still ships in /bin/bash.
+
+set -eo pipefail
+
+usage() {
+  echo -e "
+${bldcyn}USAGE: 
+  ${txtylw}create-plan-folder [-D <dir>] <status> <topic words...>${clr}
+
+${bldcyn}WHERE:
+  -D <dir>   Enclosing directory (default: ".")
+
+${txtgren}DESCRIPTION:${clr}
+  Status is a name or the emoji itself:
+
+  white  | spec               ⚪️   spec.md only, not yet planned
+  blue   | planned  | plan    🔵   spec.md + plan.md
+  yellow | open     | wip     🟡   PR raised, not yet merged
+  green  | done               🟢   all PRs merged
+  red    | declined           🔴   decided never
+  hole   | blocked            ⭕️   needs a human decision (write blockers.md)
+  brown  | later    | defer   🟤   deliberately deferred (state the trigger)
+  purple | merged             🟣   PR-level status; see note below
+
+${bldcyn}EXAMPLES:${clr}
+  ${bldylw}create-plan-folder blue update sopsy with two new commands
+  create-plan-folder -D .plans white identity subcommand group${clr}
+"
+  exit 64
+}
+
+[ $# -eq 0 ] && usage
+case "${1:-}" in -h|--help|help) usage ;; esac
+
+dir="."
+if [ "${1:-}" = "-D" ]; then
+  [ $# -ge 2 ] || usage
+  dir="$2"
+  shift 2
+fi
+
+[ $# -ge 2 ] || usage
+
+# ---------------------------------------------------------------- status ----
+# LC_ALL=C keeps tr byte-safe so multi-byte emoji pass through untouched.
+case "$(printf '%s' "$1" | LC_ALL=C tr 'A-Z' 'a-z')" in
+  white|spec|'⚪️'|'⚪')             emoji='⚪️' ;;
+  blue|planned|plan|'🔵')           emoji='🔵' ;;
+  yellow|open|wip|'🟡')             emoji='🟡' ;;
+  green|done|'🟢')                  emoji='🟢' ;;
+  red|declined|'🔴')                emoji='🔴' ;;
+  hole|blocked|'⭕️'|'⭕')            emoji='⭕️' ;;
+  brown|later|defer|deferred|'🟤')  emoji='🟤' ;;
+  purple|merged|'🟣')               emoji='🟣' ;;
+  *)
+    printf 'create-plan-folder: unknown status %s\n\n' "$1" >&2
+    usage
+    ;;
+esac
+shift
+
+# ------------------------------------------------------------- next index ----
+[ -d "$dir" ] || {
+  printf 'create-plan-folder: not a directory: %s\n' "$dir" >&2
+  exit 66
+}
+
+last=0
+for path in "$dir"/[0-9][0-9][0-9]*; do
+  [ -d "$path" ] || continue          # also skips the unexpanded glob
+  base=${path##*/}
+  digits=${base%%[!0-9]*}             # leading run of digits, nothing else
+  [ -n "$digits" ] || continue
+  n=$((10#$digits))                   # 10# so 008 isn't read as octal
+  if [ "$n" -gt "$last" ]; then last=$n; fi
+done
+
+next=$(printf '%03d' $((last + 1)))
+
+# ------------------------------------------------------------------ slug ----
+slug=$(
+  printf '%s' "$*" \
+    | LC_ALL=C tr 'A-Z' 'a-z' \
+    | LC_ALL=C tr -c 'a-z0-9' '-' \
+    | LC_ALL=C tr -s '-' \
+    | sed -e 's/^-*//' -e 's/-*$//'
+)
+
+[ -n "$slug" ] || {
+  printf 'create-plan-folder: topic produced an empty slug\n' >&2
+  exit 65
+}
+
+# --------------------------------------------------------------- create -----
+target="$dir/${next}-${emoji}-${slug}"
+
+if [ -e "$target" ]; then
+  printf 'create-plan-folder: already exists: %s\n' "$target" >&2
+  exit 73
+fi
+
+mkdir -p "$target"
+# printf 'created %s\n' "$target" >&2
+printf '%s\n' "$target"

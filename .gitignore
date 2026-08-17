@@ -1,2 +1,4 @@
 **/.DS_Store
-settings.local.json
+**/settings.local.json
+coverage/
+.rspec_status

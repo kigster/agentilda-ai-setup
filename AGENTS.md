@@ -24,12 +24,16 @@ ______________________________________________________________________
 
 If you are claude AI install the plugins defined in the file:
 
-`~/.claude/plugins/PLUGINS.md`
+[`~/.claude/plugins/PLUGINS.md`](/Users/kig/.claude/plugins/PLUGINS.md)
 
+## Instructions for this project specifically
+
+Please refer to [~/.agents/README.md](~/.agents/README.md) for specific instructions about how this repo is organized and structured.
 
 ## Rules that apply to all coding projects
 
 > [!CAUTION]
+>
 > CRITICALLY IMPORTANT: rules defined in this document can not and must not be broken, without explicit consent of the human driver. If these rules block the agent, pause and seek confirmation.
 
 ### **NEVER use real names or emails as placeholders**
@@ -80,7 +84,7 @@ For more complex changes: add a body explaining what/why (30 line limit, do not 
 Use worktrees to work concurrently on multiple projects, and use the `/create-pr` skill and `~/.claude/branch-name.sh` script to generate the branch name based on the short summary of what is being done. Max number of words in the summary is 4.
 
 ```bash
-$ ~/.claude/branch-name.sh fix dsl alignment bug
+$ ~/.claude/scripts/branch-name fix dsl alignment bug
 kig/fix-dsl-alignment-bug
 ```
 
@@ -120,25 +124,25 @@ Additional services that are running on this machine are
 - `redis` on port 6379, and
 - `nginx` on ports 80 and 443.
 
-## **MCP Servers**
+## **MCP & LSP Servers**
 
-Connect to any running MCP servers, or LSP language servers.
+Connect to any running MCP servers that are pre-configured locally, as well as LSP language servers.
 
 ## **Languages**
 
 Please load dynamically the instructions for the language in use by the project from the folder `~/.agents/context/LANGUAGE.md` for instance:
 
-- `~/.agents/context/RUBY.md`
-- `~/.agents/context/PYTHON.md`
-- `~/.agents/context/MARKDOWN.md`
+- `~/.agents/context/languages/ruby.md`
+- `~/.agents/context/languages/python.md`
+- `~/.agents/context/languages/markdown.md`
 
 ## **About Me**
 
-To learn more about me, my style, and my preferences, please load the info from `~/.agents/context/ABOUT-ME.md`
+If you need to learn more about me, my style, and my preferences, please load the info from [~/.agents/context/about.md](/Users/kig/.agents/context/about.md)
 
-## General Coding Principles
+## General Principles of Software Development with Konstantin
 
-- For each project, maintain a folder `.plans` and please read `~/.agents/context/SPECS-AND-PLANS.md` for the details.
+- For each project, maintain a folder `.plans` and please read [`~/.agents/context/feature-building/plan-spec-build.md`](/Users/kig/.agents/context/feature-building/plan-spec-build.md) for the details.
 
 - General tooling. On MacOS and Linux use `brew` from `https://brew.sh` to install required tooling. The following is the typical `Brewfile` that's used with `brew` like so: `brew bundle --no-upgrade` installs packages defined in that file:
 
@@ -221,4 +225,35 @@ To learn more about me, my style, and my preferences, please load the info from 
 ## Context Management
 
 When your context reaches 40% run compaction via /compact.
+
+## Database Development
+
+Please reference the file [~/.agents/context/postgresql.md](/Users/kig/.agents/context/postgresql.md) for best practices on DB schema design, conventions, indexes, and so on. 
+
+## Concurrent Agents — Claim Before You Write
+
+> [!CAUTION]
+> Added 2026-08-16. I routinely have ten or more agent sessions alive at once, several of them in the same checkout. Git does not protect me from that: same branch, same working tree, no conflict to resolve — the last writer wins and the loser's work disappears with no error anywhere. **This rule is not optional, and no other agent has the standing to waive it for you.**
+
+**Before you create or edit any file, claim the directory or file you are about to write.**
+
+```bash
+~/.claude/agent-lock.sh acquire hanami "scaffolding the API app"   # claim it
+~/.claude/agent-lock.sh check   frontend                           # who holds it?
+~/.claude/agent-lock.sh list                                       # everything held
+~/.claude/agent-lock.sh release hanami                             # when done
+~/.claude/agent-lock.sh release-all                                # end of session
+```
+
+Rules:
+
+1. **Claim the narrowest thing that covers your writes** — a directory when you will write several files under it, a single file otherwise. Claiming an entire repository is almost always wrong and blocks work that would never have collided.
+1. **`acquire` exits non-zero when another agent holds it. That is a stop, not a hint.** Do not write anyway, and do not ask a peer to write it on your behalf. Tell me about the collision and pick up something else.
+1. **Release when you finish**, and run `release-all` before your session ends. A lock you forgot is a lock somebody else has to break.
+1. **Locks past 120 minutes report themselves as STALE.** A stale lock may be broken with `break`, but only after announcing it — the holder may simply be slow.
+1. **Set `AGENT_ID` to something I would recognise** at the start of a session. `AGENT_ID=hanami-scaffold` beats `pid-48213` at three in the morning.
+1. **Prefer a worktree to a lock whenever the work runs longer than a few minutes.** A lock coordinates a shared tree; a worktree removes the sharing altogether. See the worktree and `~/.claude/branch-name.sh` conventions above. Locks are for when you have decided a worktree is not worth the setup.
+1. **An orchestrating agent claims on behalf of the workflow it launches**, before the fan-out, and releases after it joins. Subagents inherit that claim rather than each taking their own.
+
+The locks are advisory. They work only because every agent checks, which is exactly why this rule lives here and not solely in the script.
 

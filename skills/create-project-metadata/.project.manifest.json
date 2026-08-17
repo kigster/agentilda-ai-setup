@@ -1,0 +1,55 @@
+{
+  "$schema": "./project.manifest.schema.json",
+  "schemaVersion": "1.0.0",
+
+  "identifier": "create-project-metadata",
+  "name": "Create Project Schema Skill",
+  "description": "A Ruby gem for defining and executing multi-step, branching form flows as declarative state machines.",
+  "version": "0.4.0",
+  "developmentStatus": "active",
+  "license": "MIT",
+
+  "codeRepository": "https://github.com/kigster/flowengine",
+  "url": "https://github.com/kigster/flowengine",
+  "issueTracker": "https://github.com/kigster/flowengine/issues",
+
+  "author": [
+    {
+      "name": "Konstantin Gredeskoul",
+      "email": "kigster@gmail.com",
+      "url": "https://kig.re"
+    }
+  ],
+
+  "programmingLanguage": ["Ruby"],
+  "runtimePlatform": ["Ruby >= 3.2"],
+  "applicationCategory": "DeveloperApplication",
+  "keywords": ["state-machine", "forms", "workflow", "dsl"],
+
+  "stack": {
+    "language": "ruby",
+    "languageVersion": ">= 3.2",
+    "packageManager": "bundler",
+    "frameworks": [],
+    "datastores": [],
+    "testing": ["rspec"],
+    "linting": ["rubocop"],
+    "ci": "github-actions"
+  },
+
+  "conventions": {
+    "specsPath": "specs",
+    "specIdPattern": "^[0-9]{3}$",
+    "branchPattern": "^(?<spec>[0-9]{3})-[a-z0-9-]+$",
+    "commitScopeField": "spec",
+    "specArtifacts": ["spec.md", "plan.md", "blocked.md", "delayed.md", "rejected.md"]
+  },
+
+  "generated": {
+    "version": "gemspec",
+    "dateModified": "git"
+  },
+
+  "dateCreated": "2025-11-02",
+  "dateModified": "2026-08-16"
+}

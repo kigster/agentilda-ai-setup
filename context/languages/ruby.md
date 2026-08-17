@@ -215,3 +215,64 @@ end
 ```
 
 Then include the SVG file at the top of the `README.md`.
+
+## Running a Multi-Process Application Locally
+
+Use [mprocs](https://github.com/pvolok/dekit), installed with Homebrew, to run an application that is more than one process. Do not use Foreman.
+
+```ruby
+brew 'mprocs'
+```
+
+mprocs is configured by an `mprocs.yaml` at the root of the repository and gives each process its own scrollable pane, rather than interleaving every process into one stream. That is what keeps a backend stack trace readable while a frontend build is also talking.
+
+The common case is a bare command string per process:
+
+```yaml
+procs:
+  puma: bundle exec puma -C config/puma.rb
+  sidekiq: bundle exec sidekiq -C config/sidekiq.yml
+  css: bun run watch:css
+  js: bun run build:js:schema-viewer && sleep 10000000
+  browser: sleep 3 && open http://localhost:3000 && sleep 10000000
+  logs: tail -f log/development.log
+```
+
+Two idioms worth copying from that example. A one-shot command gets `&& sleep 10000000` so its pane stays alive and its output stays readable instead of the process vanishing the moment it succeeds. And a `browser` proc that sleeps briefly and then opens the URL saves reaching for the mouse on every boot.
+
+### The object form, for anything a bare string cannot express
+
+```yaml
+procs:
+  api:
+    shell: bundle exec hanami server
+    cwd: hanami
+  frontend:
+    shell: pnpm run dev
+    cwd: frontend
+    stop: SIGTERM
+```
+
+- `shell` (a string) or `cmd` (an array), exactly one of the two
+- `cwd` sets the working directory, which is what a monorepo with more than one deployable tree needs. The prefix `<CONFIG_DIR>` expands to the directory holding the config, so paths do not depend on where mprocs was invoked from
+- `env`, `add_path`, `autostart` (default true), `autorestart` (default false)
+- `stop` is how the process is stopped by `x` and on quit: `SIGINT`, `SIGTERM`, `SIGKILL`, `hard-kill`, `{send-keys: [...]}` or `{cmd: "docker compose down"}`
+
+Because mprocs owns starting and stopping, it is also the answer to the "Ctrl-C left a server holding the port" problem. Do not hand-roll process-group signalling in a task runner when mprocs already does it.
+
+Default keys: `q` quits and soft-kills everything, `Q` force quits, `C-a` moves focus between the process list and the output pane, `j`/`k` or the arrows select a process, `x` stops the selected one and `s` starts it again.
+
+### Do not use Foreman, and beware the scaffolds that install it
+
+Rails and Hanami both scaffold a `Procfile.dev` plus a `bin/dev` that runs Foreman. Hanami's generated `bin/dev` is worth reading before anything invokes it:
+
+```sh
+if ! gem list foreman -i --silent; then
+  echo "Installing foreman..."
+  gem install foreman
+fi
+```
+
+That installs a gem into the developer's global gem set as a side effect of booting a server. It mutates state outside the project and makes the command behave differently on the second machine. Replace `bin/dev` and `Procfile.dev` with `mprocs.yaml` and have `just dev` call mprocs.
+
+If a generated `Procfile.dev` has to stay for a deployment target that requires it, it must not be the thing a developer runs. mprocs can read one directly with `mprocs --procfile Procfile.dev` when that is genuinely the single source of truth.

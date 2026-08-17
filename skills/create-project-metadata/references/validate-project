@@ -1,0 +1,134 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# validate-project — validate #{MANIFEST} against project.schema.json and
+# cross-check derived fields against their declared authority.
+#
+#   gem install json_schemer
+#   bin/validate-project [--fix]
+#
+# Exit 0 = valid. Exit 1 = schema violation or drift in a derived field.
+# --fix rewrites derived fields from their authority instead of failing.
+
+require "json"
+require "open3"
+
+begin
+  require "json_schemer"
+rescue LoadError
+  abort "validate-project: missing dependency. Run: gem install json_schemer"
+end
+
+ROOT        = File.expand_path("..", __dir__)
+MANIFEST    = File.join(ROOT, ".project.manifest.json")
+SCHEMA_FILE = File.join(ROOT, ".project.manifest.schema.json")
+FIX         = ARGV.include?("--fix")
+
+def die(msg) = abort("\e[31mvalidate-project: #{msg}\e[0m")
+def warn_(msg) = $stderr.puts("\e[33m  ! #{msg}\e[0m")
+def ok(msg)  = puts("\e[32m  ✓ #{msg}\e[0m")
+
+die "#{MANIFEST} not found"    unless File.exist?(MANIFEST)
+die "#{SCHEMA_FILE} not found" unless File.exist?(SCHEMA_FILE)
+
+manifest = begin
+  JSON.parse(File.read(MANIFEST))
+rescue JSON::ParserError => e
+  die "#{MANIFEST} is not valid JSON: #{e.message}"
+end
+
+# ---------------------------------------------------------------- schema ----
+
+schema = JSONSchemer.schema(JSON.parse(File.read(SCHEMA_FILE)))
+errors = schema.validate(manifest).to_a
+
+unless errors.empty?
+  $stderr.puts "\e[31m#{MANIFEST} failed schema validation:\e[0m"
+  errors.each do |err|
+    pointer = err["data_pointer"].empty? ? "(root)" : err["data_pointer"]
+    $stderr.puts "  #{pointer}: #{err['error']}"
+  end
+  exit 1
+end
+ok "schema"
+
+# ----------------------------------------------------- identifier vs dir ----
+
+dir = File.basename(ROOT)
+if manifest["identifier"] != dir
+  warn_ "identifier #{manifest['identifier'].inspect} != directory name #{dir.inspect}"
+end
+
+# ------------------------------------------------------- derived fields -----
+
+# Each authority returns the value it considers canonical, or nil if it
+# cannot determine one (in which case the check is skipped, not failed).
+AUTHORITIES = {
+  "gemspec" => lambda {
+    spec = Dir[File.join(ROOT, "*.gemspec")].first
+    next nil unless spec
+
+    out, _err, status = Open3.capture3("ruby", "-e", <<~RUBY, spec)
+      spec = Gem::Specification.load(ARGV[0])
+      print spec&.version.to_s
+    RUBY
+    status.success? && !out.empty? ? out.strip : nil
+  },
+
+  "package.json" => lambda {
+    pkg = File.join(ROOT, "package.json")
+    File.exist?(pkg) ? JSON.parse(File.read(pkg))["version"] : nil
+  },
+
+  "git-tag" => lambda {
+    out, _err, status = Open3.capture3("git", "-C", ROOT, "describe", "--tags", "--abbrev=0")
+    status.success? ? out.strip.sub(/\Av/, "") : nil
+  },
+
+  "git" => lambda {
+    out, _err, status = Open3.capture3("git", "-C", ROOT, "log", "-1", "--format=%cs")
+    status.success? ? out.strip : nil
+  }
+}.freeze
+
+drift   = []
+changed = false
+
+(manifest["generated"] || {}).each do |field, authority|
+  resolver = AUTHORITIES[authority]
+  unless resolver
+    warn_ "#{field}: unknown authority #{authority.inspect}, skipping"
+    next
+  end
+
+  expected = resolver.call
+  if expected.nil?
+    warn_ "#{field}: authority #{authority.inspect} unavailable here, skipping"
+    next
+  end
+
+  actual = manifest[field]
+  next ok("#{field} (#{authority})") if actual == expected
+
+  if FIX
+    manifest[field] = expected
+    changed = true
+    ok "#{field}: #{actual.inspect} -> #{expected.inspect} (fixed)"
+  else
+    drift << "#{field}: #{MANIFEST} says #{actual.inspect}, #{authority} says #{expected.inspect}"
+  end
+end
+
+if changed
+  File.write(MANIFEST, JSON.pretty_generate(manifest) + "\n")
+  puts "\e[32m#{MANIFEST} updated.\e[0m"
+end
+
+unless drift.empty?
+  $stderr.puts "\e[31mDerived fields are out of date:\e[0m"
+  drift.each { |d| $stderr.puts "  #{d}" }
+  $stderr.puts "Run: bin/validate-project --fix"
+  exit 1
+end
+
+puts "\e[32m#{MANIFEST} OK\e[0m"
