@@ -1,0 +1,210 @@
+#!/usr/bin/env bash
+#
+# bin/setup — wire ~/.agents into ~/.claude.
+#
+#   bin/setup              # link everything that is not already there
+#   bin/setup --dry-run    # say what it would do, touch nothing
+#   bin/setup --force      # also repoint symlinks aimed somewhere else
+#
+# What it does:
+#
+#   ~/AGENTS.md            -> .agents/AGENTS.md
+#   ~/.claude/CLAUDE.md    -> ../.agents/AGENTS.md
+#   ~/.claude/<dir>        -> ../.agents/<dir>          for each shared folder
+#
+# It is a RECONCILER, not an installer: run it as often as you like. Anything
+# already correct is reported and left alone, so the safe response to "did I
+# ever link that?" is to run it again.
+#
+# Two rules it will not break:
+#
+#   1. It never replaces a real file or directory. ~/.claude holds Claude
+#      Code's own state — settings.json, projects/, history — and a setup
+#      script that overwrites those is a data-loss bug wearing a helpful hat.
+#      Conflicts are reported and skipped.
+#
+#   2. Links are RELATIVE. ~/.claude/skills/foo -> ../../.agents/skills/foo
+#      survives this whole tree being cloned to another machine under a
+#      different $HOME, which absolute paths do not.
+#
+# Where a shared folder already exists in ~/.claude as a real directory — as
+# skills/ does, holding one symlink per skill — setup descends one level and
+# links the children that are missing. That case is the whole reason this
+# script exists: skills added after the initial link were invisible to Claude
+# Code because nothing ever linked them.
+#
+# © 2026 Konstantin Gredeskoul
+
+set -euo pipefail
+
+AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
+
+# Folders that belong to the Ruby project rather than to any agent, and have no
+# business in ~/.claude.
+SKIP_DIRS=(bin scripts lib spec coverage docs tmp vendor node_modules)
+
+# Folders that exist as real directories in ~/.claude and hold one link per
+# child rather than a single link for the whole folder.
+DESCEND_DIRS=(skills)
+
+DRY_RUN=0
+FORCE=0
+QUIET=0
+
+linked=0
+already=0
+skipped=0
+conflicts=0
+
+# ------------------------------------------------------------------ output --
+
+if [[ -t 2 && -z "${NO_COLOR:-}" ]]; then
+  c_reset=$'\033[0m'; c_dim=$'\033[2m'; c_green=$'\033[32m'
+  c_yellow=$'\033[33m'; c_red=$'\033[31m'; c_bold=$'\033[1m'
+else
+  c_reset=""; c_dim=""; c_green=""; c_yellow=""; c_red=""; c_bold=""
+fi
+
+say()  { [[ $QUIET -eq 1 ]] || printf '%s\n' "$*" >&2; }
+ok()   { [[ $QUIET -eq 1 ]] || printf '  %s✓%s %s\n' "$c_green" "$c_reset" "$*" >&2; }
+note() { [[ $QUIET -eq 1 ]] || printf '  %s·%s %s\n' "$c_dim" "$c_reset" "$*" >&2; }
+warn() { printf '  %s!%s %s\n' "$c_yellow" "$c_reset" "$*" >&2; }
+bad()  { printf '  %s✗%s %s\n' "$c_red" "$c_reset" "$*" >&2; }
+
+usage() {
+  sed -n '3,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  exit 64
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -n|--dry-run) DRY_RUN=1; shift ;;
+    -f|--force)   FORCE=1;   shift ;;
+    -q|--quiet)   QUIET=1;   shift ;;
+    -h|--help)    usage ;;
+    *) printf 'setup: unknown argument: %s\n\n' "$1" >&2; usage ;;
+  esac
+done
+
+# ------------------------------------------------------------------- helpers --
+
+# The path a link at $1 should contain in order to point at $HOME-relative $2.
+#
+# Counts how deep the link sits below $HOME and prefixes that many "../", so
+# ~/.claude/skills/foo yields ../../.agents/skills/foo — matching the links
+# already in the tree, and surviving a different $HOME on another machine.
+relative_target() {
+  local dest_dir sub depth prefix i
+  dest_dir="$(dirname "$1")"
+  sub="${dest_dir#"$HOME"}"
+  sub="${sub#/}"
+
+  depth=0
+  if [[ -n "$sub" ]]; then
+    depth="$(printf '%s' "$sub" | tr '/' '\n' | grep -c . || true)"
+  fi
+
+  prefix=""
+  for ((i = 0; i < depth; i++)); do prefix="../$prefix"; done
+  printf '%s%s\n' "$prefix" "$2"
+}
+
+# Create one symlink, refusing to destroy anything real.
+#
+#   $1 real path under ~/.agents      $2 where the link goes      $3 label
+link_one() {
+  local source="$1" dest="$2" label="$3" want current
+  want="$(relative_target "$dest" "${source#"$HOME"/}")"
+
+  if [[ -L "$dest" ]]; then
+    current="$(readlink "$dest")"
+    if [[ "$current" == "$want" ]] || [[ "$(cd "$(dirname "$dest")" && cd "$(dirname "$current")" 2>/dev/null && pwd)/$(basename "$current")" == "$source" ]]; then
+      already=$((already + 1)); note "$label ${c_dim}already linked${c_reset}"; return 0
+    fi
+
+    if [[ $FORCE -eq 1 ]]; then
+      [[ $DRY_RUN -eq 1 ]] || { rm "$dest"; ln -s "$want" "$dest"; }
+      linked=$((linked + 1)); ok "$label ${c_dim}repointed from $current${c_reset}"; return 0
+    fi
+
+    conflicts=$((conflicts + 1))
+    warn "$label points at $current — pass --force to repoint it"
+    return 0
+  fi
+
+  if [[ -e "$dest" ]]; then
+    conflicts=$((conflicts + 1))
+    bad "$label exists and is not a symlink — left untouched"
+    return 0
+  fi
+
+  [[ $DRY_RUN -eq 1 ]] || { mkdir -p "$(dirname "$dest")"; ln -s "$want" "$dest"; }
+  linked=$((linked + 1)); ok "$label -> $want"
+}
+
+in_list() {
+  local needle="$1"; shift
+  local item
+  for item in "$@"; do [[ "$item" == "$needle" ]] && return 0; done
+  return 1
+}
+
+# ---------------------------------------------------------------------- run --
+
+say ""
+say "${c_bold}Linking ${AGENTS_ROOT} into ${CLAUDE_DIR}${c_reset}"
+[[ $DRY_RUN -eq 1 ]] && say "${c_yellow}dry run — nothing will be written${c_reset}"
+say ""
+
+[[ -f "$AGENTS_ROOT/AGENTS.md" ]] || { bad "no AGENTS.md in $AGENTS_ROOT"; exit 66; }
+mkdir -p "$CLAUDE_DIR"
+
+say "${c_bold}Instructions${c_reset}"
+link_one "$AGENTS_ROOT/AGENTS.md" "$HOME/AGENTS.md"          "~/AGENTS.md"
+link_one "$AGENTS_ROOT/AGENTS.md" "$CLAUDE_DIR/CLAUDE.md"    "~/.claude/CLAUDE.md"
+
+say ""
+say "${c_bold}Shared folders${c_reset}"
+
+for path in "$AGENTS_ROOT"/*/; do
+  name="$(basename "$path")"
+
+  if in_list "$name" "${SKIP_DIRS[@]}"; then
+    skipped=$((skipped + 1)); note "$name ${c_dim}project-internal, not shared${c_reset}"; continue
+  fi
+
+  dest="$CLAUDE_DIR/$name"
+
+  # A real directory already there: link its children instead of replacing it.
+  if [[ -d "$dest" && ! -L "$dest" ]]; then
+    if in_list "$name" "${DESCEND_DIRS[@]}"; then
+      say "  ${c_dim}$name is a real directory — linking its children${c_reset}"
+      for child in "$path"*/; do
+        [[ -d "$child" ]] || continue
+        child_name="$(basename "$child")"
+        link_one "${child%/}" "$dest/$child_name" "  skills/$child_name"
+      done
+    else
+      skipped=$((skipped + 1)); note "$name ${c_dim}already a real directory in ~/.claude${c_reset}"
+    fi
+    continue
+  fi
+
+  link_one "${path%/}" "$dest" "~/.claude/$name"
+done
+
+# --------------------------------------------------------------- summary ----
+
+say ""
+printf '  %slinked %d   already %d   skipped %d   conflicts %d%s\n' \
+  "$c_bold" "$linked" "$already" "$skipped" "$conflicts" "$c_reset" >&2
+
+if [[ $conflicts -gt 0 ]]; then
+  say ""
+  say "  ${c_yellow}Some targets were left alone. Nothing real is ever overwritten;${c_reset}"
+  say "  ${c_yellow}move them aside yourself, or re-run with --force for wrong symlinks.${c_reset}"
+fi
+
+say ""
+exit 0

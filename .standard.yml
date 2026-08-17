@@ -1,4 +1,7 @@
-fix: true               # default: false
+# `fix` stays false so that `just lint` only reports. `just format` passes
+# --fix explicitly, which keeps "check the code" and "change the code" as two
+# different verbs — a lint step that edits the tree is a nasty surprise in CI.
+fix: false              # default: false
 parallel: true          # default: false
 format: progress        # default: Standard::Formatter
 ruby_version: 4.0       # default: RUBY_VERSION
@@ -6,9 +9,29 @@ default_ignores: false  # default: true
 
 ignore:                 # default: []
   - 'vendor/**/*'
+  - 'coverage/**/*'
+  - 'tmp/**/*'
+  - 'plugins/**/*'
+  - 'plugins-disabled/**/*'
+  - 'skills/**/*'
 
-plugins:                # default: []
-  - standard-rails
+  # `scripts` is a symlink to `bin`, so without this every file under it is
+  # inspected twice and every offence is reported twice.
+  - 'scripts/**/*'
 
-extend_config:          # default: []
-  - .standard_ext.yml"
+  # TEMPORARY, and deliberately too broad.
+  #
+  # The only offender in bin/ is `generate-project-plan-status`, which
+  # lib/spec_plan_build supersedes — but standard's `ignore` only matches
+  # directory globs, not bare extensionless filenames, so `bin/generate-*` and
+  # `bin/generate-project-plan-status` are both silently no-ops. `bin/**/*` is
+  # the only form that works.
+  #
+  # The trap: this also stops `bin/spec-plan-build` being linted once it
+  # exists. Narrow or remove this the moment the legacy scripts are deleted.
+  - 'bin/**/*'
+
+# No plugins: `standard-rails` is not installed and this is not a Rails
+# project, and `extend_config` pointed at a .standard_ext.yml that has never
+# existed. Both came from the Gemfile's generator and stopped standardrb from
+# starting at all.

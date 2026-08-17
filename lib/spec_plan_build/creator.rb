@@ -1,0 +1,103 @@
+# frozen_string_literal: true
+
+module SpecPlanBuild
+  # Mints new plan folders. Backs `/spec-create`.
+  #
+  # Every failure is a `Failure`, never an exception: creating a folder is the
+  # one place a typo becomes permanent, so the caller is made to look.
+  class Creator
+    include Dry::Monads[:result]
+
+    # The state a new plan opens in — a specification and nothing else yet.
+    DEFAULT_STATUS = :new
+
+    # The state a retroactive plan is born in: the work is live, but it has
+    # neither a specification nor a plan.
+    RETROACTIVE_STATUS = :retroactive
+
+    # @param dir [String] the `.plans` directory
+    def initialize(dir:)
+      @dir = File.expand_path(dir)
+    end
+
+    # @return [String] the `.plans` directory
+    attr_reader :dir
+
+    # Create a plan folder.
+    #
+    # @param words [Array<String>] the topic; becomes the slug
+    # @param after [String, nil] anchor for a retroactive plan, e.g. "002"
+    # @param status [String, Symbol, nil] override the default state
+    # @return [Dry::Monads::Result] Success(absolute path) or Failure(message)
+    def create(words:, after: nil, status: nil)
+      resolved = resolve_status(status, after) or
+        return Failure("unknown status: #{status}")
+
+      slug = self.class.slugify(words)
+      return Failure("the topic produced an empty slug") if slug.empty?
+
+      ordinal = after ? retroactive_ordinal(after) : Ordinal.next_major(existing)
+      return ordinal if ordinal.is_a?(Dry::Monads::Result)
+
+      build(ordinal, resolved, slug)
+    rescue SpecPlanBuild::Error => e
+      Failure(e.message)
+    end
+
+    # @return [Array<SpecPlanBuild::Ordinal>] every number already taken
+    def existing
+      @existing ||= begin
+        return [] unless File.directory?(dir)
+
+        Dir.children(dir)
+          .select { |c| File.directory?(File.join(dir, c)) }
+          .filter_map { |c| Ordinal.from_dirname(c) }
+      end
+    end
+
+    # Turn free text into the kebab tail of a folder name.
+    #
+    # @param words [Array<String>, String]
+    # @return [String] possibly empty, which the caller must reject
+    def self.slugify(words)
+      Array(words).join(" ").downcase.gsub(/[^a-z0-9]+/, "-").gsub(/\A-+|-+\z/, "")
+    end
+
+    private
+
+    # @param status [String, Symbol, nil]
+    # @param after [String, nil]
+    # @return [SpecPlanBuild::Status, nil]
+    def resolve_status(status, after)
+      return SpecPlanBuild.status(status) if status
+
+      STATUS_BY_KEY.fetch(after ? RETROACTIVE_STATUS : DEFAULT_STATUS)
+    end
+
+    # @param after [String]
+    # @return [SpecPlanBuild::Ordinal, Dry::Monads::Result]
+    def retroactive_ordinal(after)
+      anchor = Ordinal.parse(after) or return Failure("not a plan number: #{after}")
+
+      unless existing.any? { |o| o.major == anchor.major }
+        return Failure("no plan #{format("%03d", anchor.major)} to anchor against — " \
+                       "a retroactive plan names the plan its work landed after")
+      end
+
+      Ordinal.next_minor(existing, major: anchor.major)
+    end
+
+    # @param ordinal [SpecPlanBuild::Ordinal]
+    # @param status [SpecPlanBuild::Status]
+    # @param slug [String]
+    # @return [Dry::Monads::Result]
+    def build(ordinal, status, slug)
+      target = File.join(dir, "#{ordinal}-#{status.emoji}-#{slug}")
+      return Failure("already exists: #{File.basename(target)}") if File.exist?(target)
+
+      FileUtils.mkdir_p(target)
+      @existing = nil
+      Success(target)
+    end
+  end
+end

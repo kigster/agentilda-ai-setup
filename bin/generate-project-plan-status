@@ -99,16 +99,16 @@ module PlanStatus
   # The union of both documented vocabularies. Order matters: it is the order
   # the legend prints in, and it is roughly lifecycle order.
   STATUSES = [
-    Status.new(emoji: "⚪️", label: "New",             note: "`spec.md` exists; not planned yet"),
-    Status.new(emoji: "⭐️", label: "Ready",           note: "`plan.md` exists and its ready for implementation"),
-    Status.new(emoji: "🟡", label: "In Progress",     note: "at least one PR submitted"),
-    Status.new(emoji: "🟣", label: "Merged",          note: "PR-level status"),
-    Status.new(emoji: "✅", label: "Done",            note: "every PR merged"),
-    Status.new(emoji: "⭕️", label: "Blocked",         note: "engineering must decide first — see `blocked.md`"),
+    Status.new(emoji: "⚪️", label: "New", note: "`spec.md` exists; not planned yet"),
+    Status.new(emoji: "⭐️", label: "Ready", note: "`plan.md` exists and its ready for implementation"),
+    Status.new(emoji: "🟡", label: "In Progress", note: "at least one PR submitted"),
+    Status.new(emoji: "🟣", label: "Merged", note: "PR-level status"),
+    Status.new(emoji: "✅", label: "Done", note: "every PR merged"),
+    Status.new(emoji: "⭕️", label: "Blocked", note: "engineering must decide first — see `blocked.md`"),
     Status.new(emoji: "🅱️", label: "Product Blocked", note: "product must decide first — see `blocked.md`"),
-    Status.new(emoji: "⛔️", label: "Rejected",        note: "terminal; see `rejected.md`"),
-    Status.new(emoji: "⬜️", label: "Retroactive",     note: "feature is live, but without the spec or a plan."),
-    Status.new(emoji: "☢️", label: "Deferred",        note: "deliberately deferred; the trigger is in `spec.md`")
+    Status.new(emoji: "⛔️", label: "Rejected", note: "terminal; see `rejected.md`"),
+    Status.new(emoji: "⬜️", label: "Retroactive", note: "feature is live, but without the spec or a plan."),
+    Status.new(emoji: "☢️", label: "Deferred", note: "deliberately deferred; the trigger is in `spec.md`")
   ].freeze
 
   # Variation selectors and zero-width joiners make ⚪️ and ⚪ different strings
@@ -161,12 +161,16 @@ module PlanStatus
 
     words.each_with_index.map do |word, i|
       lower = word.downcase
-      case
-      when SPECIAL_CASE.key?(lower)                then SPECIAL_CASE[lower]
-      when ACRONYMS.include?(lower)                then lower.upcase
-      when i.positive? && SMALL_WORDS.include?(lower) then lower
-      when lower.match?(/\A\d+\z/)                 then lower
-      else                                              lower.sub(/\A./, &:upcase)
+      if SPECIAL_CASE.key?(lower)
+        SPECIAL_CASE[lower]
+      elsif ACRONYMS.include?(lower)
+        lower.upcase
+      elsif i.positive? && SMALL_WORDS.include?(lower)
+        lower
+      elsif lower.match?(/\A\d+\z/)
+        lower
+      else
+        lower.sub(/\A./, &:upcase)
       end
     end.join(" ")
   end
@@ -186,7 +190,7 @@ module PlanStatus
   # @return [String]
   def self.encode_segment(segment)
     segment.to_s.b.gsub(/[^A-Za-z0-9\-_.~!$'()*+,;=:@]/n) { |c| format("%%%02X", c.ord) }
-           .force_encoding(Encoding::UTF_8)
+      .force_encoding(Encoding::UTF_8)
   end
 
   # @param path [String] a relative path with `/` separators
@@ -224,10 +228,10 @@ module PlanStatus
         %(<a href="#{href(::Regexp.last_match(2), base)}">#{::Regexp.last_match(1)}</a>)
       end
       out = out.gsub(/\*\*([^*]+)\*\*/) { "<strong>#{::Regexp.last_match(1)}</strong>" }
-      out = out.gsub(/__([^_]+)__/)     { "<strong>#{::Regexp.last_match(1)}</strong>" }
-      out = out.gsub(/~~([^~]+)~~/)     { "<del>#{::Regexp.last_match(1)}</del>" }
+      out = out.gsub(/__([^_]+)__/) { "<strong>#{::Regexp.last_match(1)}</strong>" }
+      out = out.gsub(/~~([^~]+)~~/) { "<del>#{::Regexp.last_match(1)}</del>" }
       out = out.gsub(/(?<![\w*])\*([^*\n]+)\*(?![\w*])/) { "<em>#{::Regexp.last_match(1)}</em>" }
-      out = out.gsub(/(?<![\w_])_([^_\n]+)_(?![\w_])/)   { "<em>#{::Regexp.last_match(1)}</em>" }
+      out = out.gsub(/(?<![\w_])_([^_\n]+)_(?![\w_])/) { "<em>#{::Regexp.last_match(1)}</em>" }
 
       out.gsub(/\u0000(\d+)\u0000/) { "<code>#{PlanStatus.escape_html(code[::Regexp.last_match(1).to_i])}</code>" }
     end
@@ -263,7 +267,7 @@ module PlanStatus
     def to_html(base: nil)
       case type
       when :p then "<p>#{Inline.render(items.first, base:)}</p>"
-      else         "<#{type}>#{items.map { |i| "<li>#{Inline.render(i, base:)}</li>" }.join}</#{type}>"
+      else "<#{type}>#{items.map { |i| "<li>#{Inline.render(i, base:)}</li>" }.join}</#{type}>"
       end
     end
   end
@@ -290,12 +294,16 @@ module PlanStatus
     # @param text [String] whole file contents
     # @return [Array<PlanStatus::Section>]
     def sections(text)
-      out   = [Section.new(level: 0, title: nil, lines: [])]
+      out = [Section.new(level: 0, title: nil, lines: [])]
       fence = nil
 
       strip_front_matter(text).each_line(chomp: true) do |line|
         if (m = line.match(/\A\s{0,3}(`{3,}|~{3,})/))
-          fence = fence.nil? ? m[1][0] : (m[1].start_with?(fence) ? nil : fence)
+          fence = if fence.nil?
+            m[1][0]
+          else
+            (m[1].start_with?(fence) ? nil : fence)
+          end
           out.last.lines << line
           next
         end
@@ -324,15 +332,15 @@ module PlanStatus
     # @param lines [Array<String>]
     # @return [Array<PlanStatus::Block>]
     def blocks(lines)
-      out   = []
-      para  = []
-      list  = []
-      kind  = nil
+      out = []
+      para = []
+      list = []
+      kind = nil
       fence = false
 
       flush = lambda do
         out << Block.new(type: :p, items: [para.join(" ")]) unless para.empty?
-        out << Block.new(type: kind, items: list.dup)       unless list.empty?
+        out << Block.new(type: kind, items: list.dup) unless list.empty?
         para = []
         list = []
         kind = nil
@@ -349,12 +357,12 @@ module PlanStatus
         next if fence
 
         case line
-        when /\A\s*\z/                       then flush.call
-        when /\A\s{0,3}\|/                   then flush.call                      # table
-        when /\A\s{0,3}>/                    then flush.call                      # blockquote / callout
-        when /\A\s{0,3}<!--/                 then flush.call                      # comment
-        when /\A\s{0,3}(?:[-*_]\s*){3,}\z/   then flush.call                      # thematic break
-        when /\A\s{0,3}</                    then flush.call                      # raw HTML
+        when /\A\s*\z/ then flush.call
+        when /\A\s{0,3}\|/ then flush.call                      # table
+        when /\A\s{0,3}>/ then flush.call                      # blockquote / callout
+        when /\A\s{0,3}<!--/ then flush.call                      # comment
+        when /\A\s{0,3}(?:[-*_]\s*){3,}\z/ then flush.call                      # thematic break
+        when /\A\s{0,3}</ then flush.call                      # raw HTML
         when /\A(\s*)[-*+]\s+(.*)\z/
           item = ::Regexp.last_match(2)
           out << Block.new(type: :p, items: [para.join(" ")]) unless para.empty?
@@ -401,26 +409,26 @@ module PlanStatus
     # @param text [String]
     # @return [Array<Hash{Symbol => Array}>] `{header: [String], rows: [[String]]}`
     def tables(text)
-      lines  = text.each_line(chomp: true).to_a
+      lines = text.each_line(chomp: true).to_a
       tables = []
-      i      = 0
+      i = 0
 
       while i < lines.length
         head = lines[i]
-        nxt  = lines[i + 1]
+        nxt = lines[i + 1]
         unless head&.strip&.start_with?("|") && nxt&.strip&.start_with?("|") && delimiter_row?(nxt)
           i += 1
           next
         end
 
         rows = []
-        j    = i + 2
+        j = i + 2
         while j < lines.length && lines[j].strip.start_with?("|")
           rows << cells(lines[j])
           j += 1
         end
 
-        tables << { header: cells(head), rows: rows }
+        tables << {header: cells(head), rows: rows}
         i = j
       end
 
@@ -457,9 +465,9 @@ module PlanStatus
     # @param max_blocks [Integer] paragraph/list budget
     # @param max_chars [Integer] character budget; 0 disables it
     def initialize(dir:, max_blocks: 3, max_chars: 1200)
-      @dir        = dir
+      @dir = dir
       @max_blocks = max_blocks
-      @max_chars  = max_chars
+      @max_chars = max_chars
     end
 
     # @param base [String] the feature folder's basename, for relative links
@@ -484,7 +492,7 @@ module PlanStatus
 
     # @return [Array<PlanStatus::Block>] blocks trimmed to both budgets
     def budgeted
-      out   = []
+      out = []
       spent = 0
 
       candidate_blocks.each do |block|
@@ -494,7 +502,7 @@ module PlanStatus
           # An over-long first block still has to say something: trim a
           # paragraph at a sentence boundary, take a list whole.
           if out.empty?
-            out << (block.type == :p ? Block.new(type: :p, items: [self.class.truncate(block.items.first, max_chars)]) : block)
+            out << ((block.type == :p) ? Block.new(type: :p, items: [self.class.truncate(block.items.first, max_chars)]) : block)
           end
           break
         end
@@ -601,11 +609,11 @@ module PlanStatus
       return text if text.length <= limit
 
       window = text[0, limit]
-      stop   = window.rindex(/[.!?](?:\s|\z)/)
-      cut    = stop ? text[0..stop].strip : "#{window.sub(/\s+\S*\z/, "")}…"
+      stop = window.rindex(/[.!?](?:\s|\z)/)
+      cut = stop ? text[0..stop].strip : "#{window.sub(/\s+\S*\z/, "")}…"
 
       cut = cut.sub(/\[[^\]]*\z/, "").rstrip
-      cut += "`"  if cut.count("`").odd?
+      cut += "`" if cut.count("`").odd?
       cut += "**" if cut.scan("**").size.odd?
       cut
     end
@@ -627,7 +635,7 @@ module PlanStatus
     # @return [String] one `<li>` for the PR column
     def to_html
       label = number ? "##{number} — #{PlanStatus.escape_html(title)}" : PlanStatus.escape_html(title)
-      link  = url ? %(<a href="#{PlanStatus.escape_html(url)}">#{label}</a>) : label
+      link = url ? %(<a href="#{PlanStatus.escape_html(url)}">#{label}</a>) : label
       "<li>#{link} (#{PlanStatus.escape_html(state)})</li>"
     end
   end
@@ -636,9 +644,9 @@ module PlanStatus
   class PullRequests
     # Canonical wording for the states we recognise, with their emoji.
     STATES = [
-      [/\bmerged\b/i,             "Merged 🟣"],
-      [/\bdraft\b|\bwip\b/i,      "WIP 🟡"],
-      [/\bopen\b/i,               "Open 🟡"],
+      [/\bmerged\b/i, "Merged 🟣"],
+      [/\bdraft\b|\bwip\b/i, "WIP 🟡"],
+      [/\bopen\b/i, "Open 🟡"],
       [/\bclosed\b|\babandoned\b/i, "Closed 🔴"]
     ].freeze
 
@@ -662,11 +670,11 @@ module PlanStatus
       path = %w[pull-requests.md pull_requests.md prs.md].map { |f| File.join(dir, f) }.find { |p| File.file?(p) }
       return [] unless path
 
-      text  = File.read(path, encoding: "UTF-8")
+      text = File.read(path, encoding: "UTF-8")
       table = pick_table(Markdown.tables(text))
       return fallback(text) unless table
 
-      idx  = columns(table[:header])
+      idx = columns(table[:header])
       rows = table[:rows].filter_map { |cells| row_to_pr(cells, idx) }
       rows.empty? ? fallback(text) : rows
     end
@@ -689,8 +697,8 @@ module PlanStatus
     def columns(header)
       {
         number: header.index { |h| h.match?(/number|^#$|^pr$|^pr\s*#/i) },
-        title:  header.index { |h| h.match?(/name|title|summary|description|scope/i) },
-        state:  header.index { |h| h.match?(/status|state/i) }
+        title: header.index { |h| h.match?(/name|title|summary|description|scope/i) },
+        state: header.index { |h| h.match?(/status|state/i) }
       }
     end
 
@@ -699,16 +707,16 @@ module PlanStatus
     # @return [PlanStatus::PullRequest, nil] nil when the row has no PR in it
     def row_to_pr(cells, idx)
       title_cell = cells[idx[:title] || 1].to_s
-      link_cell  = cells.find { |c| c.match?(/\[[^\]]+\]\(https?:[^)]+\)/) } || title_cell
-      link       = link_cell.match(/\[([^\]]+)\]\((https?:[^)\s]+)\)/)
+      link_cell = cells.find { |c| c.match?(/\[[^\]]+\]\(https?:[^)]+\)/) } || title_cell
+      link = link_cell.match(/\[([^\]]+)\]\((https?:[^)\s]+)\)/)
 
-      url    = link && link[2]
-      title  = link ? link[1] : title_cell.gsub(/[*_`]/, "").strip
+      url = link && link[2]
+      title = link ? link[1] : title_cell.gsub(/[*_`]/, "").strip
       number = cells[idx[:number] || 0].to_s[/\d+/] || url&.[](%r{/(?:pull|merge_requests)/(\d+)}, 1)
       return nil if title.empty? && url.nil?
 
       PullRequest.new(number:, title: title.empty? ? "Pull request" : title, url:,
-                      state: normalize_state(cells[idx[:state] || -1].to_s))
+        state: normalize_state(cells[idx[:state] || -1].to_s))
     end
 
     # When there is no parsable table, scrape bare PR links so the column is
@@ -768,7 +776,7 @@ module PlanStatus
       return nil unless m
 
       ordinal, rest = m.captures
-      head, tail    = rest.split(/[-_]/, 2)
+      head, tail = rest.split(/[-_]/, 2)
 
       # A leading segment with no ASCII word character is the status emoji;
       # otherwise the folder simply has no status and it is all slug.
@@ -794,8 +802,8 @@ module PlanStatus
     # @return [Array<Array(String, String)>] pairs of `[label, filename]`
     def artifacts
       present = Dir.children(path).select { |f| File.file?(File.join(path, f)) }.reject { |f| f.start_with?(".") }
-      known   = ARTIFACT_LABELS.keys & present
-      extra   = (present - known).sort
+      known = ARTIFACT_LABELS.keys & present
+      extra = (present - known).sort
 
       known.map { |f| [ARTIFACT_LABELS[f], f] } + extra.map { |f| [f, f] }
     end
@@ -860,20 +868,20 @@ module PlanStatus
     #
     # @param message [String]
     # @return [void]
-    def note(message) = $stderr.puts("  #{paint("·", :bright_black)} #{message}")
+    def note(message) = warn("  #{paint("·", :bright_black)} #{message}")
 
     # @param message [String]
     # @return [void]
-    def warn(message) = $stderr.puts("  #{paint("!", :yellow)} #{message}")
+    def warn(message) = warn("  #{paint("!", :yellow)} #{message}")
 
     # @param kind [Symbol] `:info`, `:warn`, `:error` or `:success`
     # @param message [String]
     # @return [void]
     def box(kind, message)
       if defined?(::TTY::Box)
-        $stderr.puts(::TTY::Box.public_send(kind, message, enable_color: color?, width: width))
+        warn(::TTY::Box.public_send(kind, message, enable_color: color?, width: width))
       else
-        $stderr.puts(message)
+        warn(message)
       end
     end
 
@@ -930,11 +938,11 @@ module PlanStatus
     # @param serial [Boolean] read one at a time, no spinners
     # @param quiet [Boolean] suppress the per-plan chatter entirely
     def initialize(dir:, max_blocks: 3, max_chars: 1200, serial: false, quiet: false)
-      @dir        = File.expand_path(dir)
+      @dir = File.expand_path(dir)
       @max_blocks = max_blocks
-      @max_chars  = max_chars
-      @serial     = serial
-      @quiet      = quiet
+      @max_chars = max_chars
+      @serial = serial
+      @quiet = quiet
       # Appended to from inside the spinner threads, so it cannot be a plain
       # Array. Falls back to one when concurrent-ruby is missing, which is only
       # ever the PLAN_STATUS_SKIP_BUNDLE path, and that never spins threads.
@@ -948,18 +956,18 @@ module PlanStatus
     attr_reader :failures
 
     # @return [Array<PlanStatus::Report>] ordered by plan number
-def reports
-  @reports ||= begin
-    found = features
-    collected =
-      if found.empty?  then []
-      elsif spinners?  then read_with_spinners(found)
-      else                  read_serially(found)
-      end
+    def reports
+      @reports ||= begin
+        found = features
+        collected =
+          if found.empty? then []
+          elsif spinners? then read_with_spinners(found)
+          else read_serially(found)
+          end
 
-    collected.compact.sort_by { |r| [r.feature.sort_key, r.feature.dirname] }
-  end
-end
+        collected.compact.sort_by { |r| [r.feature.sort_key, r.feature.dirname] }
+      end
+    end
 
     # Subdirectories that do not carry a plan number, for a closing note.
     #
@@ -1000,10 +1008,10 @@ end
     # @return [Array<String>] absolute paths of every subdirectory
     def directories
       @directories ||= Dir.children(dir)
-                          .map { |c| File.join(dir, c) }
-                          .select { |p| File.directory?(p) }
-                          .reject { |p| File.basename(p).start_with?(".") }
-                          .sort
+        .map { |c| File.join(dir, c) }
+        .select { |p| File.directory?(p) }
+        .reject { |p| File.basename(p).start_with?(".") }
+        .sort
     end
 
     # @return [Array<PlanStatus::Feature>]
@@ -1014,7 +1022,7 @@ end
     # @param found [Array<PlanStatus::Feature>]
     # @return [Array<PlanStatus::Report>]
     def read_with_spinners(found)
-      results  = defined?(::Concurrent::Array) ? ::Concurrent::Array.new : []
+      results = defined?(::Concurrent::Array) ? ::Concurrent::Array.new : []
       spinners = ::TTY::Spinner::Multi.new(
         ":spinner #{UI.paint("Reading", :bold, :cyan)} #{found.size} plans from #{UI.paint(dir, :bright_black)}",
         format: :dots, output: $stderr, success_mark: UI.paint("✓", :green), error_mark: UI.paint("✖", :red)
@@ -1036,7 +1044,7 @@ end
         report = build(feature)
         results << report
         spinner.success(UI.paint(summarize(report), :bright_black))
-      rescue StandardError => e
+      rescue => e
         failures << "#{feature.dirname}: #{e.message}"
         spinner.error(UI.paint(e.message, :red))
       end
@@ -1049,7 +1057,7 @@ end
         report = build(feature)
         UI.note("#{feature.status.emoji} #{feature.ordinal}  #{feature.title} — #{summarize(report)}") unless quiet
         report
-      rescue StandardError => e
+      rescue => e
         failures << "#{feature.dirname}: #{e.message}"
         UI.warn("#{feature.dirname}: #{e.message}") unless quiet
         nil
@@ -1086,11 +1094,11 @@ end
     # @param legend [Boolean] include the status legend
     # @param timestamp [Boolean] include a generated-on line
     def initialize(reports:, project:, dir: ".", toc: false, legend: false, timestamp: false)
-      @reports   = reports
-      @project   = project
-      @dir       = dir
-      @toc       = toc
-      @legend    = legend
+      @reports = reports
+      @project = project
+      @dir = dir
+      @toc = toc
+      @legend = legend
       @timestamp = timestamp
     end
 
@@ -1099,7 +1107,7 @@ end
       parts = ["# Project #{project}", "", "## Current Specifications and Their Status.", ""]
       parts.concat(["_Generated #{Time.now.strftime("%Y-%m-%d %H:%M")} by `generate-project-plan-status`._", ""]) if timestamp
       parts.concat(legend_lines) if legend
-      parts.concat(toc_lines)    if toc
+      parts.concat(toc_lines) if toc
 
       if reports.empty?
         parts << "_No plan folders found in `#{dir}`._"
@@ -1214,22 +1222,22 @@ end
     # @param report [PlanStatus::Report]
     # @param width [Integer] widest status label, for alignment
     # @return [String]
-def row(report, width)
-  feature = report.feature
-  prs     = report.pull_requests
-  open    = prs.count { |pr| pr.state.match?(/\b(?:open|wip|draft)\b/i) }
+    def row(report, width)
+      feature = report.feature
+      prs = report.pull_requests
+      open = prs.count { |pr| pr.state.match?(/\b(?:open|wip|draft)\b/i) }
 
-  # Pad before painting. ANSI escapes are characters as far as format() is
-  # concerned, so colouring first silently eats the width of every
-  # coloured column and the table stops lining up.
-  [
-    UI.paint(format("%-7s", feature.ordinal), :bold),
-    feature.status.emoji,
-    UI.paint(format("%-#{width}s", feature.status.label), :cyan),
-    format("%-38s", feature.title),
-    UI.paint(pr_summary(prs.size, open), :bright_black)
-  ].join("  ").rstrip
-end
+      # Pad before painting. ANSI escapes are characters as far as format() is
+      # concerned, so colouring first silently eats the width of every
+      # coloured column and the table stops lining up.
+      [
+        UI.paint(format("%-7s", feature.ordinal), :bold),
+        feature.status.emoji,
+        UI.paint(format("%-#{width}s", feature.status.label), :cyan),
+        format("%-38s", feature.title),
+        UI.paint(pr_summary(prs.size, open), :bright_black)
+      ].join("  ").rstrip
+    end
 
     # @param total [Integer] pull requests recorded
     # @param open [Integer] of those, not yet merged
@@ -1258,15 +1266,15 @@ end
           super
 
           klass.option :dir, default: ".", aliases: ["-D"],
-                             desc: "The .plans directory"
+            desc: "The .plans directory"
           klass.option :paragraphs, default: "3", aliases: ["-p"],
-                                    desc: "Max description paragraphs per plan"
+            desc: "Max description paragraphs per plan"
           klass.option :chars, default: "1200", aliases: ["-c"],
-                               desc: "Max description characters per plan (0 = no limit)"
+            desc: "Max description characters per plan (0 = no limit)"
           klass.option :serial, type: :boolean, default: false, aliases: ["-s"],
-                                desc: "Read plans one at a time, without spinners"
+            desc: "Read plans one at a time, without spinners"
           klass.option :quiet, type: :boolean, default: false, aliases: ["-q"],
-                               desc: "Suppress all progress output on STDERR"
+            desc: "Suppress all progress output on STDERR"
         end
 
         private
@@ -1302,7 +1310,7 @@ end
           return 0 if options.fetch(:quiet, false)
 
           unless collector.skipped.empty?
-            UI.warn("Skipped #{collector.skipped.size} unnumbered #{collector.skipped.size == 1 ? "entry" : "entries"}: " \
+            UI.warn("Skipped #{collector.skipped.size} unnumbered #{(collector.skipped.size == 1) ? "entry" : "entries"}: " \
                     "#{collector.skipped.join(", ")}")
           end
 
@@ -1333,7 +1341,7 @@ end
         # @return [void]
         def call(**options)
           collector = collect(options)
-          name      = options[:name].to_s.empty? ? collector.project_name : options[:name]
+          name = options[:name].to_s.empty? ? collector.project_name : options[:name]
 
           document = Renderer.new(
             reports: collector.reports, project: name, dir: collector.dir,
@@ -1379,8 +1387,8 @@ end
       end
 
       register "generate", Generate, aliases: %w[g gen]
-      register "list",     List,     aliases: %w[l ls]
-      register "version",  Version,  aliases: %w[--version -V]
+      register "list", List, aliases: %w[l ls]
+      register "version", Version, aliases: %w[--version -V]
     end
 
     # Names that dry-cli can resolve on its own. Anything else on the front of

@@ -1,0 +1,132 @@
+# frozen_string_literal: true
+
+module SpecPlanBuild
+  # Lowercase in the middle of a title, capitalised at the front.
+  SMALL_WORDS = %w[a an and as at but by for from in into nor of on or per the to via vs with].freeze
+
+  # Slug words that are really acronyms and should shout.
+  ACRONYMS = %w[
+    abac ai api aws cdn ci cd cli cms cors cpu crm css csv db dns dsl e2e ec2 etl gcp gdpr gpu gui
+    html http https iam id ide jwt json k8s llm ml mcp mvp npm oauth orm otp pdf pii poc pr prs qa
+    rbac rds rest rls rpc rss s3 saas sdk seo sns spa sql sqs sre ssh sso ssl ssr tls tui ts tsx ui
+    ux uuid vpc vpn xml yaml
+  ].freeze
+
+  # Words with a house spelling that neither capitalize nor upcase gets right.
+  SPECIAL_CASE = {
+    "github" => "GitHub", "gitlab" => "GitLab", "graphql" => "GraphQL", "ios" => "iOS",
+    "javascript" => "JavaScript", "macos" => "macOS", "nodejs" => "Node.js", "oauth" => "OAuth",
+    "openai" => "OpenAI", "postgres" => "PostgreSQL", "postgresql" => "PostgreSQL",
+    "typescript" => "TypeScript", "uuidv7" => "UUIDv7", "websocket" => "WebSocket"
+  }.freeze
+
+  # Turn a kebab slug into a proper name: `law-as-data` → "Law as Data".
+  #
+  # @param slug [String]
+  # @return [String]
+  def self.titleize(slug)
+    words = slug.to_s.split(/[-_\s.]+/).reject(&:empty?)
+    return "" if words.empty?
+
+    words.each_with_index.map { |word, i|
+      lower = word.downcase
+      if SPECIAL_CASE.key?(lower) then SPECIAL_CASE[lower]
+      elsif ACRONYMS.include?(lower) then lower.upcase
+      elsif i.positive? && SMALL_WORDS.include?(lower) then lower
+      elsif lower.match?(/\A\d+\z/) then lower
+      else lower.sub(/\A./, &:upcase)
+      end
+    }.join(" ")
+  end
+
+  # One `NNN.MM-<emoji>-<slug>` folder, decoded.
+  #
+  # @!attribute [r] ordinal
+  #   @return [SpecPlanBuild::Ordinal]
+  # @!attribute [r] status
+  #   @return [SpecPlanBuild::Status]
+  # @!attribute [r] slug
+  #   @return [String]
+  # @!attribute [r] dirname
+  #   @return [String] exactly as it is on disk
+  # @!attribute [r] path
+  #   @return [String] absolute
+  Feature = Data.define(:ordinal, :status, :slug, :dirname, :path) do
+    include Comparable
+
+    # Decode a folder name, or return nil when it is not a plan folder.
+    #
+    # @param path [String] absolute path to a candidate directory
+    # @return [SpecPlanBuild::Feature, nil]
+    def self.parse(path)
+      dirname = File.basename(path)
+      ordinal = Ordinal.from_dirname(dirname) or return nil
+
+      rest = dirname.sub(/\A[\d.]+[-_]/, "")
+      head, tail = rest.split(/[-_]/, 2)
+
+      # A leading segment with no ASCII word character is the status emoji.
+      status = (SpecPlanBuild.status_for_emoji(head) if tail && !head.to_s.empty? && !head.match?(/[A-Za-z0-9]/))
+      slug = status ? tail : rest
+
+      new(ordinal:, status: status || STATUS_BY_KEY.fetch(:new), slug:, dirname:, path:)
+    end
+
+    # @return [String] proper name, e.g. "Law as Data"
+    def title = SpecPlanBuild.titleize(slug)
+
+    # The folder name this feature would carry in a given state — the number
+    # and the slug never move, only the emoji.
+    #
+    # @param status [SpecPlanBuild::Status]
+    # @return [String]
+    def dirname_as(status) = "#{ordinal}-#{status.emoji}-#{slug}"
+
+    # @param other [Object]
+    # @return [Integer, nil]
+    def <=>(other) = other.is_a?(self.class) ? [ordinal, dirname] <=> [other.ordinal, other.dirname] : nil
+  end
+
+  # A plan folder as the state machine sees it: which files exist, what they
+  # say, and which pull requests they record.
+  #
+  # It exists because the invariants ask the same questions repeatedly and
+  # {Feature} is a frozen `Data` with nowhere to memoize the answers.
+  class Subject
+    # @param feature [SpecPlanBuild::Feature]
+    def initialize(feature)
+      @feature = feature
+      @reads = {}
+    end
+
+    # @return [SpecPlanBuild::Feature]
+    attr_reader :feature
+
+    # @return [SpecPlanBuild::Status] the status the folder name claims
+    def status = feature.status
+
+    # @param name [String] a bare filename
+    # @return [Boolean]
+    def file?(name) = File.file?(File.join(feature.path, name))
+
+    # @param name [String]
+    # @return [String, nil] contents, or nil when absent
+    def read(name)
+      @reads.fetch(name) do
+        @reads[name] = file?(name) ? File.read(File.join(feature.path, name), encoding: "UTF-8") : nil
+      end
+    end
+
+    # @return [Array<SpecPlanBuild::PullRequest>]
+    def pull_requests = @pull_requests ||= PullRequests.new(dir: feature.path).all
+
+    # @return [String, nil] why the folder's name is not justified
+    def violation = status.violation(self)
+
+    # @return [Boolean] whether the name matches the contents
+    def consistent? = violation.nil?
+
+    # @return [Array<Symbol>] states reachable right now, guards applied
+    def allowed = Lifecycle.allowed_from(self)
+  end
+end
