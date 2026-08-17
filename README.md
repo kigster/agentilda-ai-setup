@@ -1,5 +1,7 @@
 # Agents Folder by @kigster
 
+[![Ruby](https://github.com/kigster/dot-agents/actions/workflows/ruby.yml/badge.svg)](https://github.com/kigster/dot-agents/actions/workflows/ruby.yml)
+
 This project is the `~/.agents` folder that contains the `AGENTS.md` file. 
 
 ## Goals
