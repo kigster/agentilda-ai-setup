@@ -52,7 +52,7 @@ module SpecPlanBuild
         changes = plan
         return changes unless commit
 
-        changes.each { |change| rename(change) }
+        UI.stepping(changes, "Renaming") { |change| rename(change) }
         tree.reload
         changes
       end
@@ -107,7 +107,7 @@ module SpecPlanBuild
     class Prs
       # Titles that already carry a prefix — a plan number, the no-plan marker,
       # or the legacy `[XXX]`.
-      PREFIXED = /\A\[(?:\d{3}(?:\.\d{2})?|DEV\.00|XXX)\]\s/
+      PREFIXED = /\A\[(?:\d{3}(?:\.\d{2})?|DEV\.00|XXX)\](?:\([A-Z]\))?\s/
 
       # Finds a plan number in a branch name: `kig/018.01-verify`, `002-slug`.
       BRANCH_PATTERN = %r{(?:\A|[/\-_])(\d{3}(?:\.\d{2})?)(?:\z|[-_])}
@@ -165,7 +165,8 @@ module SpecPlanBuild
         changes = plan
         return changes unless commit
 
-        changes.select(&:applicable?).each { |c| github.retitle(number: c.number, title: c.new_title) }
+        applicable = changes.select(&:applicable?)
+        UI.stepping(applicable, "Retitling") { |c| github.retitle(number: c.number, title: c.new_title) }
         changes
       end
 

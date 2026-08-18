@@ -9,8 +9,13 @@ require "pastel"
 require "tty/box"
 require "tty/command"
 require "tty/screen"
+require "tty/progressbar"
 require "tty/spinner"
+require "concurrent/array"
+require "concurrent/hash"
+require "etc"
 require "fileutils"
+require "tempfile"
 
 # Spec → Plan → Build.
 #
@@ -60,6 +65,12 @@ end
   resolver
   resync
   reporter
+  agent
+  worktree
+  publisher
+  executor
+  runner
+  documentation
   cli
 ].each do |component|
   path = File.join(__dir__, "spec_plan_build", "#{component}.rb")

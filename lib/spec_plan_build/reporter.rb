@@ -102,9 +102,18 @@ module SpecPlanBuild
     def footer
       counts = totals.map { |key, n| "#{STATUS_BY_KEY.fetch(key).emoji} #{n}" }.join("   ")
       summary = "  #{tree.subjects.size} plans   #{counts}"
-      return summary if inconsistent.empty?
+      lines = [summary]
 
-      "#{summary}\n  #{UI.paint("#{inconsistent.size} with a status their contents do not justify", :red)}"
+      unless inconsistent.empty?
+        lines << "  #{UI.paint("#{inconsistent.size} with a status their contents do not justify", :red)}"
+      end
+
+      tree.duplicates.each do |ordinal, dirnames|
+        lines << "  #{UI.paint("#{ordinal} is claimed by #{dirnames.size} folders — a number is an identity:", :red)}"
+        dirnames.each { |d| lines << "    #{UI.paint(d, :bright_black)}" }
+      end
+
+      lines.join("\n")
     end
   end
 end

@@ -72,6 +72,25 @@ RSpec.describe SpecPlanBuild::Reporter, :tree do
     end
   end
 
+  describe "duplicate plan numbers" do
+    let!(:tree) do
+      plans do |t|
+        t.plan "002.00", :new, "one-thing", files: {"spec.md" => spec_body}
+        t.plan "002.00", :blocked, "another-thing", files: {"blocked.md" => "B1"}
+      end
+    end
+
+    # A number is an identity that branches and PR titles join on. Two folders
+    # wearing it makes every one of those joins ambiguous.
+    it "names the number and every folder claiming it" do
+      aggregate_failures do
+        expect(table).to include("002.00 is claimed by 2 folders")
+        expect(table).to include("002.00-⚪️-one-thing")
+        expect(table).to include("002.00-⭕️-another-thing")
+      end
+    end
+  end
+
   describe "an empty tree" do
     let!(:tree) { plans }
 

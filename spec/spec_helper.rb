@@ -9,13 +9,12 @@ require "coverage/badge"
 FileUtils.mkdir_p("docs/badges")
 
 SimpleCov.start do
-  # `track_files` is what makes the number mean anything: without it SimpleCov
-  # only counts files some example happened to load, so a library nobody
-  # requires reports 100% of nothing. With it, an untested file counts as 0%.
-  track_files "lib/**/*.rb"
-
-  add_filter %r{\A/spec/}
-  add_filter %r{\A/bin/}
+  # `cover` (replacing the deprecated `track_files`) is what makes the number
+  # mean anything: without it SimpleCov only counts files some example happened
+  # to load, so a library nobody requires reports 100% of nothing. With it, an
+  # untested file counts as 0% AND the report is restricted to this pattern —
+  # which is also why `spec/` and `bin/` need no separate exclusion below.
+  cover "lib/**/*.rb"
 
   enable_coverage :branch
 

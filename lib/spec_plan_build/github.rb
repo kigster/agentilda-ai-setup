@@ -24,8 +24,18 @@ module SpecPlanBuild
     # @param state [String] "open", "closed", "merged" or "all"
     # @return [Array<Hash>] `{number:, title:, url:, branch:, files:}`
     def pulls(state: "all")
-      out = @command.run("gh", "pr", "list", "--state", state, "--limit", @limit.to_s,
-        "--json", FIELDS.join(",")).out
+      out = UI.spinning("Fetching pull requests from GitHub") {
+        @command.run("gh", "pr", "list", "--state", state, "--limit", @limit.to_s,
+          "--json", FIELDS.join(",")).out
+      }
+
+      # `gh` can exit 0 having printed NOTHING — most often when it cannot reach
+      # the credential store, as in a non-interactive shell that has no keyring
+      # access, or when GH_TOKEN is set to something invalid and shadows a
+      # working login. Left alone this parses as a JSON error and reports as
+      # "bad output", sending you to look at the wrong thing entirely.
+      raise Error, no_output_message if out.to_s.strip.empty?
+
       JSON.parse(out).map do |pr|
         {
           number: pr["number"],
@@ -37,6 +47,22 @@ module SpecPlanBuild
       end
     rescue TTY::Command::ExitError, JSON::ParserError => e
       raise Error, "could not list pull requests via `gh`: #{e.message.lines.first.to_s.strip}"
+    end
+
+    # @return [String] the diagnosis for a silent `gh`
+    def no_output_message
+      <<~MESSAGE.strip
+        `gh` produced no output and did not report an error.
+
+        That is almost always authentication rather than an empty repository:
+
+          - Check `gh auth status`. An invalid GH_TOKEN in the environment
+            shadows a working keyring login and fails without saying so.
+          - A non-interactive shell may have no access to the system keyring
+            even when an interactive one does.
+
+        Verify with: gh pr list --state all --limit 1
+      MESSAGE
     end
 
     # Change a pull request's title.

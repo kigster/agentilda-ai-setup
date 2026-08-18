@@ -28,6 +28,20 @@ module SpecPlanBuild
     # @return [Array<String>]
     def skipped = @skipped ||= directories.reject { |p| Feature.parse(p) }.map { |p| File.basename(p) }
 
+    # Numbers claimed by more than one folder.
+    #
+    # A plan's number is its identity: branch names, pull request titles and
+    # every `pull-requests.md` join on it. Two folders wearing the same number
+    # make every one of those joins ambiguous, and nothing downstream can tell
+    # which folder a `[002.00]` pull request belongs to.
+    #
+    # @return [Hash{SpecPlanBuild::Ordinal => Array<String>}] number => dirnames
+    def duplicates
+      features.group_by(&:ordinal)
+        .select { |_, group| group.size > 1 }
+        .transform_values { |group| group.map(&:dirname) }
+    end
+
     # @param ordinal [SpecPlanBuild::Ordinal, String]
     # @return [SpecPlanBuild::Subject, nil]
     def find(ordinal)
