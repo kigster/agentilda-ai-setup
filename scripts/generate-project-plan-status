@@ -595,7 +595,7 @@ module PlanStatus
     #
     # @param title [String] raw heading text
     # @return [String]
-    def self.normalize_heading(title)
+    private_class_method def self.normalize_heading(title)
       title.gsub(/[^\p{Alnum}\s]/, " ").sub(/\A\s*\d+(?:\s+\d+)*\s+/, "").squeeze(" ").strip
     end
 
@@ -605,7 +605,7 @@ module PlanStatus
     # @param text [String]
     # @param limit [Integer]
     # @return [String]
-    def self.truncate(text, limit)
+    private_class_method def self.truncate(text, limit)
       return text if text.length <= limit
 
       window = text[0, limit]
@@ -888,7 +888,7 @@ module PlanStatus
     # @return [Integer] a box width that fits the terminal but stays readable
     def width
       screen = defined?(::TTY::Screen) ? ::TTY::Screen.width : 100
-      [[screen - 4, 60].max, 100].min
+      (screen - 4).clamp(60, 100)
     end
   end
 

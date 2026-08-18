@@ -2,3 +2,4 @@
 **/settings.local.json
 coverage/
 .rspec_status
+tmp/

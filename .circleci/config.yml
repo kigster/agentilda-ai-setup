@@ -1,0 +1,85 @@
+version: 2.1
+
+executors:
+  # No database, no browser: the two scanners and RuboCop.
+  ruby:
+    docker:
+      - image: cimg/ruby:4.0.6
+    working_directory: ~/dot-agents
+
+commands:
+  install_packages:
+    description: >-
+      The apt packages the runner image does not carry. Note the absence of
+      google-chrome-stable, which the GitHub `test` job installed: the
+      `-browsers` image variant already ships it, and layering a second Chrome
+      over the top is how a browser and a driver stop agreeing.
+    steps:
+      - run:
+          name: Install packages
+          command: |
+            sudo apt-get update
+            sudo apt-get install --no-install-recommends -y curl libjemalloc2 libvips
+
+  bundle_deps:
+    description: >-
+      Replaces `bundler-cache: true`. Same idea, spelled out: restore, install,
+      save, keyed on Gemfile.lock.
+    steps:
+      # INQUIREX_PATH is deliberately ABSENT here, as on GitHub. It is the
+      # Gemfile's opt-in for resolving the inquirex gems from sibling checkouts
+      # (PR #179); CI has none, so setting it fails at `bundle install` before a
+      # single test runs. CI must always resolve the published gems.
+      - restore_cache:
+          keys:
+            - v1-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-{{ checksum "Gemfile.lock" }}
+            - v1-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-
+      - run:
+          name: Install Ruby dependencies
+          command: |
+            bundle config set --local path vendor/bundle
+            bundle install --jobs=4 --retry=3
+            bundle clean --force
+      - save_cache:
+          key: v1-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-{{ checksum "Gemfile.lock" }}
+          paths:
+            - vendor/bundle
+
+jobs:
+  linter:
+    executor: ruby
+    steps:
+      - checkout
+      - install_packages
+      - bundle_deps
+      # `-f github` emitted GitHub's workflow-command annotations, which mean
+      # nothing to CircleCI's log renderer. Plain output; the offences are
+      # identical.
+      - run:
+          command: bundle exec standardrb
+          name: Lint code for consistent style
+
+  test:
+    # ubuntu-latest is 4 vCPU / 16 GB; CircleCI's `medium` is 2 vCPU. `large`
+    # is the closest match. Drop to `medium` if the credit burn matters more
+    # than the wall clock — nothing here needs the extra cores to be correct.
+    resource_class: medium
+    docker:
+      - image: cimg/ruby:4.0.6
+    working_directory: ~/dot-agents
+    steps:
+      - checkout
+      - install_packages
+      - bundle_deps
+      - run:
+          name: Run tests
+          command: bundle exec rspec
+
+workflows:
+  # .github/workflows/ci.yml + lint.yml + biome.yml. They are separate files on
+  # GitHub only because that is the unit GitHub schedules; nothing depended on
+  # them being independent, and one workflow gives one status to read.
+  ci:
+    jobs:
+      - test
+      - linter

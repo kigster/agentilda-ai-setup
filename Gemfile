@@ -34,6 +34,7 @@ group :development do
 end
 
 group :test do
+  gem "rspec_junit_formatter" # JUnit XML for CircleCI store_test_results
   gem "rspec"
   gem "rspec-its"
   gem "simplecov"
