@@ -1,35 +1,61 @@
-# [Project Name]
+# [NNN.MM] [Feature Name] — Blocked
 
-> [!IMPORTANT]
-> 
-> ⛔️ This feature has been rejected. 
+> [!CAUTION]
+> This plan **cannot proceed** until a human decides the questions below.
+> It is not deferred (we could proceed and chose not to) and not rejected (we
+> decided never). It is stopped.
 
-## Rejection Reasoning
+**Status:** ⭕️ Blocked — an engineer or the CTO must decide
+_or_ 🅱️ Product Blocked — a product manager must decide
 
-### Summary
+Pick one and set the folder emoji to match. The two states are identical to the
+tooling on purpose — both mean "a human must decide" — and **only the folder
+name records which human**, so nothing can re-derive it later.
 
-### Specific Reasoning
+**Blocked since:** YYYY-MM-DD
+**Blocking:** what cannot start or finish while this stands
+**Decision needed from:** a role, and a name if you have one
 
-- [ ] Reason 1
-- [ ] Reason 2
-- [ ] Reason Ʒ
-- [ ] Reason 3
-- [ ] Reason 4
+______________________________________________________________________
 
+## The questions
 
-## Metadata
+Number them. They get referenced in conversation, in pull requests and in the
+answer, and "the second one" is not a reference.
 
-* **Date:** [YYYY-MM-DD] 
-* **Decided By:** [Who wrote this brief] 
-* **Stakeholders:** [Who needs to sign off] 
+### B1. [The question, as a question]
 
+**What we need decided:** one sentence, phrased so that an answer is possible.
+A question nobody can answer without more work is a task, not a blocker.
 
-## Resolution: [ None | Resolved | In Progress | Deferred ]
+**Why it blocks:** what breaks or gets built wrong if we guess.
 
-If this block has been addressed and resolved, capture the decisions made here. 
+**Options, with what each costs:**
 
-## Technical Block
+| Option | What it means | Cost / risk |
+| :----- | :------------ | :---------- |
+| A      |               |             |
+| B      |               |             |
 
-For implementation or technical blocks, document the reasons the block occurred, the solution arrived at, and most importantly how to avoid such a block in the future.
+**Our recommendation:** name one, and say why. A blocker that offers no
+recommendation makes the decider do the analysis twice.
 
-## Optional: Retrospective
+**What we will do if we get no answer by [date]:** the default, stated in
+advance. This is the difference between a blocker and a stall.
+
+### B2. […]
+
+______________________________________________________________________
+
+## What is already decided
+
+Anything settled that the decider does not need to reopen. Without this,
+answering B1 turns into re-litigating the whole spec.
+
+## Answers
+
+Record them here as they arrive, dated and attributed, then promote the folder
+out of Blocked with `spec-plan-build resync dirs`.
+
+- **B1** — YYYY-MM-DD, [who]: [what was decided, and any constraint that came
+  with it]
