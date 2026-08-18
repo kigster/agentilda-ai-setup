@@ -107,6 +107,6 @@ resync-prs-check:
 resync-prs:
     {{ spb }} resync prs --commit
 
-# Regenerate context/SPEC-PLAN-BUILD.md from the state machine
+# Regenerate context/feature-building/spec-plan-build.md from the state machine
 docs:
-    {{ spb }} docs --output context/SPEC-PLAN-BUILD.md
+    {{ spb }} docs --output context/feature-building/spec-plan-build.md

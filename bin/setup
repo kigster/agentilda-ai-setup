@@ -46,7 +46,7 @@ SKIP_DIRS=(bin scripts lib spec coverage docs tmp vendor node_modules)
 
 # Folders that exist as real directories in ~/.claude and hold one link per
 # child rather than a single link for the whole folder.
-DESCEND_DIRS=(skills)
+DESCEND_DIRS=(skills commands agents)
 
 DRY_RUN=0
 FORCE=0
@@ -180,10 +180,10 @@ for path in "$AGENTS_ROOT"/*/; do
   if [[ -d "$dest" && ! -L "$dest" ]]; then
     if in_list "$name" "${DESCEND_DIRS[@]}"; then
       say "  ${c_dim}$name is a real directory — linking its children${c_reset}"
-      for child in "$path"*/; do
-        [[ -d "$child" ]] || continue
+      for child in "$path"*; do
+        [[ -e "$child" ]] || continue
         child_name="$(basename "$child")"
-        link_one "${child%/}" "$dest/$child_name" "  skills/$child_name"
+        link_one "${child%/}" "$dest/$child_name" "  $name/$child_name"
       done
     else
       skipped=$((skipped + 1)); note "$name ${c_dim}already a real directory in ~/.claude${c_reset}"
