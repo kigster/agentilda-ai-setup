@@ -14,15 +14,15 @@ For the purposes of this skill, we'll define the following classes of applicatio
   <dt><strong>PG-lax</strong></dt>
 	<dd>Type: OLTP. Many small transactions from a potentially large number of concurrent users. Generally, non-critical applications, games, social apps, with an unknown (but likely small) number of users (which can grow), where the cost of invalid data reference or a missed insert is relatively low. These types of applications can be configured to perform delayed commits, and even be eventually consistent. Often in these cases it's more important that the development moves fast, and the database is not in the way. Physical deletes are a norm, logical deletes are not. Foreign key delete behavior is often <code>ON DELETE CASCADE</code>.</dd>
   <dt><strong>PG-traditional</strong></dt>
-  <dd>Type: OLTP. Many small transactions from a potentially large number of concurrent users. Otherwise, its design is tighter than that of <strong>PG-lax</strong>. Perhaps this database may contain PII on large amount of users, or be a backend for an e-commerce store, where referential integrity saves time and effort on tracking down problems and customer complaints. However, it may not need many encrypted fields or SSL-only connection, it may be directly accessible by the operations staff via a VPN, and whether to apply physical deletes or logical to key tables is a production decision.</dd>
+  <dd>Type: OLTP. Many small transactions from a potentially large number of concurrent users. Otherwise, its design is tighter than that of <strong>PG-lax</strong>. Perhaps this database may contain PII on a large number of users, or be a backend for an e-commerce store, where referential integrity saves time and effort on tracking down problems and customer complaints. However, it may not need many encrypted fields or SSL-only connections, it may be directly accessible by the operations staff via a VPN, and whether to apply physical deletes or logical to key tables is a production decision.</dd>
   <dt><strong>PG-strict</strong></dt>
-  <dd>Type: OLTP. Many small transactions from a potentially large number of concurrent users. The opposite of <strong>PG-lax</strong>: these applications often manage money, transactions, taxes, significant amount of PII or health records, and a mistake, leak, or a data corruption in such an application, as well as any extended  downtime, will cost a significant amount of money. In addition it can be legally bound to perform security audits, penetration testing and so on. These types of applications often prefer immutability (eg. on the transactions table) with later transaction inserted to amend the previous one, instead of updating it directly in place. Many tables maintain audit trails (via the triggers), and tight security, encryption at rest, encryption of columns in real-time, and SSL-only access often using public/private key. These databases almost never allow physical deletes, and perform logical delete only by having each table carry the <code>deleted_at</code> nullable column, null value of which is usually part of some unique index. <code>ON DELETE</code> behaviour is typically custom, and deletions often propagate by setting <code>deleted_at</code> on the dependent rows, but almost never physically delete anything.</dd>
+  <dd>Type: OLTP. Many small transactions from a potentially large number of concurrent users. The opposite of <strong>PG-lax</strong>: these applications often manage money, transactions, taxes, significant amount of PII or health records, and a mistake, leak, or a data corruption in such an application, as well as any extended downtime, will cost a significant amount of money. In addition, it can be legally bound to perform security audits, penetration testing and so on. These types of applications often prefer immutability (eg. on the transactions table) with a later transaction inserted to amend the previous one, instead of updating it directly in place. Many tables maintain audit trails (via the triggers), and tight security, encryption at rest, encryption of columns in real-time, and SSL-only access often using public/private key. These databases almost never allow physical deletes, and perform logical delete only by having each table carry the <code>deleted_at</code> nullable column, the null value of which is usually part of some unique index. <code>ON DELETE</code> behaviour is typically custom, and deletions often propagate by setting <code>deleted_at</code> on the dependent rows, but almost never physically delete anything.</dd>
   <dt><strong>PG-analytics</strong></dt>
-  <dd>Type: Data Warehouse. These PG instances are meant for analytics, data warehousing, and often contain large number of materialized views, ingest data from multiple sources, and have small number of concurrent users performing large and long-running queries. These applications rarely perform physical deletes, are optimized for ingestion of data and fast batch imports.</dd>
+  <dd>Type: Data Warehouse. These PG instances are meant for analytics, data warehousing, and often contain a large number of materialized views, ingest data from multiple sources, and have a small number of concurrent users performing large and long-running queries. These applications rarely perform physical deletes, are optimized for ingestion of data and fast batch imports.</dd>
 </dl>
 
 > [!IMPORTANT]
-> **It is critically important to understand what type of application we are dealing with before applying the rules. If agent is engaged in designing the schema, it must first ask the user (or read in the spec) and infer the type of application this is, and record it in its AGENTS.md file or CLAUDE.md file**. This decision will guide many of the conventions and default behaviors.
+> **It is critically important to understand what type of application we are dealing with before applying the rules. If the agent is engaged in designing the schema, it must first ask the user (or read in the spec) and infer the type of application this is, and record it in its AGENTS.md file or CLAUDE.md file**. This decision will guide many of the conventions and default behaviors.
 
 
 
@@ -34,7 +34,7 @@ For the purposes of this skill, we'll define the following classes of applicatio
 
 Regardless of what application we are building and in what language, we are generally going to lean on Rails conventions for database and table naming:
 
-1. **Tables names are plural, lower cased, underscored**
+1. **Table names are plural, lower cased, underscored**
 1. **Column names are singular (unless it's an array), also lower case, underscored and are constructed using proper English words**, almost never abbreviations unless it's something extraordinarily well known, such as `llm` or `i18n`.
 1. **Foreign keys are also singular**, eg `users` table, may be referenced by `profiles` with a singular column **`profiles.user_id`**.
 1. Each foreign key MUST state its `ON DELETE` behaviour explicitly — `CASCADE`, `RESTRICT`, `SET NULL` or `NO ACTION`. The right answer depends on the application class (see above). Leaving it unstated means `NO ACTION`, which is a decision nobody made.
@@ -43,22 +43,22 @@ Regardless of what application we are building and in what language, we are gene
 
 If you are dealing with Rails, Django, or similar frameworks, you have very likely come across both polymorphic tables (for instance — `edibles`  with `edible_id` and `edible_type`  mapping to a class in your language such as `strawberries` and `bananas`), where each class may use only a fraction of the columns of the entire table. 
 
-STI is another way to have many classes map to a single table, this time using class inheritance, implemented in the database as a `type` column which typically by the default carriers the class name that needs to be instantiated upon read.
+STI is another way to have many classes map to a single table, this time using class inheritance, implemented in the database as a `type` column which typically by default carries the class name that needs to be instantiated upon read.
 
-As a complimentary approach to STI, Rails recently introduced so called "Delegated Types", which are kind of like STI, but where the mapping between classes and the tables is actually 1-1, and there is a polymorphic table in the middle joining them all into one happy family.  So it's more like polymorphic table, honestly, than it is an STI table. For a reference please see [this blog post by Vincent, an Iterative Thinker](https://dev.to/vincentgithinji/single-table-inheritance-vs-delegated-types-in-rails-whats-the-deal-32oe).
+As a complimentary approach to STI, Rails recently introduced so-called "Delegated Types", which are kind of like STI, but where the mapping between classes and the tables is actually 1-1, and there is a polymorphic table in the middle joining them all into one happy family.  So it's more like a polymorphic table, honestly, than it is an STI table. For a reference please see [this blog post by Vincent, an Iterative Thinker](https://dev.to/vincentgithinji/single-table-inheritance-vs-delegated-types-in-rails-whats-the-deal-32oe).
 
 There are a couple of important points you should know about these mappings between classes and database tables.
 
-1. Both support the foreign keys out to other tables, but other tables can not have foreign keys onto them. For instance, `fruit_salads.banana_id` can not be a FK into the `edibles` table, but it can be with the Delegated Types.
-2. With STI you also have multiple classes occupying different rows in a single table, so outbound FKs are cool, inbound not so much.
-3. With STI you have a single column — typically `type`, that differentiates the classes, and contains the fully qualified actual classname. **And that is the problem.** Imagine you decided to refactor your codebase, and `Shloopify::Checkout::Cart` became `AmazonBoughtUs::Checkout::Cart`, and the `carts` are stored in the STI table because why not, there many kinds of shopping carts, some roll, some you have to carry, some charge you before you give them your credit card. Jokes aside, this is a gnarly data migration. So the advice is simple: use a single word in lower case designated to each class to tell which class this row belongs to. And in Rails the magical method that helps you resolve all that is called `find_sti_class`.   If instead of the first classname we simply stored `shloop`, we could change the codebase to now resolve `shloop` to the second class, bypassing the need for a giant multi-day data migration.
+1. **The polymorphic column pair can never be a real foreign key.** A FK constraint targets exactly one table, and `edibles.edible_id` targets whichever table `edible_type` names on that particular row. There is no SQL for that. This is the actual limitation, and it is why Delegated Types help: each concrete type gets its own table, and the join row carries a genuine, enforced FK to it.
+2. **STI is the opposite problem, and subtler.** An STI table is one real table with one real primary key, so other tables *can* declare a foreign key onto it — the database accepts `carts.id` as a target without complaint. What the FK cannot do is constrain *which subclass* was referenced: Postgres will let `smoothies.banana_id` point at a row whose `type` is `strawberry`. If that distinction matters, enforce it with a `CHECK` constraint, a partial unique index, or a different design — not a foreign key.
+3. With STI you have a single column — typically `type`, that differentiates the classes, and contains the fully qualified actual classname. **And that is the problem.** Imagine you decided to refactor your codebase, and `Shloopify::Checkout::Cart` became `AmazonBoughtUs::Checkout::Cart`, and the `carts` are stored in the STI table because why not, there are many kinds of shopping carts, some roll, some you have to carry, some charge you before you give them your credit card. Jokes aside, this is a gnarly data migration. So the advice is simple: use a single word in lower case designated to each class to tell which class this row belongs to. And in Rails the magical method that helps you resolve all that is called `find_sti_class`.   If instead of the first classname we simply stored `shloop`, we could change the codebase to now resolve `shloop` to the second class, bypassing the need for a giant multi-day data migration.
 4. Do index the `type` column. By itself, and in a composite index with `id, type` → this will be used for joins.
-5. With polymorphic tables, the same exact concept applies to polymorphic tables: you do not want the fully qualified classname to be in the `edible_type`, you want it to contain `banana` and `strawberry`. The trick in this case is much simpler, you merely need to define a class method `polymorphic_name` on each class you don't want to participate in the polymorphic table using it's fully qualified classname.
+5. With polymorphic tables, the same exact concept applies to polymorphic tables: you do not want the fully qualified classname to be in the `edible_type`, you want it to contain `banana` and `strawberry`. The trick in this case is much simpler, you merely need to define a class method `polymorphic_name` on each class you don't want to participate in the polymorphic table using its fully qualified classname.
 6. And for the love of god, please create the index on ID first and sort the type so that in the index similar objects are next to each other: `create index on edibles (edible_id, edible_type desc)`;
 
 ### Third Party Schemas
 
-Whenever there is a benefit of copying a third party tables into our own database due to the active integration, webhooks being received for various events, and so on (examples of which include Stripe, Plaid, and many others) sometimes it's very beneficial to store the third party's data in the tables they might publicize and even encourage us to use.
+Whenever there is a benefit of copying third party tables into our own database due to the active integration, webhooks being received for various events, and so on (examples of which include Stripe, Plaid, and many others) sometimes it's very beneficial to store the third party's data in the tables they might publicize and even encourage us to use.
 
 This can be very useful and can provide a good additional source of information about what's going on in the application, useful in audits, debugging, troubleshooting, and so on, especially if the application is receiving a lot of webhooks from the third party, each of a different schema mapped to a potential table.
 
@@ -134,7 +134,7 @@ That does not mean skip the partial index. It stays small because it only covers
 > [!CAUTION]
 > **Never store money in `float`, `double precision`, or Ruby's `Float`.** Binary floating point cannot represent 0.10, and a tax engine that is off by a hundredth of a cent on ten million line items is off by real money in a real audit. This is not a style preference.
 
-**The default is integer minor units — cents — in a `bigint`.** `amount_cents bigint NOT NULL`, paired with `currency char(3) NOT NULL` holding an ISO 4217 code. Integers add, subtract and compare exactly, they are 8 bytes, they survive every serialization boundary between Postgres, Ruby, JSON and JavaScript without a single rounding surprise, and `bigint` cents holds about 92 quadrillion of them, which is more than any of us will need.
+**The default is integer minor units — cents — in a `bigint`.** `amount_cents bigint NOT NULL`, paired with `currency char(3) NOT NULL` holding an ISO 4217 code. Integers add, subtract and compare exactly, they are 8 bytes, they survive every serialization boundary between Postgres, Ruby, JSON and JavaScript without a single rounding surprise, and `bigint` cents tops out at 9,223,372,036,854,775,807 — 9.2 quintillion cents, or about 92 quadrillion dollars — which is more than any of us will need.
 
 Name the column for what it holds. `amount_cents`, not `amount` — the suffix is what stops somebody assigning `19.99` to it three years from now and being wrong by two orders of magnitude.
 
@@ -205,11 +205,11 @@ Primary keys should never be made composite or based on business-value columns. 
 You have two choices in choosing the datatype for primary keys, which depends on the application you are building once again.
 
 > [!CAUTION]
-> The default datatype for auto-incrementing primary key is `integer` which is 32-bit and signed, and is therefore capped at 2,147,483,647 — a shade over 2.1 billion. Therefore modern application almost never use the default data type.
+> The default datatype for auto-incrementing primary key is `integer` which is 32-bit and signed, and is therefore capped at 2,147,483,647 — a shade over 2.1 billion. Therefore modern applications almost never use the default data type.
 
 #### Data Types for Primary Keys
 
-Primary keys often leak out to the web front-end in unexpected ways. You may be calling a REST API, and calling `/users/:id/settings` which anyone with Chrome Dev Tools can watch and realize that their user id is for instance, 10,000. Imagine using a web app that's 10 years old, and realizing you are only the 10,000s user on the entire system? That's not good. It also allows your competitors to inspect the sizes of your key tables by watching the RESTful API URLs and deducing it from there.
+Primary keys often leak out to the web front-end in unexpected ways. You may be calling a REST API, and calling `/users/:id/settings` which anyone with Chrome Dev Tools can watch and realize that their user id is for instance, 10,000. Imagine using a web app that's 10 years old, and realizing you are only the 10,000th user on the entire system? That's not good. It also allows your competitors to inspect the sizes of your key tables by watching the RESTful API URLs and deducing it from there.
 
 ##### Bigint
 
@@ -217,7 +217,7 @@ If you do not care about any of the above, then use `bigint`, which tops out aro
 
 ##### UUIDv7
 
-**The answer to this nonsense is — UUID. With PostgreSQL18 embracing UUID and no longer requiring a custom extension to load to use it, this is likely the most secure and modern data-independent ID strategy you should use.**
+**The answer to this nonsense is — UUID.** Be precise about the history: an extension has not been required to *generate* a UUID since PostgreSQL 13, when `gen_random_uuid()` moved into core and `pgcrypto` stopped being a prerequisite. What PostgreSQL 18 adds is `uuidv7()`, which is what makes a UUID primary key the most secure and modern data-independent ID strategy to reach for by default.
 
 **What landed in 18:**
 
@@ -225,14 +225,14 @@ If you do not care about any of the above, then use `bigint`, which tops out aro
 - `uuidv4()` — an alias for `gen_random_uuid()`, purely so your schema reads honestly about which version you asked for.
 - `uuid_extract_timestamp()` (which arrived in 17) now understands v7, so you can recover the creation time from the key itself.
 
-Also: use `uuid` primary keys, `timestamptz` not `timestamp` (Rails 7.0+ does this by default), real foreign keys with `add_foreign_key ... validate: false` then validate separately, and `citext` or a `CHECK` rather than three layers of Ruby validation pretending to be a constraint.
+Also: use `uuid` primary keys, and `timestamptz` not `timestamp` — note that Rails does **not** do this for you; the PostgreSQL adapter still maps `t.datetime` to `timestamp without time zone`. Rails 7.0 added the opt-in, so set `ActiveRecord::ConnectionAdapters::PostgreSQLAdapter.datetime_type = :timestamptz` in an initializer. Then real foreign keys with `add_foreign_key ... validate: false` then validate separately, and `citext` or a `CHECK` rather than three layers of Ruby validation pretending to be a constraint.
 
 > [!NOTE]
 > Early versions of Rails pretended that Rails validations are enough, and you do not need foreign keys. This was mostly motivated by the challenges in creating test fixtures in the right order (when FKs were enabled), and DHH's lack of understanding of databases deep enough to grok why that was a misnomer. **Do use foreign keys on ALL of your tables that have them.**
 
 ##### The Size of UUID
 
-**Bytes:** a Postgres `uuid` is **16 bytes** (128 bits, twice larger than `bigint`), fixed-width, stored as a raw 128-bit value — not the 36-character text form you see in `psql`. Its alignment is char, so it doesn't force padding. Compare to `bigint` at 8 bytes. So the honest accounting is: +8 bytes per row in the heap, +8 per entry in the primary key index, and +8 in every single foreign key column and every index covering one. On a table with five FK references to it, you're paying that toll five times over. If anyone ever suggests storing UUIDs as `varchar(36)`, that's 37 bytes plus alignment slop, and you should look at them the way you'd look at someone who tunes a kick drum by ear at 3am.
+**Bytes:** a Postgres `uuid` is **16 bytes** (128 bits, twice the width of `bigint`), fixed-width, stored as a raw 128-bit value — not the 36-character text form you see in `psql`. Its alignment is char, so it doesn't force padding. Compare to `bigint` at 8 bytes. So the honest accounting is: +8 bytes per row in the heap, +8 per entry in the primary key index, and +8 in every single foreign key column and every index covering one. On a table with five FK references to it, you're paying that toll five times over. If anyone ever suggests storing UUIDs as `varchar(36)`, that's 37 bytes plus alignment slop, and you should look at them the way you'd look at someone who tunes a kick drum by ear at 3am.
 
 **Why v7 matters more than the 8 bytes.** UUIDv4 is uniformly random, so every insert lands in a random B-tree leaf page. On a table bigger than `shared_buffers` that means a page fault per insert, catastrophic index bloat as pages split at ~50% fill instead of packing right-to-left, and a working set that is effectively the whole index. UUIDv7's leading timestamp restores the sequential insert locality that made `bigserial` fast — you get right-hand-side page splits, ~90% fill factor, and a hot tail that stays cached. Benchmarks vary wildly by workload, but the insert-throughput gap between v4 and v7 on large tables is routinely an order of magnitude, ***which dwarfs 8 bytes of width.***
 
@@ -369,7 +369,7 @@ Two more rules that keep this honest:
 
 You cannot tune what you cannot see, and the single highest-value thing you can do is make the database *readable* — safely — by the people and tools trying to understand it. 
 
-Of course I'd love for you to use Datadog, NewRelic, HoneyComb, and so on and so force. But, if you know where to look, or if you played with `pgAnalyzer` before, then you know how deep peformance tuning of PG queries can go.
+Of course I'd love for you to use Datadog, NewRelic, HoneyComb, and so on and so forth. But, if you know where to look, or if you played with `pganalyze` before, then you know how deep performance tuning of PG queries can go.
 
 ### A read-only role, and let the agents use it
 
@@ -402,7 +402,7 @@ PostgreSQL 18 ships roughly **forty-six** `pg_stat*` views, and the useful ones 
 - **`pg_stat_progress_create_index`** and **`pg_stat_progress_vacuum`** — how far along that `CREATE INDEX CONCURRENTLY` actually is, rather than staring at a hung terminal.
 - **`pg_stat_replication`** — lag, per replica, in bytes and in time.
 
-Add `auto_explain` with a threshold (`auto_explain.log_min_duration = '500ms'`, `log_analyze = on`) so the plan for a slow query is in the log at the moment it was slow, rather than the plan you get re-running it later against a warm cache and different statistics. And when you do explain by hand, it is `EXPLAIN (ANALYZE, BUFFERS)` — without `BUFFERS` you cannot distinguish "read from memory" from "read from disk", which is usually the entire question.
+Add `auto_explain` with a threshold (`auto_explain.log_min_duration = '500ms'`, `log_analyze = on`) so the plan for a slow query is in the log at the moment it was slow, rather than the plan you get re-running it later against a warm cache and different statistics. And when you do explain by hand, it is `EXPLAIN (ANALYZE, BUFFERS)` — without `BUFFERS` you cannot distinguish "read from memory" from "read from disk", which is usually the entire question. On PostgreSQL 18 `BUFFERS` is included automatically whenever `ANALYZE` is used, so the explicit option only matters on 17 and older.
 
 ## Vector Search
 
