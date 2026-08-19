@@ -1,6 +1,8 @@
-# Databases: Best Practices
+# PostgreSQL: Best Practices for Engineering Applications that Use It
 
-This document captures various practices, dos and don'ts accumulated over decades of working with PostgreSQL in particular. While PostgreSQL is moving exceptionally fast, and new features or new behavior may override the old, you are going to adhere to these rules judiciously, and only when you find a new feature contradicting something here or a specific use case you will stop and have a conversation with your human co-author.
+This document is meant to be part of context that AGENTS.md (or CLAUDE.md) loads on demand, whenever it needs to design PostgreSQL schema, optimize queries, or propose a sub-schema to an existing application. It classifies the types of applications the agent will be dealing with, and captures various practices, dos and don'ts accumulated over decades of working with PostgreSQL in particular. 
+
+While PostgreSQL is moving exceptionally fast, and new features or new behavior may override the old, you are going to adhere to these rules judiciously, and only when you find a new feature contradicting something here or a specific use case you will stop and have a conversation with your human co-author.
 
 ## Application Classifications
 
@@ -20,7 +22,13 @@ For the purposes of this skill, we'll define the following classes of applicatio
 </dl>
 
 > [!IMPORTANT]
-> It is critically important to understand what type of application we are dealing with before applying the rules. If agent is engaged in designing the schema, it must first ask the user (or read in the spec) and infer the type of application this is, and record it in its AGENTS.md file or CLAUDE.md file. This decision will guide many of the conventions and default behaviors.
+> **It is critically important to understand what type of application we are dealing with before applying the rules. If agent is engaged in designing the schema, it must first ask the user (or read in the spec) and infer the type of application this is, and record it in its AGENTS.md file or CLAUDE.md file**. This decision will guide many of the conventions and default behaviors.
+
+
+
+> [!NOTE]
+>
+> Note that the following advice is presented in no particular order. 
 
 ## Logical vs Physical Deletes
 

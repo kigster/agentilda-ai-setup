@@ -261,10 +261,13 @@ module SpecPlanBuild
           desc:          "Actually retitle the pull requests (default: dry run)"
         option :state, default: "all", values: %w[open closed merged all],
           desc:            "Which pull requests to consider"
+        option :adopt, type: :boolean, default: true,
+          desc:           "Mint a retroactive plan folder for every pull request that resolves to none. --no-adopt flags them for a human instead"
 
         example [
-          "                # show what would be retitled",
+          "                # show what would be retitled, and what would be adopted",
           "--state open    # only open pull requests",
+          "--no-adopt      # never create a folder; flag the unresolvable ones",
           "--commit        # do it"
         ]
 
@@ -272,7 +275,9 @@ module SpecPlanBuild
         # @return [void]
         def call(**options)
           github = GitHub.new
-          changes = SpecPlanBuild::Resync::Prs.new(tree: tree_for(options), github:)
+          tree = tree_for(options)
+          changes = SpecPlanBuild::Resync::Prs.new(tree:, github:,
+            adopt: options.fetch(:adopt, true), root: File.dirname(tree.dir))
             .call(commit: commit?(options))
 
           if changes.empty?
@@ -302,8 +307,13 @@ module SpecPlanBuild
           assumed = applicable.select(&:assumed?)
 
           applicable.each do |c|
-            say("##{c.number}  #{c.new_title}#{paint("   (assumed)", :yellow) if c.assumed?}")
+            note = if c.adopted? then paint("   (new plan)", :magenta)
+            elsif c.assumed? then paint("   (assumed)", :yellow)
+            end
+            say("##{c.number}  #{c.new_title}#{note}")
           end
+
+          report_adoptions(applicable.select(&:adopted?), options)
 
           flagged.each { |c| say("##{c.number}  #{paint("SKIPPED", :red)} — #{c.reason}", bullet: "!") }
 
@@ -320,6 +330,23 @@ module SpecPlanBuild
                  "That is an assertion about intent, and it is yours to make: check each one\n" \
                  "before committing. A pull request that writes a plan's spec belongs to that\n" \
                  "plan however its branch was named.")
+        end
+
+        # Creating folders is a bigger act than editing a title, so it is
+        # reported separately rather than buried in the retitle list.
+        #
+        # @param adopted [Array]
+        # @param options [Hash]
+        # @return [void]
+        def report_adoptions(adopted, options)
+          return if adopted.empty?
+
+          verb = commit?(options) ? "Created" : "Would create"
+          info("#{verb} #{adopted.size} plan folder#{"s" unless adopted.size == 1} for pull " \
+               "requests that resolved to no plan:\n\n" \
+               "#{adopted.map { |c| "  #{c.ordinal}  ##{c.number}  #{c.title}" }.join("\n")}\n\n" \
+               "Each holds its pull request and nothing else. Run `spec-plan-build run --commit`\n" \
+               "to have the specification written from what the pull request actually did.")
         end
       end
     end

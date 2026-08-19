@@ -32,7 +32,7 @@ RSpec.describe SpecPlanBuild::GitHub do
 
       expect(command).to have_received(:run).with(
         "gh", "pr", "list", "--state", "all", "--limit", "200",
-        "--json", "number,title,url,headRefName,files"
+        "--json", "number,title,url,headRefName,files,state,isDraft,mergedAt"
       )
     end
 
@@ -50,7 +50,9 @@ RSpec.describe SpecPlanBuild::GitHub do
         title: "Send transactional mail through Resend",
         url: "https://github.com/example/repo/pull/92",
         branch: "kig/018.01-resend",
-        files: [".plans/018.01-🟡-deploy/plan.md", "rails/Gemfile"]
+        files: [".plans/018.01-🟡-deploy/plan.md", "rails/Gemfile"],
+        state: "Unknown",
+        open: false
       )
     end
 

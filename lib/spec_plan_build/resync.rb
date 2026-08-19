@@ -156,12 +156,15 @@ module SpecPlanBuild
       #   @return [Boolean] a human must decide; never edited
       # @!attribute [r] assumed
       #   @return [Boolean] "no plan" was inferred, not asserted by the author
-      Change = Data.define(:number, :title, :new_title, :ordinal, :reason, :ambiguous, :assumed) do
+      Change = Data.define(:number, :title, :new_title, :ordinal, :reason, :ambiguous, :assumed, :adopted) do
         # @return [Boolean]
         def ambiguous? = ambiguous
 
         # @return [Boolean]
         def assumed? = assumed
+
+        # @return [Boolean] whether a plan folder was minted for this one
+        def adopted? = adopted
 
         # @return [Boolean] safe to apply without a human looking
         def applicable? = !ambiguous && !new_title.nil?
@@ -169,10 +172,18 @@ module SpecPlanBuild
 
       # @param tree [SpecPlanBuild::Tree]
       # @param github [SpecPlanBuild::GitHub]
-      def initialize(tree:, github: GitHub.new)
+      # @param adopt [Boolean] give a plan folder to every pull request that
+      #   resolves to none, rather than flagging it and moving on
+      # @param root [String, nil] repository root, for reading branches
+      def initialize(tree:, github: GitHub.new, adopt: true, root: nil)
         @tree = tree
         @github = github
+        @adopt = adopt
+        @root = root
       end
+
+      # @return [Boolean]
+      def adopt? = @adopt
 
       # @return [SpecPlanBuild::Tree]
       attr_reader :tree
@@ -183,22 +194,65 @@ module SpecPlanBuild
       # What would change, without changing anything.
       #
       # @return [Array<SpecPlanBuild::Resync::Prs::Change>]
-      def plan
-        github.pulls.reject { |pr| pr[:title].to_s.match?(PREFIXED) }.map { |pr| change_for(pr) }
-      end
+      def plan = resolve(candidates).then { |changes| adopt? ? with_adoptions(changes) : changes }
 
-      # @param commit [Boolean] actually retitle
+      # @param commit [Boolean] actually retitle, and mint the folders
       # @return [Array<SpecPlanBuild::Resync::Prs::Change>] what was proposed
       def call(commit: false)
-        changes = plan
-        return changes unless commit
+        changes = resolve(candidates)
+        return adopt? ? with_adoptions(changes) : changes unless commit
 
+        changes = with_adoptions(changes, create: true) if adopt?
         applicable = changes.select(&:applicable?)
         UI.stepping(applicable, "Retitling") { |c| github.retitle(number: c.number, title: c.new_title) }
         changes
       end
 
+      # @return [Array<SpecPlanBuild::Adoption>] the adopter, memoized
+      def adoption = @adoption ||= Adoption.new(tree:, github:, root: @root)
+
       private
+
+      # @return [Array<Hash>] pull requests with no prefix yet
+      def candidates = github.pulls.reject { |pr| pr[:title].to_s.match?(PREFIXED) }
+
+      # @param pulls [Array<Hash>]
+      # @return [Array<SpecPlanBuild::Resync::Prs::Change>]
+      def resolve(pulls) = pulls.map { |pr| change_for(pr) }
+
+      # Replace every flagged change with one that points at a plan folder the
+      # pull request now owns. The unresolvable ones were unresolvable because
+      # no plan described them — so the answer is a plan, not a shrug.
+      #
+      # @param changes [Array<SpecPlanBuild::Resync::Prs::Change>]
+      # @param create [Boolean] mint the folders, rather than only saying so
+      # @return [Array<SpecPlanBuild::Resync::Prs::Change>]
+      def with_adoptions(changes, create: false)
+        orphans = changes.select(&:ambiguous?)
+        return changes if orphans.empty?
+
+        pulls = orphans.map { |c| pull_by_number.fetch(c.number) }
+        adoptees = create ? adoption.call(pulls) : adoption.plan(pulls)
+        by_number = adoptees.to_h { |a| [a.pull[:number], a] }
+
+        changes.map { |c| (c.ambiguous? && by_number[c.number]) ? adopted(c, by_number[c.number]) : c }
+      end
+
+      # @return [Hash{Integer => Hash}]
+      def pull_by_number = @pull_by_number ||= candidates.to_h { |pr| [pr[:number], pr] }
+
+      # @param change [SpecPlanBuild::Resync::Prs::Change]
+      # @param adoptee [SpecPlanBuild::Adoption::Adoptee]
+      # @return [SpecPlanBuild::Resync::Prs::Change]
+      def adopted(change, adoptee)
+        change.with(
+          ordinal: adoptee.ordinal,
+          new_title: "#{adoptee.ordinal.to_prefix} #{change.title}",
+          reason: "#{change.reason} — adopted into #{adoptee.dirname}",
+          ambiguous: false,
+          adopted: true
+        )
+      end
 
       # @param pull [Hash]
       # @return [SpecPlanBuild::Resync::Prs::Change]
@@ -252,7 +306,7 @@ module SpecPlanBuild
       # @return [SpecPlanBuild::Resync::Prs::Change]
       def resolved(pull, ordinal, why)
         Change.new(number: pull[:number], title: pull[:title], ordinal:, reason: why,
-          new_title: "#{ordinal.to_prefix} #{pull[:title]}", ambiguous: false, assumed: false)
+          new_title: "#{ordinal.to_prefix} #{pull[:title]}", ambiguous: false, assumed: false, adopted: false)
       end
 
       # Nothing resolved, so this is developer work — but that is an assertion
@@ -263,7 +317,7 @@ module SpecPlanBuild
       def no_plan(pull)
         Change.new(number: pull[:number], title: pull[:title], ordinal: nil,
           new_title: "[#{SpecPlanBuild::NO_PLAN_PREFIX}] #{pull[:title]}",
-          reason: "no plan resolved from the branch or the diff", ambiguous: false, assumed: true)
+          reason: "no plan resolved from the branch or the diff", ambiguous: false, assumed: true, adopted: false)
       end
 
       # @param pull [Hash]
@@ -271,7 +325,7 @@ module SpecPlanBuild
       # @return [SpecPlanBuild::Resync::Prs::Change]
       def flag(pull, why)
         Change.new(number: pull[:number], title: pull[:title], new_title: nil, ordinal: nil,
-          reason: why, ambiguous: true, assumed: false)
+          reason: why, ambiguous: true, assumed: false, adopted: false)
       end
     end
   end

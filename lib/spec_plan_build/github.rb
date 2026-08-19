@@ -10,7 +10,7 @@ module SpecPlanBuild
   # repository.
   class GitHub
     # Fields asked of `gh pr list`.
-    FIELDS = %w[number title url headRefName files].freeze
+    FIELDS = %w[number title url headRefName files state isDraft mergedAt].freeze
 
     # @param command [TTY::Command] runner, injectable for tests
     # @param limit [Integer] how many pull requests to fetch
@@ -42,7 +42,9 @@ module SpecPlanBuild
           title: pr["title"].to_s,
           url: pr["url"],
           branch: pr["headRefName"].to_s,
-          files: Array(pr["files"]).map { |f| f["path"] }.compact
+          files: Array(pr["files"]).map { |f| f["path"] }.compact,
+          state: self.class.state_label(pr),
+          open: pr["mergedAt"].nil? && pr["state"].to_s.upcase == "OPEN"
         }
       end
     rescue TTY::Command::ExitError, JSON::ParserError => e

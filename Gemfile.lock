@@ -167,6 +167,7 @@ DEPENDENCIES
   dry-schema
   dry-types
   dry-validation
+  parallel
   pastel
   rspec
   rspec-its

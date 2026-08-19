@@ -16,6 +16,8 @@ require "concurrent/hash"
 require "etc"
 require "fileutils"
 require "tempfile"
+require "shellwords"
+require "parallel"
 
 # Spec → Plan → Build.
 #
@@ -66,6 +68,25 @@ module SpecPlanBuild
     true
   end
 
+  # Plan numbers visible in `.plans` on a git ref, without checking it out.
+  #
+  # A pull request's branch is the only place that knows how far the sequence
+  # had got when the work started, and branches are not all rebased onto the
+  # same main. Reading the ref directly costs one `ls-tree` and no worktree.
+  #
+  # @param root [String] repository root
+  # @param ref [String] a branch name; `origin/` is tried first
+  # @return [Array<SpecPlanBuild::Ordinal>] possibly empty
+  def self.plans_on_ref(root, ref)
+    ["origin/#{ref}", ref].each do |candidate|
+      out = `git -C #{root.shellescape} ls-tree -d --name-only #{candidate.shellescape} #{PLANS_DIR}/ 2>/dev/null`
+      next if out.to_s.strip.empty?
+
+      return out.lines.filter_map { |line| Ordinal.from_dirname(File.basename(line.strip)) }
+    end
+    []
+  end
+
   # The agent that writes a specification for work that already shipped.
   # Named here rather than in the CLI so the definition file stays the single
   # source of truth about who does what.
@@ -89,6 +110,7 @@ end
   github
   tree
   creator
+  adoption
   resolver
   resync
   reporter
