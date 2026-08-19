@@ -66,6 +66,79 @@ module SpecPlanBuild
       MESSAGE
     end
 
+    # Fields asked of `gh pr view`, which unlike `pr list` can be told about
+    # one pull request in another repository.
+    VIEW_FIELDS = %w[number title url state isDraft mergedAt body].freeze
+
+    # A reference to one pull request: a bare number, a `#`-prefixed number,
+    # or a full URL to a GitHub pull request or a GitLab merge request.
+    REF = %r{\A(?:\#?\d+|https?://\S+?/(?:pull|merge_requests)/\d+/?)\z}
+
+    # Split and validate a `--prs` value before any of it reaches the network,
+    # so a typo fails in a hundredth of a second with the offending token named
+    # rather than after four round trips with a `gh` diagnostic.
+    #
+    # @param text [String] e.g. "12,15,18" or "https://…/pull/12, #15"
+    # @return [Array<String>] references, in the order given, de-duplicated
+    # @raise [SpecPlanBuild::Error] on anything that is not a reference
+    def self.parse_refs(text)
+      refs = text.to_s.split(",").map(&:strip).reject(&:empty?)
+      raise Error, "no pull requests given" if refs.empty?
+
+      bad = refs.reject { |r| r.match?(REF) }
+      unless bad.empty?
+        raise Error, "not a pull request number or URL: #{bad.join(", ")}"
+      end
+
+      refs.uniq
+    end
+
+    # One pull request, by number or URL.
+    #
+    # @param ref [String] "12", "#12" or "https://github.com/o/r/pull/12"
+    # @return [Hash] `{number:, title:, url:, state:, body:}`
+    # @raise [SpecPlanBuild::Error]
+    def pull_request(ref)
+      out = @command.run("gh", "pr", "view", ref.to_s, "--json", VIEW_FIELDS.join(",")).out
+      raise Error, no_output_message if out.to_s.strip.empty?
+
+      pr = JSON.parse(out)
+      {
+        number: pr["number"],
+        title: pr["title"].to_s,
+        url: pr["url"].to_s,
+        state: self.class.state_label(pr),
+        body: pr["body"].to_s
+      }
+    rescue TTY::Command::ExitError, JSON::ParserError => e
+      raise Error, "could not read pull request #{ref}: #{e.message.lines.first.to_s.strip}"
+    end
+
+    # Several pull requests, in the order asked for.
+    #
+    # @param refs [Array<String>]
+    # @return [Array<Hash>]
+    def pull_requests(refs)
+      UI.stepping(refs, "Fetching pull requests") { |ref| ref }
+      refs.map { |ref| pull_request(ref) }
+    end
+
+    # `gh` speaks in enums; `pull-requests.md` speaks in the words the state
+    # machine parses. Translate once, here, rather than at each call site.
+    #
+    # @param pr [Hash] a decoded `gh pr view` payload
+    # @return [String] one of the labels in {PullRequests::STATES}
+    def self.state_label(pr)
+      return "Merged 🟣" if pr["mergedAt"]
+      return "WIP 🟡" if pr["isDraft"]
+
+      case pr["state"].to_s.upcase
+      when "OPEN" then "Open 🟡"
+      when "CLOSED" then "Closed 🔴"
+      else "Unknown"
+      end
+    end
+
     # Change a pull request's title.
     #
     # @param number [Integer]

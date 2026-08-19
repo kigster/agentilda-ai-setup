@@ -77,12 +77,18 @@ module SpecPlanBuild
         desc:            "Create a retroactive plan in the gap after this plan, e.g. 002"
       option :status, aliases: ["-s"],
         desc:             "Open in a state other than the default"
+      option :prs, aliases: ["--pr"],
+        desc:          "Document work that already shipped: pull request numbers or URLs, comma separated. Requires --after"
+      option :spec, type: :boolean, default: true,
+        desc:           "With --prs, write spec.md from what the pull requests did. --no-spec records them and stops, which is fast and offline"
 
       # noinspection RubyMismatchedArgumentType
       example [
-        "tax rule dsl                  # 003.00-⚪️-tax-rule-dsl",
-        "--after 002 schedule k1       # 002.01-⬜️-schedule-k1 (documented after the fact)",
-        "--status ready billing sync   # opens at ⭐️ instead of ⚪️"
+        "tax rule dsl                        # 003.00-⚪️-tax-rule-dsl",
+        "--after 002 schedule k1             # 002.01-🕰️-schedule-k1 (documented after the fact)",
+        "--after 018 --prs 12,15 verify      # …and write spec.md from what those PRs did",
+        "--after 018 --pr https://…/pull/12 verify",
+        "--status ready billing sync         # opens at ⭐️ instead of ⚪️"
       ]
 
       # @param words [Array<String>]
@@ -92,23 +98,99 @@ module SpecPlanBuild
         dir = options.fetch(:dir, SpecPlanBuild::PLANS_DIR)
         FileUtils.mkdir_p(dir)
 
-        result = Creator.new(dir:).create(words:, after: options[:after], status: options[:status])
+        prs = fetch_prs(options)
+        result = Creator.new(dir:).create(words:, after: options[:after],
+          status: options[:status], prs:)
 
         result.either(
-          lambda { |path|
-            puts path
-            unless quiet?(options)
-              feature = Feature.parse(path)
-              success("Created #{File.basename(path)}\n\n" \
-                        "#{feature.status.emoji} #{feature.status.label} — #{feature.status.note}\n" \
-                        "Next: write #{File.join(File.basename(path), "spec.md")}")
-            end
-          },
+          ->(path) { created(path, prs, options) },
           lambda { |message|
             error("Could not create the plan:\n#{message}")
             exit 65
           }
         )
+      end
+
+      private
+
+      # A retroactive plan documents work that landed *somewhere* in the
+      # sequence, and only its author knows where. Guessing would put the
+      # number — the one thing that never changes — in the wrong place.
+      #
+      # @param options [Hash]
+      # @return [Array<Hash>, nil]
+      def fetch_prs(options)
+        return nil unless options[:prs]
+
+        unless options[:after]
+          error("--prs documents work that already shipped;\n" \
+                "name the plan it landed after with --after, e.g. --after 018")
+          exit 64
+        end
+
+        GitHub.new.pull_requests(GitHub.parse_refs(options[:prs]))
+      rescue SpecPlanBuild::Error => e
+        error("Could not read the pull requests:\n#{e.message}")
+        exit 65
+      end
+
+      # @param path [String]
+      # @param prs [Array<Hash>, nil]
+      # @param options [Hash]
+      # @return [void]
+      def created(path, prs, options)
+        path = synthesize(path, options) if prs && !prs.empty? && options.fetch(:spec, true)
+        puts path
+        return if quiet?(options)
+
+        feature = Feature.parse(path)
+        success("Created #{File.basename(path)}\n\n" \
+                  "#{feature.status.emoji} #{feature.status.label} — #{feature.status.note}\n" \
+                  "#{next_step(path, feature)}")
+      end
+
+      # Hand the folder to the writer that already knows how to write a
+      # retroactive specification, then let `resync dirs` decide what the
+      # folder has become — 🕰️ is only true while there is no `spec.md`.
+      #
+      # @param path [String]
+      # @param options [Hash]
+      # @return [String] the folder's path, which the resync may have renamed
+      def synthesize(path, options)
+        agent = Agents.new.find(SpecPlanBuild::RETROACTIVE_WRITER) or return path
+        root = options[:root] || File.dirname(path, 2)
+
+        ok, note = UI.spinning("Writing spec.md from #{File.basename(path)}") {
+          Executor.new(root:).call(agent, Subject.new(Feature.parse(path)))
+        }
+        warn_about(note) unless ok
+
+        settle(path)
+      end
+
+      # @param path [String]
+      # @return [String] where the folder ended up
+      def settle(path)
+        tree = Tree.new(dir: File.dirname(path))
+        change = SpecPlanBuild::Resync::Dirs.new(tree:).call(commit: true)
+          .find { |c| c.source == path }
+        change ? change.target : path
+      end
+
+      # @param note [String]
+      # @return [void]
+      def warn_about(note)
+        error("The folder was created, but spec.md was not written:\n#{note}\n\n" \
+              "The pull requests are recorded. Run `spec-plan-build run --commit` to retry.")
+      end
+
+      # @param path [String]
+      # @param feature [SpecPlanBuild::Feature]
+      # @return [String]
+      def next_step(path, feature)
+        return "Next: write #{File.join(File.basename(path), "spec.md")}" unless feature.status.key == :new && File.file?(File.join(path, "spec.md"))
+
+        "Next: read #{File.join(File.basename(path), "spec.md")} — it was written from the pull requests, so check it against what actually shipped"
       end
     end
 

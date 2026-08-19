@@ -318,7 +318,10 @@ end
 ```
 
 > [!CAUTION]
-> **ActiveRecord relations are lazy, and that will defeat this block silently.** `eventually_consistent { User.where(first_name: "Alan") }` returns an *unloaded* relation; the query then executes later, outside the block, against whichever connection happens to be current. Nothing runs on the replica and nothing is retried. Force evaluation **inside** the block — `.first`, `.to_a`, `.load`, `.find_by!`, `.count` — or the whole thing is decoration.
+>
+> **ActiveRecord relations are lazy, and that will defeat this block silently.** 
+>
+> `eventually_consistent { User.where(first_name: "Alan") }` returns an *unloaded* relation; the query then executes later, outside the block, against whichever connection happens to be current. Nothing runs on the replica and nothing is retried. Force evaluation **inside** the block — `.first`, `.to_a`, `.load`, `.find_by!`, `.count` — or the whole thing is decoration.
 
 Two more rules that keep this honest:
 
@@ -327,7 +330,9 @@ Two more rules that keep this honest:
 
 ## Observability
 
-You cannot tune what you cannot see, and the single highest-value thing you can do is make the database *readable* — safely — by the people and tools trying to understand it.
+You cannot tune what you cannot see, and the single highest-value thing you can do is make the database *readable* — safely — by the people and tools trying to understand it. 
+
+Of course I'd love for you to use Datadog, NewRelic, HoneyComb, and so on and so force. But, if you know where to look, or if you played with `pgAnalyzer` before, then you know how deep peformance tuning of PG queries can go.
 
 ### A read-only role, and let the agents use it
 

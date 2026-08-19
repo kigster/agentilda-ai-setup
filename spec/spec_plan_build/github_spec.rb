@@ -136,4 +136,67 @@ RSpec.describe SpecPlanBuild::GitHub do
       expect(github).to be_available
     end
   end
+
+  describe ".parse_refs" do
+    it "takes numbers, #numbers and URLs in one list" do
+      expect(described_class.parse_refs("12, #15, https://github.com/o/r/pull/18"))
+        .to eq(["12", "#15", "https://github.com/o/r/pull/18"])
+    end
+
+    it "drops a repeated reference rather than fetching it twice" do
+      expect(described_class.parse_refs("12,12,15")).to eq(["12", "15"])
+    end
+
+    # Locally, in a hundredth of a second, naming the offending token — rather
+    # than after four network round trips with a `gh` diagnostic attached.
+    it "names what it could not read" do
+      expect { described_class.parse_refs("12, banana, 15") }
+        .to raise_error(SpecPlanBuild::Error, /not a pull request number or URL: banana/)
+    end
+
+    it "refuses an empty list" do
+      expect { described_class.parse_refs(" , ") }.to raise_error(SpecPlanBuild::Error, /no pull requests/)
+    end
+  end
+
+  describe ".state_label" do
+    it "translates gh's enums into the words the state machine parses" do
+      aggregate_failures do
+        expect(described_class.state_label({"mergedAt" => "2026-01-01", "state" => "MERGED"})).to eq("Merged 🟣")
+        expect(described_class.state_label({"state" => "OPEN", "isDraft" => true})).to eq("WIP 🟡")
+        expect(described_class.state_label({"state" => "OPEN"})).to eq("Open 🟡")
+        expect(described_class.state_label({"state" => "CLOSED"})).to eq("Closed 🔴")
+      end
+    end
+
+    # A closed-unmerged pull request is finished business; a merged one is not
+    # the same thing, and the folder's invariants turn on the difference.
+    it "does not call a closed pull request merged" do
+      expect(described_class.state_label({"state" => "CLOSED", "mergedAt" => nil})).to eq("Closed 🔴")
+    end
+  end
+
+  describe "#pull_request" do
+    let(:payload) do
+      {number: 12, title: "Add health checks", url: "https://github.com/o/r/pull/12",
+       state: "MERGED", isDraft: false, mergedAt: "2026-08-01T10:00:00Z",
+       body: "Adds /healthz."}.to_json
+    end
+
+    it "reads one pull request by number or URL" do
+      command = instance_double(TTY::Command)
+      allow(command).to receive(:run).and_return(instance_double(TTY::Command::Result, out: payload))
+
+      expect(described_class.new(command:).pull_request("12"))
+        .to include(number: 12, state: "Merged 🟣", body: "Adds /healthz.")
+    end
+
+    it "blames authentication rather than reporting a parse error when gh says nothing" do
+      command = instance_double(TTY::Command)
+      allow(command).to receive(:run).and_return(instance_double(TTY::Command::Result, out: ""))
+
+      expect { described_class.new(command:).pull_request("12") }
+        .to raise_error(SpecPlanBuild::Error, /gh auth status/)
+    end
+  end
 end

@@ -218,12 +218,24 @@ module SpecPlanBuild
         text + " " * (width - display_width(text))
       end
 
+      # Everything the user sees goes through here, so it writes to `$stderr`
+      # directly rather than through `Kernel.warn`.
+      #
+      # That is not a style preference. `Kernel.warn` is a **no-op** when
+      # `$VERBOSE` is nil, which is what `-W0` sets — and `RUBYOPT=-W0` is
+      # common in CI images and agent harnesses. Routed through `Kernel.warn`,
+      # every box this tool draws silently disappears in exactly the
+      # environments where a failure most needs explaining.
+      #
       # @param kind [Symbol] :info, :warn, :error or :success
       # @param message [String]
       # @return [void]
+      # standard:disable Style/StderrPuts -- the cop's own rationale, "to allow
+      # such output to be disabled", is the behaviour being removed here.
       def box(kind, message)
-        Kernel.warn TTY::Box.public_send(kind, message.to_s, enable_color: color?, width:)
+        $stderr.puts TTY::Box.public_send(kind, message.to_s, enable_color: color?, width:)
       end
+      # standard:enable Style/StderrPuts
 
       # A single unadorned line, for per-item progress that does not deserve
       # a box of its own.
@@ -231,7 +243,9 @@ module SpecPlanBuild
       # @param message [String]
       # @param bullet [String]
       # @return [void]
-      def line(message, bullet: "·") = Kernel.warn("  #{paint(bullet, :bright_black)} #{message}")
+      # standard:disable Style/StderrPuts -- see {.box}: `warn` is a no-op under -W0.
+      def line(message, bullet: "·") = $stderr.puts("  #{paint(bullet, :bright_black)} #{message}")
+      # standard:enable Style/StderrPuts
     end
 
     # @param message [String]

@@ -38,6 +38,62 @@ module SpecPlanBuild
     # Filenames that may hold the table.
     CANDIDATES = %w[pull-requests.md pull_requests.md prs.md].freeze
 
+    # The file this class writes, and the first one it looks for.
+    FILENAME = CANDIDATES.first
+
+    # Render `pull-requests.md` for a set of pull requests fetched from GitHub.
+    #
+    # The table is what {#parse} reads back and what the state machine judges
+    # a folder by. The descriptions below it are for a reader — human or
+    # agent — synthesizing a specification from work that already shipped:
+    # the table says *which* pull requests, the bodies say *what they did*,
+    # and a retroactive `spec.md` cannot be written from numbers alone.
+    #
+    # Prose after the table is ignored by the parser, so the two can coexist
+    # in one file rather than needing a scratch file the folder rules forbid.
+    #
+    # @param prs [Array<Hash>] `{number:, title:, url:, state:, body:}`
+    # @return [String]
+    def self.render(prs)
+      rows = prs.map { |pr|
+        "| #{pr[:number]} | [#{escape(pr[:title])}](#{pr[:url]}) | #{pr[:state]} |"
+      }
+
+      <<~MARKDOWN
+        # Pull Requests
+
+        | Pull Request Number | Pull Request Name | Status |
+        | ------------------: | :---------------- | -----: |
+        #{rows.join("\n")}
+
+        ## What these pull requests did
+
+        #{prs.map { |pr| describe(pr) }.join("\n")}
+      MARKDOWN
+    end
+
+    # @param pr [Hash]
+    # @return [String]
+    def self.describe(pr)
+      body = pr[:body].to_s.strip
+      body = "_No description was written on the pull request._" if body.empty?
+
+      <<~MARKDOWN
+        ### ##{pr[:number]} — #{pr[:title]}
+
+        #{pr[:url]}
+
+        #{body}
+      MARKDOWN
+    end
+
+    # A `|` inside a cell ends the cell, and a title containing one is not
+    # unusual — "fix: guard against a || b".
+    #
+    # @param text [String]
+    # @return [String]
+    def self.escape(text) = text.to_s.gsub("|", "\\|").gsub(/\s+/, " ").strip
+
     # @param dir [String] absolute path to the plan folder
     def initialize(dir:)
       @dir = dir
@@ -93,6 +149,7 @@ module SpecPlanBuild
 
       url = link && link[2]
       title = link ? link[1] : title_cell.gsub(/[*_`]/, "").strip
+      title = title.gsub(/\\([|\\])/, '\1')   # undo the escaping {.render} applies
       number = cells[idx[:number] || 0].to_s[/\d+/] || url&.[](%r{/(?:pull|merge_requests)/(\d+)}, 1)
       return nil if title.empty? && url.nil?
 

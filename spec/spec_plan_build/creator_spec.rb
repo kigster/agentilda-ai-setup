@@ -111,4 +111,48 @@ RSpec.describe SpecPlanBuild::Creator, :tree do
       expect(creator.create(words:, status: "chartreuse")).to be_failure
     end
   end
+
+  # `create --prs` documents work that already shipped. 🕰️ Retroactive means
+  # "the feature is live, but has neither a specification nor a plan", and its
+  # invariant demands recorded pull requests and no spec.md — which is exactly
+  # and only what this produces.
+  describe "creating from pull requests" do
+    let(:prs) do
+      [{number: 12, title: "Add health checks", url: "https://github.com/o/r/pull/12",
+        state: "Merged 🟣", body: "Adds /healthz and /readyz."},
+        {number: 15, title: "Structured logging", url: "https://github.com/o/r/pull/15",
+         state: "Merged 🟣", body: "JSON lines."}]
+    end
+
+    let!(:anchor) { plans { |t| t.plan "018.00", :approved, "deploy", prs: [t.merged(1, "x")] } }
+
+    let(:path) do
+      described_class.new(dir: plans_root)
+        .create(words: %w[alerting probes], after: "018", prs:).value!
+    end
+
+    it "records the pull requests in the folder it just made" do
+      expect(File.read(File.join(path, "pull-requests.md"))).to include("/pull/12", "/pull/15")
+    end
+
+    it "opens at 🕰️ Retroactive, in the gap after the plan the work landed on" do
+      expect(File.basename(path)).to eq("018.01-🕰️-alerting-probes")
+    end
+
+    # The point of the whole design: the folder is not merely labelled
+    # retroactive, its contents justify the label the moment it exists.
+    it "is justified by its contents rather than merely claiming to be" do
+      expect(SpecPlanBuild::Subject.new(SpecPlanBuild::Feature.parse(path))).to be_consistent
+    end
+
+    it "leaves spec.md unwritten — that is the writer's job, not the creator's" do
+      expect(File.exist?(File.join(path, "spec.md"))).to be(false)
+    end
+
+    it "writes no pull-requests.md when there are no pull requests to record" do
+      plain = described_class.new(dir: plans_root).create(words: %w[ordinary work]).value!
+
+      expect(Dir.children(plain)).to be_empty
+    end
+  end
 end
