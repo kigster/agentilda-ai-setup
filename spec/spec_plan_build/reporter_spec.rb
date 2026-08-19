@@ -8,10 +8,12 @@ RSpec.describe SpecPlanBuild::Reporter, :tree do
   let!(:tree) do
     plans do |t|
       t.plan "001.00", :new, "initial-spec", files: {"spec.md" => spec_body(title: "Initial Spec")}
-      t.plan "002.00", :done, "dev-foundation",
+      t.plan "002.00", :approved, "dev-foundation",
         files: {"spec.md" => spec_body},
         prs: [t.merged(2, "Frontend test rig"), t.merged(3, "Rails foundation")]
-      t.plan "018.01", :wip, "verify-returns", prs: [t.open(92, "Send mail through Resend")]
+      t.plan "018.01", :building, "verify-returns",
+        files: {"spec.md" => spec_body, "plan.md" => "# Plan"},
+        prs: [t.open(92, "Send mail through Resend")]
       t.plan "003.00", :blocked, "pricing", files: {"blocked.md" => "B1. Which tier?"}
     end
   end
@@ -26,9 +28,9 @@ RSpec.describe SpecPlanBuild::Reporter, :tree do
     it "shows each status as both icon and words" do
       aggregate_failures do
         expect(table).to include("⚪️").and include("New")
-        expect(table).to include("✅").and include("Done")
-        expect(table).to include("🟡").and include("In Progress")
-        expect(table).to include("⭕️").and include("Blocked")
+        expect(table).to include("✅").and include("Approved & Merged")
+        expect(table).to include("🟡").and include("Building")
+        expect(table).to include("⭕️").and include("Technical Block")
       end
     end
 
@@ -47,6 +49,27 @@ RSpec.describe SpecPlanBuild::Reporter, :tree do
       end
     end
 
+    # The table colours itself when attached to a terminal, and colour hides
+    # content from naive matchers: `\b\d{3}\.\d{2}\b` does NOT match "001.00"
+    # inside "\e[1m001.00\e[0m", because the escape ends in "m" — a word
+    # character — so there is no word boundary before the digits.
+    #
+    # That is exactly the bug this example exists to catch: the suite forces
+    # colour off for determinism, which means nothing else here would ever
+    # exercise the coloured path.
+    it "still lists every plan when colour is on" do
+      allow(SpecPlanBuild::UI).to receive(:color?).and_return(true)
+      SpecPlanBuild::UI.reset!
+
+      rendered = reporter.render
+
+      aggregate_failures do
+        expect(rendered).to match(/\e\[/), "expected colour to actually be on"
+        expect(strip_ansi(rendered).scan(/\b\d{3}\.\d{2}\b/))
+          .to eq(%w[001.00 002.00 003.00 018.01])
+      end
+    end
+
     it "says so plainly when a plan has no pull requests yet" do
       expect(table).to match(/001\.00.*(—|none|no PRs)/i)
     end
@@ -54,13 +77,13 @@ RSpec.describe SpecPlanBuild::Reporter, :tree do
 
   describe "counts" do
     it "totals plans by status" do
-      expect(reporter.totals).to include(done: 1, new: 1, wip: 1, blocked: 1)
+      expect(reporter.totals).to include(approved: 1, new: 1, building: 1, blocked: 1)
     end
   end
 
   describe "consistency" do
     let!(:tree) do
-      plans { |t| t.plan "001.00", :done, "lying", prs: [t.open(5, "still open")] }
+      plans { |t| t.plan "001.00", :approved, "lying", prs: [t.open(5, "still open")] }
     end
 
     it "flags a plan whose status its contents do not justify" do

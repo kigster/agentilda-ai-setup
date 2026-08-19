@@ -12,7 +12,7 @@ machine that refuses to let a folder claim a phase it has not reached.
 | --------- | ----------- | ----------------------- |
 | **spec**  | ⚪️ New      | `spec.md`               |
 | **plan**  | ⭐️ Ready    | `plan.md`               |
-| **build** | 🟡 → ✅     | `pull-requests.md`      |
+| **build** | 🟡 → ✅   | `pull-requests.md`      |
 
 > [!IMPORTANT]
 > **The conventions are not written here.** The status vocabulary, the numbering

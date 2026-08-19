@@ -130,9 +130,9 @@ module SpecPlanBuild
     # @return [Array<SpecPlanBuild::Subject>]
     def blocked = tree.subjects.select { |s| %i[blocked product_blocked].include?(s.status.key) }
 
-    # @return [Boolean] every plan is either done or deliberately parked
+    # @return [Boolean] every plan is either finished or deliberately parked
     def settled?
-      tree.subjects.all? { |s| %i[done rejected deferred blocked product_blocked].include?(s.status.key) }
+      tree.subjects.all? { |s| StateMachine::SETTLED.include?(s.status.key) }
     end
 
     private
@@ -183,7 +183,7 @@ module SpecPlanBuild
     # @return [Array<Array(SpecPlanBuild::Agent, SpecPlanBuild::Subject)>]
     def assignments
       tree.subjects.filter_map do |subject|
-        next if %i[blocked product_blocked rejected deferred done].include?(subject.status.key)
+        next if StateMachine::SETTLED.include?(subject.status.key)
 
         agent = @agents.for_status(subject.status).first
         agent && [agent, subject]

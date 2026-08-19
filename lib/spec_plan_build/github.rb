@@ -58,6 +58,7 @@ module SpecPlanBuild
 
           - Check `gh auth status`. An invalid GH_TOKEN in the environment
             shadows a working keyring login and fails without saying so.
+
           - A non-interactive shell may have no access to the system keyring
             even when an interactive one does.
 

@@ -13,8 +13,8 @@ RSpec.describe SpecPlanBuild::Resync::Dirs, :tree do
       let!(:tree) do
         plans do |t|
           t.plan "001.00", :new, "initial-spec", files: {"spec.md" => spec_body}
-          t.plan "002.00", :ready, "dev-foundation", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}
-          t.plan "003.00", :done, "ledger", prs: [t.merged(3, "Ship it")]
+          t.plan "002.00", :planned, "dev-foundation", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}
+          t.plan "003.00", :approved, "ledger", prs: [t.merged(3, "Ship it")]
         end
       end
 
@@ -31,7 +31,7 @@ RSpec.describe SpecPlanBuild::Resync::Dirs, :tree do
       end
 
       it "proposes the state the contents justify" do
-        expect(changes.map { |c| [c.from, c.to] }).to eq([[:new, :ready]])
+        expect(changes.map { |c| [c.from, c.to] }).to eq([[:new, :planned]])
       end
 
       it "keeps the number and the slug, changing only the emoji" do
@@ -39,15 +39,20 @@ RSpec.describe SpecPlanBuild::Resync::Dirs, :tree do
       end
     end
 
-    context "when a folder claims Done with an open pull request" do
+    context "when a folder claims Approved & Merged with an open pull request" do
       let!(:tree) do
         plans do |t|
-          t.plan "004.00", :done, "deploy", prs: [t.merged(1, "a"), t.open(2, "b")]
+          t.plan "004.00", :approved, "deploy",
+            files: {"spec.md" => spec_body, "plan.md" => "# Plan"},
+            prs: [t.merged(1, "a"), t.open(2, "b")]
         end
       end
 
-      it "walks it back to In Progress" do
-        expect(changes.map(&:to)).to eq([:wip])
+      # 🟡 rather than 🔴: an open pull request proves the work is back in the
+      # review phase, but nothing on disk says whether a reviewer has seen it,
+      # so it lands on the floor of that family.
+      it "walks it back to the weakest state the family can prove" do
+        expect(changes.map(&:to)).to eq([:building])
       end
 
       it "records why, so the rename is auditable rather than mysterious" do
@@ -105,7 +110,7 @@ RSpec.describe SpecPlanBuild::Resync::Dirs, :tree do
     end
 
     it "reports what it did" do
-      expect(resync.call(commit: true).map(&:to)).to eq([:ready])
+      expect(resync.call(commit: true).map(&:to)).to eq([:planned])
     end
 
     it "is idempotent — a second run finds nothing left to do" do

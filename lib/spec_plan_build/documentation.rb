@@ -3,7 +3,7 @@
 module SpecPlanBuild
   # Generates the conventions document from the state machine itself.
   #
-  # The tables and the diagram are DERIVED — from {STATUSES}, {Lifecycle::INBOUND}
+  # The tables and the diagram are DERIVED — from {STATUSES}, {StateMachine.inbound}
   # and {Ordinal} — so they cannot drift from the tool the way three
   # hand-maintained copies of the status table already did.
   #
@@ -35,8 +35,13 @@ module SpecPlanBuild
         # Spec → Plan → Build
 
         > [!IMPORTANT]
-        > **This file is generated.** Run `spec-plan-build docs -o context/feature-building/spec-plan-build.md`
-        > after changing the state machine. Editing it by hand puts it back into the
+        > **This file is auto generated.**
+        >
+        > To regenerate it, run `spec-plan-build docs` (which by the default
+        > writes to `context/feature-building/spec-plan-build.md`). To override
+        > the destination, use the -o | --output <file> option.
+        >
+        > After changing the state machine. Editing it by hand puts it back into the
         > condition it was written to end: three copies of the same table, quietly
         > disagreeing.
 
@@ -50,8 +55,8 @@ module SpecPlanBuild
         | Phase | State | The file that proves it |
         | :---- | :---- | :---------------------- |
         | **spec** | #{status(:new).emoji} #{status(:new).label} | `spec.md` |
-        | **plan** | #{status(:ready).emoji} #{status(:ready).label} | `plan.md` |
-        | **build** | #{status(:wip).emoji} → #{status(:done).emoji} | `pull-requests.md` |
+        | **plan** | #{status(:planned).emoji} #{status(:planned).label} | `plan.md` |
+        | **build** | #{status(:building).emoji} → #{status(:ready_for_review).emoji} → #{status(:in_review).emoji} → #{status(:approved).emoji} | `pull-requests.md` |
 
         Those files are not paperwork. They are what the tool checks: a folder may not
         claim a phase whose file is missing, and `spec-plan-build resync dirs` renames
@@ -73,9 +78,9 @@ module SpecPlanBuild
 
         ```
         #{SpecPlanBuild::PLANS_DIR}/000.00-#{status(:new).emoji}-initial-spec
-        #{SpecPlanBuild::PLANS_DIR}/001.00-#{status(:done).emoji}-dev-foundation
-        #{SpecPlanBuild::PLANS_DIR}/001.01-#{status(:done).emoji}-schedule-k1-backfill   <- shipped between 001 and 002,
-        #{SpecPlanBuild::PLANS_DIR}/002.00-#{status(:ready).emoji}-tenancy-households        specified afterwards
+        #{SpecPlanBuild::PLANS_DIR}/001.00-#{status(:approved).emoji}-dev-foundation
+        #{SpecPlanBuild::PLANS_DIR}/001.01-#{status(:approved).emoji}-schedule-k1-backfill   <- shipped between 001 and 002,
+        #{SpecPlanBuild::PLANS_DIR}/002.00-#{status(:planned).emoji}-tenancy-households        specified afterwards
         ```
 
         - **`NNN` counts from `000`.** The first plan of a project is `000.00`; after
@@ -128,15 +133,20 @@ module SpecPlanBuild
         #{rows.join("\n")}
 
         "Files required" is a **minimum**, not an exact match: a #{status(:new).emoji} folder that
-        has grown a `plan.md` still satisfies #{status(:new).emoji}, and is #{status(:ready).emoji} anyway. That is
+        has grown a `plan.md` still satisfies #{status(:new).emoji}, and is #{status(:planned).emoji} anyway. That is
         why `resync dirs` moves a folder to the furthest state its contents justify
         rather than only fixing outright lies.
 
-        Two states share their requirements on purpose. #{status(:blocked).emoji} #{status(:blocked).label} and
-        #{status(:product_blocked).emoji} #{status(:product_blocked).label} both mean "a human must decide before this can
-        move"; *which* human is recorded nowhere but the emoji. So nothing re-derives
-        one from a folder's contents — otherwise every #{status(:blocked).emoji} would silently become
-        #{status(:product_blocked).emoji} the first time anything resynced.
+        Some states share their requirements on purpose, and are told apart only by the
+        folder name. #{status(:blocked).emoji} #{status(:blocked).label} and #{status(:product_blocked).emoji} #{status(:product_blocked).label} both mean "a human must
+        decide before this can move"; *which* human is recorded nowhere but the emoji.
+        #{StateMachine::FAMILIES.last.map { |k| status(k).emoji }.join(" ")} all mean "the work exists and pull requests are open"; whether
+        anyone has started reviewing is written down nowhere either.
+
+        So nothing re-derives one of them from a folder's contents — otherwise every
+        #{status(:blocked).emoji} would silently become #{status(:product_blocked).emoji} the first time anything resynced. A folder
+        falling back into that group from outside lands on its weakest member,
+        #{status(StateMachine::FAMILIES.last.first).emoji} #{status(StateMachine::FAMILIES.last.first).label}, because that is all its contents can prove.
 
         #{merged_note}
 
@@ -152,9 +162,9 @@ module SpecPlanBuild
     # @return [String]
     def transitions
       rows = SpecPlanBuild::STATUSES.map do |s|
-        out = Lifecycle::OUTBOUND.fetch(s.key, [])
+        out = StateMachine.outbound(s.key)
         targets = out.empty? ? "_terminal_" : out.map { |k| status(k).emoji }.join(" ")
-        spine = Lifecycle::SPINE[s.key]
+        spine = StateMachine::SPINE[s.key]
         "| #{s.emoji} #{s.label} | #{targets} | #{spine ? "#{status(spine).emoji} #{status(spine).label}" : "—"} |"
       end
 
@@ -176,7 +186,7 @@ module SpecPlanBuild
 
     # @return [String]
     def diagram
-      edges = Lifecycle::INBOUND.flat_map { |to, froms|
+      edges = StateMachine.inbound.flat_map { |to, froms|
         froms.map { |from| "    #{from} --> #{to}" }
       }
 

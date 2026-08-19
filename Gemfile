@@ -2,9 +2,10 @@
 source "https://rubygems.org"
 
 # Various Gems
-gem "finite_machine"  # State Machine
+gem "aasm"             # State Machine
 gem "concurrent-ruby" # Concurrency Primitives
 gem "pastel"          # ANSI Coloring
+gem "unicode-display_width" # How many terminal cells a string occupies
 
 gem "tty-spinner"     # Use for parallel execution, and reporting the status
 gem "tty-progressbar" # Same as above, except when we can tell how far along we are

@@ -66,7 +66,7 @@ module SpecPlanBuild
       # @param subject [SpecPlanBuild::Subject]
       # @return [SpecPlanBuild::Resync::Dirs::Change, nil]
       def change_for(subject)
-        fit = Lifecycle.best_fit(subject)
+        fit = subject.best_fit
         return nil if fit.nil? || fit.key == subject.status.key
 
         feature = subject.feature
@@ -80,20 +80,9 @@ module SpecPlanBuild
         )
       end
 
-      # Prefer `git mv` so the folder's history follows it.
-      #
       # @param change [SpecPlanBuild::Resync::Dirs::Change]
       # @return [void]
-      def rename(change)
-        return if File.exist?(change.target)
-
-        parent = File.dirname(change.source)
-        tracked = system("git", "-C", parent, "ls-files", "--error-unmatch", change.source,
-          out: File::NULL, err: File::NULL)
-        moved = tracked && system("git", "-C", parent, "mv", change.source, change.target,
-          out: File::NULL, err: File::NULL)
-        FileUtils.mv(change.source, change.target) unless moved
-      end
+      def rename(change) = SpecPlanBuild.move_directory(change.source, change.target)
     end
 
     # `resync prs` — puts an `[NNN.MM]` prefix on every pull request title that

@@ -8,7 +8,19 @@ module SpecPlanBuild
   # where it goes, which keeps the table pipeable.
   class Reporter
     # Columns, so the header and the rows cannot drift apart.
-    HEADINGS = ["Plan", "", "Status", "Feature", "Pull Requests"].freeze
+    HEADINGS = ["Plan", "⬇", "Status", "Feature", "Pull Requests"].freeze
+
+    # Cells given to the plan number: "018.01" with room to grow.
+    ORDINAL_WIDTH = 7
+
+    # Cells given to a status icon. Emoji vary in both character count and
+    # display width, so the cell is padded to this by {UI.fit} rather than
+    # trusted to be any particular size — see the note there.
+    EMOJI_WIDTH = 2
+
+    # Cells given to a pull request's state, so the URLs line up beneath each
+    # other whichever states the tree happens to contain.
+    STATE_WIDTH = PullRequests::STATES.map { |_, label| UI.display_width(label) }.max
 
     # @param tree [SpecPlanBuild::Tree]
     def initialize(tree:)
@@ -38,15 +50,51 @@ module SpecPlanBuild
     private
 
     # @return [Integer] widest status label, so the column lines up
-    def label_width = @label_width ||= tree.subjects.map { |s| s.status.label.length }.max.to_i
+    def label_width = @label_width ||= tree.subjects.map { |s| UI.display_width(s.status.label) }.max.to_i + 4
 
     # @return [Integer] widest feature name
-    def title_width = @title_width ||= tree.subjects.map { |s| s.feature.title.length }.max.to_i
+    def title_width = @title_width ||= tree.subjects.map { |s| UI.display_width(s.feature.title) }.max.to_i + 2
+
+    # The one place the table's shape is written down. The heading, the plan
+    # rows, the continuation lines and the violations all come through here, so
+    # a column cannot widen in one of them and stay put in the others.
+    #
+    # Cells arrive already fitted and already painted, in that order, because
+    # the order matters: escape codes count toward a string's length, so
+    # padding a coloured string pads it to a width of which several characters
+    # are invisible, and the column collapses by exactly that much.
+    #
+    # @return [String]
+    def row(flag, ordinal, emoji, label, title, tail)
+      format("%s %s  %s %s  %s %s", flag, ordinal, emoji, label, title, tail)
+    end
+
+    # Cell at which the pull requests start, so a plan's second and third pull
+    # requests sit under its first. Measured by running blanks through {#row}
+    # rather than counted by hand, so the indent cannot drift when the layout
+    # changes.
+    #
+    # @return [Integer]
+    def pr_column
+      @pr_column ||= row(" ", " " * ORDINAL_WIDTH, " " * EMOJI_WIDTH,
+        " " * label_width, " " * title_width, "").length
+    end
+
+    # @return [Integer] cell at which the feature name starts
+    def title_column = pr_column - title_width - 1
 
     # @return [String]
     def header
-      line = format("  %-7s %-2s  %-#{label_width}s  %-#{title_width}s  %s", *HEADINGS)
-      [UI.paint(line, :bold), UI.paint("  " + "─" * (line.length - 2), :bright_black)].join("\n")
+      text = row(" ",
+        UI.fit(HEADINGS[0], ORDINAL_WIDTH),
+        UI.fit(HEADINGS[1], EMOJI_WIDTH),
+        UI.fit(HEADINGS[2], label_width),
+        UI.fit(HEADINGS[3], title_width),
+        HEADINGS[4])
+
+      rule = "  " + "─" * (UI.display_width(text) - 2)
+
+      [UI.paint(text, :bold), UI.paint(rule, :bright_yellow)].join("\n")
     end
 
     # One line per plan, plus a continuation line for each extra pull request
@@ -57,37 +105,43 @@ module SpecPlanBuild
     def rows_for(subject)
       feature = subject.feature
       prs = subject.pull_requests
-      flag = subject.consistent? ? " " : UI.paint("!", :red)
 
-      first = format("%s %-7s %-2s  %-#{label_width}s  %-#{title_width}s  %s",
-        flag,
-        UI.paint(feature.ordinal.to_s, :bold),
-        feature.status.emoji,
-        UI.paint(feature.status.label, :cyan),
-        feature.title,
-        prs.empty? ? UI.paint("—", :bright_black) : link(prs.first))
+      first = row(
+        subject.consistent? ? " " : UI.paint("!", :red),
+        UI.paint(UI.fit(feature.ordinal.to_s, ORDINAL_WIDTH), :bold),
+        UI.fit(feature.status.emoji, EMOJI_WIDTH),
+        UI.paint(UI.fit(feature.status.label, label_width), :yellow),
+        UI.paint(UI.fit(feature.title, title_width), :blue, :bold),
+        prs.empty? ? UI.paint("[none yet]", :bright_red) : link(prs.first)
+      )
 
-      rest = prs.drop(1).map do |pr|
-        format("  %-7s %-2s  %-#{label_width}s  %-#{title_width}s  %s", "", "", "", "", link(pr))
-      end
+      rest = prs.drop(1).map { |pr| (" " * pr_column) + link(pr) }
 
       [first, *rest, *violation_line(subject)]
     end
 
+    # The URL is left bare rather than wrapped in an OSC 8 hyperlink: the table
+    # is as likely to be piped into a file as read in a terminal, and every
+    # terminal worth the name linkifies a bare URL anyway.
+    #
     # @param pr [SpecPlanBuild::PullRequest]
     # @return [String]
     def link(pr)
-      "#{UI.paint("##{pr.number}", :bright_black)} #{pr.url} #{state_badge(pr)}"
+      colour = state_colour(pr)
+
+      format("#%4s %s %s",
+        pr.number,
+        UI.paint(UI.fit(pr.state, STATE_WIDTH), colour),
+        UI.paint(pr.url.to_s, colour))
     end
 
     # @param pr [SpecPlanBuild::PullRequest]
-    # @return [String]
-    def state_badge(pr)
-      colour = if pr.merged? then :magenta
+    # @return [Symbol] a pastel style name
+    def state_colour(pr)
+      if pr.merged? then :magenta
       elsif pr.open? then :yellow
-      else :bright_black
+      else :blue
       end
-      UI.paint("(#{pr.state})", colour)
     end
 
     # @param subject [SpecPlanBuild::Subject]
@@ -95,14 +149,13 @@ module SpecPlanBuild
     def violation_line(subject)
       return [] if subject.consistent?
 
-      [format("  %-7s %-2s  %s", "", "", UI.paint("↳ #{subject.violation}", :red))]
+      [(" " * title_column) + UI.paint("↳ #{subject.violation}", :red)]
     end
 
     # @return [String]
     def footer
       counts = totals.map { |key, n| "#{STATUS_BY_KEY.fetch(key).emoji} #{n}" }.join("   ")
-      summary = "  #{tree.subjects.size} plans   #{counts}"
-      lines = [summary]
+      lines = ["  #{tree.subjects.size} #{(tree.subjects.size == 1) ? "plan" : "plans"}   #{counts}"]
 
       unless inconsistent.empty?
         lines << "  #{UI.paint("#{inconsistent.size} with a status their contents do not justify", :red)}"

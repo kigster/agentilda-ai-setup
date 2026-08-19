@@ -12,8 +12,8 @@ RSpec.describe SpecPlanBuild::Resync::Prs, :tree do
   let!(:tree) do
     plans do |t|
       t.plan "001.00", :new, "initial-spec", files: {"spec.md" => spec_body}
-      t.plan "002.00", :done, "dev-foundation", prs: [t.merged(2, "Ship it")]
-      t.plan "018.01", :done, "verify-returns", prs: [t.merged(41, "Backfill")]
+      t.plan "002.00", :approved, "dev-foundation", prs: [t.merged(2, "Ship it")]
+      t.plan "018.01", :approved, "verify-returns", prs: [t.merged(41, "Backfill")]
     end
   end
 

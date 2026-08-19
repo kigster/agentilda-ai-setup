@@ -18,7 +18,7 @@ RSpec.describe SpecPlanBuild::Creator, :tree do
       let!(:tree) do
         plans do |t|
           t.plan "001.00", :new, "initial-spec", files: {"spec.md" => spec_body}
-          t.plan "002.00", :done, "dev-foundation", prs: [t.merged(2, "Ship it")]
+          t.plan "002.00", :approved, "dev-foundation", prs: [t.merged(2, "Ship it")]
         end
       end
 
@@ -31,7 +31,7 @@ RSpec.describe SpecPlanBuild::Creator, :tree do
       end
 
       it "ignores retroactive siblings when choosing the next number" do
-        plans { |t| t.plan "002.01", :done, "backfill", prs: [t.merged(9, "x")] }
+        plans { |t| t.plan "002.01", :approved, "backfill", prs: [t.merged(9, "x")] }
 
         expect(created).to eq("003.00-⚪️-tax-rule-dsl")
       end
@@ -70,7 +70,7 @@ RSpec.describe SpecPlanBuild::Creator, :tree do
     let!(:tree) do
       plans do |t|
         t.plan "001.00", :new, "initial-spec", files: {"spec.md" => spec_body}
-        t.plan "002.00", :done, "dev-foundation", prs: [t.merged(2, "Ship it")]
+        t.plan "002.00", :approved, "dev-foundation", prs: [t.merged(2, "Ship it")]
         t.plan "003.00", :new, "tenancy", files: {"spec.md" => spec_body}
       end
     end
@@ -78,13 +78,13 @@ RSpec.describe SpecPlanBuild::Creator, :tree do
     let(:retro) { File.basename(creator.create(words: %w[schedule k1 backfill], after: "002").value!) }
 
     it "takes a decimal slot in the gap, so the number itself records the retroactivity" do
-      expect(retro).to eq("002.01-⬜️-schedule-k1-backfill")
+      expect(retro).to eq("002.01-🕰️-schedule-k1-backfill")
     end
 
     it "takes the next free slot when the gap is already partly used" do
       plans { |t| t.plan "002.01", :retroactive, "earlier-backfill", prs: [t.merged(8, "x")] }
 
-      expect(retro).to eq("002.02-⬜️-schedule-k1-backfill")
+      expect(retro).to eq("002.02-🕰️-schedule-k1-backfill")
     end
 
     it "accepts the anchor in either shape" do
@@ -96,14 +96,14 @@ RSpec.describe SpecPlanBuild::Creator, :tree do
       expect(creator.create(words: %w[a b], after: "099")).to be_failure
     end
 
-    it "births retroactive plans as ⬜️, since the work exists but the documents do not" do
-      expect(retro).to include("⬜️")
+    it "births retroactive plans as 🕰️, since the work exists but the documents do not" do
+      expect(retro).to include("🕰️")
     end
   end
 
   describe "an explicit status" do
     it "honours one when given, rather than always opening at ⚪️" do
-      expect(File.basename(creator.create(words:, status: "ready").value!))
+      expect(File.basename(creator.create(words:, status: "planned").value!))
         .to eq("000.00-⭐️-tax-rule-dsl")
     end
 

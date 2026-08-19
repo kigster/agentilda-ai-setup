@@ -126,7 +126,34 @@ module SpecPlanBuild
     # @return [Boolean] whether the name matches the contents
     def consistent? = violation.nil?
 
+    # @return [SpecPlanBuild::StateMachine] positioned at the current state
+    def machine = StateMachine.new(self)
+
     # @return [Array<Symbol>] states reachable right now, guards applied
-    def allowed = Lifecycle.allowed_from(self)
+    def allowed = machine.allowed
+
+    # @return [SpecPlanBuild::Status, nil] the state these contents justify
+    def best_fit = machine.best_fit
+
+    # Move the folder into +status+ — the side effect a transition *is*.
+    #
+    # The {Feature} is a frozen `Data` holding the old name, so it is replaced
+    # rather than mutated, and the memoized reads go with it.
+    #
+    # @param status [SpecPlanBuild::Status]
+    # @return [SpecPlanBuild::Feature] the feature under its new name
+    # @raise [SpecPlanBuild::Error] when the target name is already taken
+    def rename_to(status)
+      return @feature if status.key == @feature.status.key
+
+      target = File.join(File.dirname(@feature.path), @feature.dirname_as(status))
+      unless SpecPlanBuild.move_directory(@feature.path, target)
+        raise Error, "cannot rename #{@feature.dirname} — #{File.basename(target)} already exists"
+      end
+
+      @reads = {}
+      @pull_requests = nil
+      @feature = Feature.parse(target) or raise Error, "#{File.basename(target)} is not a plan folder"
+    end
   end
 end

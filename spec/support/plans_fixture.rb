@@ -11,7 +11,7 @@
 #   let!(:tree) do
 #     plans do |t|
 #       t.plan "001.00", :new,  "initial-spec", files: {"spec.md" => "# Spec"}
-#       t.plan "002.00", :done, "dev-foundation", prs: [t.merged(2, "Ship it")]
+#       t.plan "002.00", :approved, "dev-foundation", prs: [t.merged(2, "Ship it")]
 #     end
 #   end
 module PlansFixture
@@ -93,6 +93,12 @@ module PlansFixture
 
   # @return [String] the temp `.plans` directory for this example
   def plans_root = @plans_root
+
+  # Drop ANSI escape sequences so an assertion tests content, not presentation.
+  #
+  # @param text [String]
+  # @return [String]
+  def strip_ansi(text) = text.gsub(/\e\[[0-9;]*[a-zA-Z]/, "")
 
   # Populate the example's `.plans` tree.
   #

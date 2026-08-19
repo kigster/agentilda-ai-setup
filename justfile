@@ -11,7 +11,7 @@ rbenv := 'eval "$(rbenv init - bash 2>/dev/null || true)"; bundle exec '
 
 # This repo is linted with `standard`, not rubocop: the Gemfile says so, and
 # standard is rubocop with the arguing removed.
-spb := 'bin/spec-plan-build'
+spb := 'bundle exec scripts/spec-plan-build'
 
 [no-exit-message]
 recipes:
@@ -108,5 +108,6 @@ resync-prs:
     {{ spb }} resync prs --commit
 
 # Regenerate context/feature-building/spec-plan-build.md from the state machine
-docs:
+docs: bundle
     {{ spb }} docs --output context/feature-building/spec-plan-build.md
+    mdformat --wrap no context/feature-building/spec-plan-build.md

@@ -34,6 +34,19 @@ module SpecPlanBuild
       # @return [Pastel] colour engine, disabled when STDERR is not a terminal
       def pastel = @pastel ||= Pastel.new(enabled: color?)
 
+      # Forget everything memoized here.
+      #
+      # Pastel captures `enabled:` once, at construction. Anything that changes
+      # the answer afterwards — a test stubbing `tty?`, a caller setting
+      # NO_COLOR late — would otherwise be ignored for the rest of the process,
+      # and the first answer would leak into every later call.
+      #
+      # @return [void]
+      def reset!
+        remove_instance_variable(:@pastel) if instance_variable_defined?(:@pastel)
+        self.quiet = false
+      end
+
       # @return [Boolean] whether STDERR is an interactive terminal
       def tty? = $stderr.tty?
 
@@ -182,6 +195,28 @@ module SpecPlanBuild
       # @param styles [Array<Symbol>] pastel style names
       # @return [String] decorated when colour is on, bare otherwise
       def paint(text, *styles) = color? ? pastel.decorate(text.to_s, *styles) : text.to_s
+
+      # @param text [String]
+      # @return [Integer] how many terminal cells the text occupies
+      def display_width(text) = Unicode::DisplayWidth.of(text.to_s)
+
+      # Pad or truncate to an exact number of terminal *cells*.
+      #
+      # `format`'s "%-20.20s" counts characters, and a character is not a cell.
+      # "✅" is one character two cells wide; "🅱️" is two characters one cell
+      # wide. Any column laid out with %s therefore drifts by one for every
+      # emoji whose two counts disagree — which is every emoji, in one
+      # direction or the other.
+      #
+      # @param text [String] unpainted; escape codes count as characters and
+      #   would be padded like any other
+      # @param width [Integer] terminal cells
+      # @return [String]
+      def fit(text, width)
+        text = text.to_s
+        text = text[0..-2] while display_width(text) > width
+        text + " " * (width - display_width(text))
+      end
 
       # @param kind [Symbol] :info, :warn, :error or :success
       # @param message [String]

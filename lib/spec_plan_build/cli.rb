@@ -22,9 +22,9 @@ module SpecPlanBuild
       def self.inherited(klass)
         super
         klass.option :dir, default: SpecPlanBuild::PLANS_DIR, aliases: ["-D"],
-          desc: "The .plans directory"
+          desc:          "The .plans directory"
         klass.option :quiet, type: :boolean, default: false, aliases: ["-q"],
-          desc: "Suppress progress output on STDERR"
+          desc:         "Suppress progress output on STDERR"
       end
 
       private
@@ -35,7 +35,7 @@ module SpecPlanBuild
         tree = Tree.new(dir: options.fetch(:dir, SpecPlanBuild::PLANS_DIR))
         unless tree.exist?
           error("No #{SpecPlanBuild::PLANS_DIR} directory at\n#{tree.dir}\n\n" \
-                "Run this from the project root, or pass -D.")
+                  "Run this from the project root, or pass -D.")
           exit 66
         end
         tree
@@ -71,13 +71,14 @@ module SpecPlanBuild
       desc "Create the next numbered plan folder"
 
       argument :words, type: :array, required: true,
-        desc: "The topic, two to five words; becomes the folder slug"
+        desc:         "The topic, two to five words; becomes the folder slug"
 
       option :after, aliases: ["-a"],
-        desc: "Create a retroactive plan in the gap after this plan, e.g. 002"
+        desc:            "Create a retroactive plan in the gap after this plan, e.g. 002"
       option :status, aliases: ["-s"],
-        desc: "Open in a state other than the default"
+        desc:             "Open in a state other than the default"
 
+      # noinspection RubyMismatchedArgumentType
       example [
         "tax rule dsl                  # 003.00-⚪️-tax-rule-dsl",
         "--after 002 schedule k1       # 002.01-⬜️-schedule-k1 (documented after the fact)",
@@ -99,8 +100,8 @@ module SpecPlanBuild
             unless quiet?(options)
               feature = Feature.parse(path)
               success("Created #{File.basename(path)}\n\n" \
-                      "#{feature.status.emoji} #{feature.status.label} — #{feature.status.note}\n" \
-                      "Next: write #{File.join(File.basename(path), "spec.md")}")
+                        "#{feature.status.emoji} #{feature.status.label} — #{feature.status.note}\n" \
+                        "Next: write #{File.join(File.basename(path), "spec.md")}")
             end
           },
           lambda { |message|
@@ -134,7 +135,7 @@ module SpecPlanBuild
         desc "Rename plan folders so their emoji matches their contents"
 
         option :commit, type: :boolean, default: false,
-          desc: "Actually rename the folders (default: dry run)"
+          desc:          "Actually rename the folders (default: dry run)"
 
         example [
           "                # show what would be renamed",
@@ -175,9 +176,9 @@ module SpecPlanBuild
         desc "Add missing [NNN.MM] prefixes to pull request titles"
 
         option :commit, type: :boolean, default: false,
-          desc: "Actually retitle the pull requests (default: dry run)"
+          desc:          "Actually retitle the pull requests (default: dry run)"
         option :state, default: "all", values: %w[open closed merged all],
-          desc: "Which pull requests to consider"
+          desc:            "Which pull requests to consider"
 
         example [
           "                # show what would be retitled",
@@ -233,10 +234,10 @@ module SpecPlanBuild
           return if assumed.empty?
 
           warn("#{assumed.size} title#{"s" unless assumed.size == 1} would get " \
-               "[#{SpecPlanBuild::NO_PLAN_PREFIX}] because no plan resolved.\n\n" \
-               "That is an assertion about intent, and it is yours to make: check each one\n" \
-               "before committing. A pull request that writes a plan's spec belongs to that\n" \
-               "plan however its branch was named.")
+                 "[#{SpecPlanBuild::NO_PLAN_PREFIX}] because no plan resolved.\n\n" \
+                 "That is an assertion about intent, and it is yours to make: check each one\n" \
+                 "before committing. A pull request that writes a plan's spec belongs to that\n" \
+                 "plan however its branch was named.")
         end
       end
     end
@@ -245,9 +246,9 @@ module SpecPlanBuild
     class Docs < Base
       desc "Generate the conventions document from the state machine itself"
 
-      option :output, aliases: ["-o"], desc: "Write here instead of STDOUT"
+      option :output, aliases: ["-o"], desc: "Write here instead of STDOUT", default: "context/feature-building/spec-plan-build.md"
 
-      example ["", "-o context/SPEC-PLAN-BUILD.md"]
+      example ["", "-o tentative-new-plan.md"]
 
       # @param options [Hash]
       # @return [void]
@@ -268,17 +269,17 @@ module SpecPlanBuild
       desc "Run specialist agents over the plans until nothing changes"
 
       option :commit, type: :boolean, default: false,
-        desc: "Actually invoke the agents (default: dry run, prints the plan of work)"
+        desc:          "Actually invoke the agents (default: dry run, prints the plan of work)"
       option :rounds, default: "10", desc: "Hard ceiling on loop iterations"
       option :agent, desc: "Only run this one agent"
       option :root, desc: "Repository root the agents work in (default: the .plans parent)"
       option :isolation, default: "worktree", values: %w[worktree shared],
-        desc: "worktree: a checkout and branch per plan, run in parallel. shared: one tree, serial"
+        desc:                "worktree: a checkout and branch per plan, run in parallel. shared: one tree, serial"
       option :jobs, aliases: ["-j"],
-        desc: "Agents to run at once (default: cores - 2, capped at 12)"
+        desc:           "Agents to run at once (default: cores - 2, capped at 12)"
       option :push_pr, aliases: ["-p"],
-        desc: "Push each finished branch and open a PR titled [NNN.MM](X). " \
-              "Pass a letter to force it; omit to continue the plan's sequence. Requires --commit"
+        desc:              "Push each finished branch and open a PR titled [NNN.MM](X). " \
+                             "Pass a letter to force it; omit to continue the plan's sequence. Requires --commit"
 
       example [
         "                       # show which agent would take which plan",
@@ -301,7 +302,7 @@ module SpecPlanBuild
 
         if isolation == :worktree && !Worktree.new(root:).repository?
           error("#{root} is not a git repository, so plans cannot be isolated.\n\n" \
-                "Run with --isolation shared to work in one tree, serially.")
+                  "Run with --isolation shared to work in one tree, serially.")
           exit 66
         end
 
@@ -387,9 +388,12 @@ module SpecPlanBuild
         rounds.each do |round|
           puts "round #{round.number}"
           round.attempts.each do |a|
-            mark = if !a.ok then "FAIL"
-            elsif a.advanced? then "#{a.from} -> #{a.to}"
-            else "no change"
+            mark = if !a.ok
+              "FAIL"
+            elsif a.advanced?
+              "#{a.from} -> #{a.to}"
+            else
+              "no change"
             end
             puts "  #{a.ordinal}\t#{a.agent}\t#{mark}\t#{a.note}"
           end

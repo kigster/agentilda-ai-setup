@@ -1,6 +1,6 @@
 # Databases: Best Practices
 
-This document captures various practices, dos and don'ts accumulated over decades of working with PostgreSQL in particular. While PostgreSQL is moving exceptionally fast, and new features or new behavior may override the old, you are going to ahere to these rules judiciously, and only when you find a new feature contradicting something here or a specific use case you will stop and have a conversation with your human co-author.
+This document captures various practices, dos and don'ts accumulated over decades of working with PostgreSQL in particular. While PostgreSQL is moving exceptionally fast, and new features or new behavior may override the old, you are going to adhere to these rules judiciously, and only when you find a new feature contradicting something here or a specific use case you will stop and have a conversation with your human co-author.
 
 ## Application Classifications
 
@@ -10,26 +10,26 @@ For the purposes of this skill, we'll define the following classes of applicatio
 
 <dl>
   <dt><strong>PG-lax</strong></dt>
-	<dd>Type: OLTP. Many small transactions from a potentially large number of concurrent users. Generally, non-critical applications, games, social apps, with an unknown (but likely small) number of users (which can grow), where the cost of invalid data reference or a missed insert is relatively low. These types of applications can be configured to perform delayed commits, and even be eventualluy consistent. Often in these cases it's more important that the development moves fast, and the database is not in the way. Physical deletes are a norm, logical deletes are not. Foreign key delete behavior is often <code>ON CASCADE DELETE</code>.</dd>
+	<dd>Type: OLTP. Many small transactions from a potentially large number of concurrent users. Generally, non-critical applications, games, social apps, with an unknown (but likely small) number of users (which can grow), where the cost of invalid data reference or a missed insert is relatively low. These types of applications can be configured to perform delayed commits, and even be eventually consistent. Often in these cases it's more important that the development moves fast, and the database is not in the way. Physical deletes are a norm, logical deletes are not. Foreign key delete behavior is often <code>ON CASCADE DELETE</code>.</dd>
   <dt><strong>PG-traditional</strong></dt>
-  <dd>Type: OLTP. Many small transactions from a potentially large number of concurrent users. Otherwise, it's design is tighter than that of <strong>PG-lax</strong>. Perhaps this database may contain PII on large amount of users, or be a backend for an e-commerce store, where referential integrity saves time and effort on tracking down problems and customer complaints. However, it may not need many encrypted fields or SSL-only connection, it maybe directly accessible by the operations staff via a VPN, and whether to apply physical deletes or logical to key tables is a production decision.</dd>
+  <dd>Type: OLTP. Many small transactions from a potentially large number of concurrent users. Otherwise, its design is tighter than that of <strong>PG-lax</strong>. Perhaps this database may contain PII on large amount of users, or be a backend for an e-commerce store, where referential integrity saves time and effort on tracking down problems and customer complaints. However, it may not need many encrypted fields or SSL-only connection, it may be directly accessible by the operations staff via a VPN, and whether to apply physical deletes or logical to key tables is a production decision.</dd>
   <dt><strong>PG-strict</strong></dt>
   <dd>Type: OLTP. Many small transactions from a potentially large number of concurrent users. The opposite of <strong>PG-lax</strong>: these applications often manage money, transactions, taxes, significant amount of PII or health records, and a mistake, leak, or a data corruption in such an application, as well as any extended  downtime, will cost a significant amount of money. In addition it can be legally bound to perform security audits, penetration testing and so on. These types of applications often prefer immutability (eg. on the transactions table) with later transaction inserted to amend the previous one, instead of updating it directly in place. Many tables maintain audit trails (via the triggers), and tight security, encryption at rest, encryption of columns in real-time, and SSL-only access often using public/private key. These databases almost never allow physical deletes, and perform logical delete only by having each table carry the <code>deleted_at</code> nullable column, null value of which is usually part of some unique index. ON CASCADE behavior is typically custom, and deletions often propagate by setting <code>deleted_at</code> on the dependent columns, but almost never physically delete anything.</dd>
   <dt><strong>PG-analytics</strong></dt>
-  <dd>Type: Data Warehouse. These PG instances are meant for analytics, data warehousing, and often contain large number of materialized views, injest data from multiple sources, and have small number of concurrent users performing large and long-running queries. These applications rarely perform physical deletes, are optimized for injestion of data and fast batch imports.</dd>
+  <dd>Type: Data Warehouse. These PG instances are meant for analytics, data warehousing, and often contain large number of materialized views, ingest data from multiple sources, and have small number of concurrent users performing large and long-running queries. These applications rarely perform physical deletes, are optimized for ingestion of data and fast batch imports.</dd>
 </dl>
 
 
 
 > [!IMPORTANT]
 >
-> It is critically important to understand what type of application we are dealing with before applying the rules. If agent is engaged in designing the schema, it must first ask the user (or read in the spec) and infer the type of application this is, and record it in it's AGENTS.md file or CLAUDE.md file. This decision will guide many of the conventions and default behaviors.
+> It is critically important to understand what type of application we are dealing with before applying the rules. If agent is engaged in designing the schema, it must first ask the user (or read in the spec) and infer the type of application this is, and record it in its AGENTS.md file or CLAUDE.md file. This decision will guide many of the conventions and default behaviors.
 
 ## Logical vs Physical Deletes
 
-If your application type warrants logical, and not physical deletes, there are some advantages to that. First of all, you never loose any data, so you can always restore someone's account, or provide forensic assistance to law enforcement. 
+If your application type warrants logical, and not physical deletes, there are some advantages to that. First of all, you never lose any data, so you can always restore someone's account, or provide forensic assistance to law enforcement. 
 
-Secondly, any row that's physically deleted in PostgreSQL needs to be vacuumed at some point. Vaccuuming is a IO heavy process that, despite all the advancements in parallel vacuuming, may be addding to your database load considerably. 
+Secondly, any row that's physically deleted in PostgreSQL needs to be vacuumed at some point. Vacuuming is an IO-heavy process that, despite all the advancements in parallel vacuuming, may be adding to your database load considerably. 
 
 Logical deletes do no such thing. Especially if the column that separates "logically deleted" rows from live rows is only indexed where it is NULL, and never index where it is NOT NULL. 
 
@@ -56,7 +56,7 @@ Regardless of what application we are building and in what language, we are gene
 
 Whenever there is a benefit of copying a third party tables into our own database due to the active integration, webhooks being received for various events, and so on (examples of which include Stripe, Plaid, and many others) sometimes it's very beneficial to store the third party's data in the tables they might publicize and even encourage us to use. 
 
-This can be very useful and can provide a good additional source of information about what's going on in the application, useful in audits, debugging, troubleshooting, and so on, especially if the applicaiton is receiving a lot of webhooks from the third party, each of a different schema mapped to a potential table.
+This can be very useful and can provide a good additional source of information about what's going on in the application, useful in audits, debugging, troubleshooting, and so on, especially if the application is receiving a lot of webhooks from the third party, each of a different schema mapped to a potential table.
 
 **In those cases, the following rules apply:**
 
@@ -73,7 +73,7 @@ This can be very useful and can provide a good additional source of information 
    `ALTER USER <USERNAME> SET SEARCH_PATH TO $user, public, stripe, plaid;` 
    NOTE: this statement would require the user to logout and log back in, and the search path will be updated and persisted. 
 
-   Search Path can also be set or reset temporarily, per current session, and so on. Decide the most appopriate method but beware that if there are name collisions between the vendors, the first schema's object wins.
+   Search Path can also be set or reset temporarily, per current session, and so on. Decide the most appropriate method but beware that if there are name collisions between the vendors, the first schema's object wins.
 
 6. It's very easy to do cross-schema joins in PostgreSQL, just don't forget to add the schema prefix before the dot for any schema not in the search path.  For this reason you may choose to NOT modify your search path, because that will require you to reference any Stripe or Plaid table with the `stripe.transactions` prefix.
 
@@ -93,7 +93,7 @@ And switch to `schema_format = :sql`; `schema.rb` silently loses partial indexes
 
 ### Primary Keys
 
-Primary keys should never be made composite or based on business-value columns. This is beceause businss requirements change over time. Always create an ID column on all tables, and do not assign it any meaning other than a unique ID that may be referenced from elsewhere. 
+Primary keys should never be made composite or based on business-value columns. This is because business requirements change over time. Always create an ID column on all tables, and do not assign it any meaning other than a unique ID that may be referenced from elsewhere. 
 
 You have two choices in choosing the datatype for primary keys, which depends on the application you are building once again.
 
@@ -103,15 +103,15 @@ You have two choices in choosing the datatype for primary keys, which depends on
 
 #### Data Types for Primary Keys
 
-Primary keys often leak out to the web front-end in unexpected ways. You maybe calling a REST API, and calling `/users/:id/settings` which anyone with Chrome Dev Tools can watch and realize that their user id is for instance, 10,000. Imagine using a web app that's 10 years old, and realizing you are only the 10,000s user on the entire system? That's not good. It also allows your competitors to inspect the sizes of your key tables by watching the RESTFUL API urls and deducing it from there.
+Primary keys often leak out to the web front-end in unexpected ways. You may be calling a REST API, and calling `/users/:id/settings` which anyone with Chrome Dev Tools can watch and realize that their user id is for instance, 10,000. Imagine using a web app that's 10 years old, and realizing you are only the 10,000s user on the entire system? That's not good. It also allows your competitors to inspect the sizes of your key tables by watching the RESTful API URLs and deducing it from there.
 
 ##### Bigint
 
-If you do not care about any of the above, then use `bigint` which is not 2.6B capped, and can grow as much as you like. And to confuse your competitors you don't even have to start at 1. You can alwasy start the sequence at 1M, throwing anyone assuming they are auto-incrementing from 1 off. This data type is fast, compact (64-bits), but remembering to always start from some high random number may get tedious.
+If you do not care about any of the above, then use `bigint` which is not 2.6B capped, and can grow as much as you like. And to confuse your competitors you don't even have to start at 1. You can always start the sequence at 1M, throwing anyone assuming they are auto-incrementing from 1 off. This data type is fast, compact (64-bits), but remembering to always start from some high random number may get tedious.
 
 ##### UUIDv7
 
-**The answer to this nonesense is — UUID. With PostgreSQL18 embracing UUID and no longer requiring a custom extension to load to use it, this is likely the most secure and modern data-independent ID strategy you should use.**
+**The answer to this nonsense is — UUID. With PostgreSQL18 embracing UUID and no longer requiring a custom extension to load to use it, this is likely the most secure and modern data-independent ID strategy you should use.**
 
 **What landed in 18:**
 
@@ -123,7 +123,7 @@ Also: use ` primary keys`, `timestamptz` not `timestamp` (Rails 7.0+ does this b
 
 > [!NOTE]
 >
-> Early versions of Rails pretended that Rails validations are enough, and you do not need foreign keys. This was mostly motivated by the challenges in creating text fixtures in the right order (when FKs were enabled), and DHH's lack of understanding of databases deep enough to grok why that was a misnomer. **Do use foreign keys on ALL of your tables that have them.**
+> Early versions of Rails pretended that Rails validations are enough, and you do not need foreign keys. This was mostly motivated by the challenges in creating test fixtures in the right order (when FKs were enabled), and DHH's lack of understanding of databases deep enough to grok why that was a misnomer. **Do use foreign keys on ALL of your tables that have them.**
 
 ##### The Size of UUID
 
@@ -166,3 +166,6 @@ Turn on `strict_loading` — per-association at first, then `config.active_recor
 Know the three loaders: `preload` does separate queries and is usually what you want; `eager_load` forces one `LEFT OUTER JOIN` and is right when you filter or order on the association; `includes` guesses between them and will silently switch to `eager_load` the moment you add `references` or a hash condition, which is how a fast page becomes a Cartesian explosion. 
 
 Use `joins` when you're only filtering and don't need the objects. Counter caches for `.count` in loops; `Model.where(id: ids).index_by(&:id)` when the association graph is awkward. And check your serializers and view partials — that's where N+1s hide, not in the controller where everyone looks. Finally, `ORDER BY ... LIMIT` on a joined query is the one shape where `preload` and `eager_load` differ semantically, so read the SQL rather than trusting the DSL.
+
+## Vector Search
+

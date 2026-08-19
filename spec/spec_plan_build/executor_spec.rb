@@ -6,7 +6,7 @@ RSpec.describe SpecPlanBuild::Executor, :tree do
   let(:root) { File.dirname(plans_root) }
   let(:command) { instance_double(TTY::Command, run: nil) }
   let(:agents) { SpecPlanBuild::Agents.new }
-  let(:agent) { agents.find("spec-writer") }
+  let(:agent) { agents.find("yoda-writer") }
 
   let!(:built) do
     plans { |t| t.plan "000.00", :new, "a-feature", files: {"spec.md" => spec_body} }

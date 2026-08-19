@@ -23,16 +23,16 @@ RSpec.describe SpecPlanBuild::Runner, :tree do
       let!(:built) do
         plans do |t|
           t.plan "000.00", :new, "needs-a-spec", files: {"spec.md" => spec_body}
-          t.plan "001.00", :ready, "needs-a-plan", files: {"spec.md" => spec_body, "plan.md" => "# P"}
+          t.plan "001.00", :planned, "needs-a-plan", files: {"spec.md" => spec_body, "plan.md" => "# P"}
           t.plan "002.00", :blocked, "needs-a-human", files: {"blocked.md" => "B1. Which?"}
-          t.plan "003.00", :done, "finished", prs: [t.merged(3, "done")]
+          t.plan "003.00", :approved, "finished", prs: [t.merged(3, "done")]
         end
       end
 
       it "offers each plan to the agent that handles its state" do
         runner.call
 
-        expect(calls.uniq).to contain_exactly(["spec-writer", "000.00"], ["planner", "001.00"])
+        expect(calls.uniq).to contain_exactly(["yoda-writer", "000.00"], ["palpatine-planner", "001.00"])
       end
 
       it "never offers a blocked plan to anyone — that is what blocked means" do
@@ -114,7 +114,7 @@ RSpec.describe SpecPlanBuild::Runner, :tree do
     describe "#settled?" do
       it "is true when every plan is done or deliberately parked" do
         plans do |t|
-          t.plan "000.00", :done, "shipped", prs: [t.merged(1, "x")]
+          t.plan "000.00", :approved, "shipped", prs: [t.merged(1, "x")]
           t.plan "001.00", :blocked, "waiting", files: {"blocked.md" => "B1"}
         end
 

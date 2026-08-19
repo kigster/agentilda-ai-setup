@@ -35,6 +35,16 @@ end
 require "rspec/its"
 require "tmpdir"
 
+# Colour is decided by `$stderr.tty?`, which is FALSE under CI (piped) and TRUE
+# in a developer's terminal. Left alone, that makes the suite environment-
+# dependent: assertions on rendered text see bare strings in CI and ANSI escape
+# sequences locally, so a green CI run says nothing about a local one.
+#
+# Forcing it off makes every content assertion test content. The coloured path
+# is still covered — deliberately, by examples that stub `UI.color?` — rather
+# than by accident, differently, on each machine.
+ENV["NO_COLOR"] = "1"
+
 $LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
 require "spec_plan_build"
 
@@ -52,6 +62,10 @@ RSpec.configure do |config|
   Kernel.srand config.seed
 
   config.include PlansFixture
+
+  # Pastel memoizes `enabled:` at construction, so an example that stubs
+  # `tty?` or `color?` would otherwise poison every example that ran after it.
+  config.before { SpecPlanBuild::UI.reset! }
 
   # Every example tagged `:tree` gets its own throwaway `.plans` directory, so
   # the suite never reads or writes a real project.

@@ -8,7 +8,7 @@ RSpec.describe SpecPlanBuild::Publisher, :tree do
 
   let!(:built) do
     plans do |t|
-      t.plan "000.00", :wip, "folder-capitalized-not-downcased",
+      t.plan "000.00", :building, "folder-capitalized-not-downcased",
         files: {"spec.md" => spec_body(goal: "Make the thing work.")}
     end
   end
@@ -32,7 +32,7 @@ RSpec.describe SpecPlanBuild::Publisher, :tree do
 
     it "continues the sequence for a plan that already has pull requests" do
       plans do |t|
-        t.plan "001.00", :wip, "second-feature", prs: [t.merged(1, "first part")]
+        t.plan "001.00", :building, "second-feature", prs: [t.merged(1, "first part")]
       end
       second = SpecPlanBuild::Tree.new(dir: plans_root).find("001.00")
 

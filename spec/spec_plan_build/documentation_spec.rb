@@ -12,7 +12,7 @@ RSpec.describe SpecPlanBuild::Documentation do
   describe "#render" do
     it "says plainly that it is generated, and how to regenerate it" do
       aggregate_failures do
-        expect(document).to match(/This file is generated/)
+        expect(document).to match(/This file is auto generated/)
         expect(document).to include("spec-plan-build docs")
       end
     end
@@ -41,7 +41,7 @@ RSpec.describe SpecPlanBuild::Documentation do
 
       aggregate_failures do
         expect(diagram).to include("stateDiagram-v2")
-        SpecPlanBuild::Lifecycle::INBOUND.each do |to, froms|
+        SpecPlanBuild::StateMachine.inbound.each do |to, froms|
           froms.each { |from| expect(diagram).to include("#{from} --> #{to}") }
         end
       end
@@ -94,7 +94,7 @@ RSpec.describe SpecPlanBuild::Documentation do
       table = document[/^## Transitions\n(.*?)^A bare promote/m, 1].to_s
       dashes = table.lines.count { |l| l.end_with?("| — |\n") }
 
-      expect(dashes).to eq(SpecPlanBuild::STATUSES.size - SpecPlanBuild::Lifecycle::SPINE.size)
+      expect(dashes).to eq(SpecPlanBuild::STATUSES.size - SpecPlanBuild::StateMachine::SPINE.size)
     end
   end
 end

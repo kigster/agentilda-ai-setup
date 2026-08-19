@@ -123,4 +123,52 @@ RSpec.describe SpecPlanBuild::UI do
       end
     end
   end
+
+  # Column alignment in a terminal is measured in cells, and a character is
+  # not a cell. Every example here is a case where counting characters — what
+  # `format("%-4s")` does — gets the width wrong.
+  describe ".fit" do
+    it "pads a plain string to the asked-for width" do
+      expect(described_class.fit("ab", 5)).to eq("ab   ")
+    end
+
+    it "truncates a string wider than the column" do
+      expect(described_class.fit("abcdef", 3)).to eq("abc")
+    end
+
+    # "✅" is a single character that occupies two cells, so `%-2s` would leave
+    # it unpadded at two cells wide — right by luck — while `%-3s` would pad it
+    # to four.
+    it "counts a one-character wide emoji as the two cells it draws" do
+      expect(described_class.fit("✅", 2)).to eq("✅")
+    end
+
+    # "⚪️" is a base character plus a variation selector: two characters, still
+    # two cells.
+    it "counts a two-character emoji as the two cells it draws" do
+      expect(described_class.fit("⚪️", 2)).to eq("⚪️")
+    end
+
+    # And the case that motivated all of this: two characters, but only one
+    # cell, so it needs a space to sit in the same column as its neighbours.
+    it "pads an emoji that draws narrower than it is written" do
+      expect(described_class.fit("🅱️", 2)).to eq("🅱️ ")
+    end
+
+    it "never returns something wider than the column it was given" do
+      widths = SpecPlanBuild::STATUSES.map { |s| described_class.display_width(described_class.fit(s.emoji, 2)) }
+
+      expect(widths.uniq).to eq([2])
+    end
+  end
+
+  describe ".display_width" do
+    it "measures cells rather than characters" do
+      aggregate_failures do
+        expect(described_class.display_width("abc")).to eq(3)
+        expect(described_class.display_width("✅")).to eq(2)
+        expect(described_class.display_width("")).to eq(0)
+      end
+    end
+  end
 end

@@ -84,9 +84,9 @@ module SpecPlanBuild
 
         ## This invocation
 
-        Plan folder: #{subject.feature.path}
-        Plan number: #{subject.feature.ordinal}
-        Current state: #{subject.status.emoji} #{subject.status.label}
+        Plan folder    : #{subject.feature.path}
+        Plan number    : #{subject.feature.ordinal}
+        Current state  : #{subject.status.emoji} #{subject.status.label}
         Repository root: #{root}
 
         #{"The folder's name is not currently justified: #{subject.violation}" if subject.violation}

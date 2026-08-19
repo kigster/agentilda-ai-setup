@@ -4,8 +4,8 @@ require "dry/cli"
 require "dry/initializer"
 require "dry/monads"
 require "dry/inflector"
-require "finite_machine"
 require "pastel"
+require "unicode/display_width"
 require "tty/box"
 require "tty/command"
 require "tty/screen"
@@ -45,6 +45,27 @@ module SpecPlanBuild
   # @return [Dry::Inflector] shared inflector
   def self.inflector = @inflector ||= Dry::Inflector.new
 
+  # Move a directory, preferring `git mv` so its history follows it.
+  #
+  # Both the state machine and `resync dirs` move plan folders, and a folder
+  # that loses its history because one of them used `FileUtils` is a folder
+  # nobody can `git log`.
+  #
+  # @param source [String] absolute
+  # @param target [String] absolute
+  # @return [Boolean] false when the target was already occupied
+  def self.move_directory(source, target)
+    return false if File.exist?(target)
+
+    parent = File.dirname(source)
+    tracked = system("git", "-C", parent, "ls-files", "--error-unmatch", source,
+      out: File::NULL, err: File::NULL)
+    moved = tracked && system("git", "-C", parent, "mv", source, target,
+      out: File::NULL, err: File::NULL)
+    FileUtils.mv(source, target) unless moved
+    true
+  end
+
   class Error < StandardError; end
 end
 
@@ -54,7 +75,8 @@ end
 %w[
   ui
   ordinal
-  lifecycle
+  status
+  state_machine
   markdown
   pull_request
   description
