@@ -4,102 +4,157 @@ This document captures various practices, dos and don'ts accumulated over decade
 
 ## Application Classifications
 
-Before we dive into the practices, it helps to define what kind of application we are building because the rules change based on the type of application sometimes. 
+Before we dive into the practices, it helps to define what kind of application we are building because the rules change based on the type of application sometimes.
 
 For the purposes of this skill, we'll define the following classes of applications:
 
 <dl>
   <dt><strong>PG-lax</strong></dt>
-	<dd>Type: OLTP. Many small transactions from a potentially large number of concurrent users. Generally, non-critical applications, games, social apps, with an unknown (but likely small) number of users (which can grow), where the cost of invalid data reference or a missed insert is relatively low. These types of applications can be configured to perform delayed commits, and even be eventually consistent. Often in these cases it's more important that the development moves fast, and the database is not in the way. Physical deletes are a norm, logical deletes are not. Foreign key delete behavior is often <code>ON CASCADE DELETE</code>.</dd>
+	<dd>Type: OLTP. Many small transactions from a potentially large number of concurrent users. Generally, non-critical applications, games, social apps, with an unknown (but likely small) number of users (which can grow), where the cost of invalid data reference or a missed insert is relatively low. These types of applications can be configured to perform delayed commits, and even be eventually consistent. Often in these cases it's more important that the development moves fast, and the database is not in the way. Physical deletes are a norm, logical deletes are not. Foreign key delete behavior is often <code>ON DELETE CASCADE</code>.</dd>
   <dt><strong>PG-traditional</strong></dt>
   <dd>Type: OLTP. Many small transactions from a potentially large number of concurrent users. Otherwise, its design is tighter than that of <strong>PG-lax</strong>. Perhaps this database may contain PII on large amount of users, or be a backend for an e-commerce store, where referential integrity saves time and effort on tracking down problems and customer complaints. However, it may not need many encrypted fields or SSL-only connection, it may be directly accessible by the operations staff via a VPN, and whether to apply physical deletes or logical to key tables is a production decision.</dd>
   <dt><strong>PG-strict</strong></dt>
-  <dd>Type: OLTP. Many small transactions from a potentially large number of concurrent users. The opposite of <strong>PG-lax</strong>: these applications often manage money, transactions, taxes, significant amount of PII or health records, and a mistake, leak, or a data corruption in such an application, as well as any extended  downtime, will cost a significant amount of money. In addition it can be legally bound to perform security audits, penetration testing and so on. These types of applications often prefer immutability (eg. on the transactions table) with later transaction inserted to amend the previous one, instead of updating it directly in place. Many tables maintain audit trails (via the triggers), and tight security, encryption at rest, encryption of columns in real-time, and SSL-only access often using public/private key. These databases almost never allow physical deletes, and perform logical delete only by having each table carry the <code>deleted_at</code> nullable column, null value of which is usually part of some unique index. ON CASCADE behavior is typically custom, and deletions often propagate by setting <code>deleted_at</code> on the dependent columns, but almost never physically delete anything.</dd>
+  <dd>Type: OLTP. Many small transactions from a potentially large number of concurrent users. The opposite of <strong>PG-lax</strong>: these applications often manage money, transactions, taxes, significant amount of PII or health records, and a mistake, leak, or a data corruption in such an application, as well as any extended  downtime, will cost a significant amount of money. In addition it can be legally bound to perform security audits, penetration testing and so on. These types of applications often prefer immutability (eg. on the transactions table) with later transaction inserted to amend the previous one, instead of updating it directly in place. Many tables maintain audit trails (via the triggers), and tight security, encryption at rest, encryption of columns in real-time, and SSL-only access often using public/private key. These databases almost never allow physical deletes, and perform logical delete only by having each table carry the <code>deleted_at</code> nullable column, null value of which is usually part of some unique index. <code>ON DELETE</code> behaviour is typically custom, and deletions often propagate by setting <code>deleted_at</code> on the dependent rows, but almost never physically delete anything.</dd>
   <dt><strong>PG-analytics</strong></dt>
   <dd>Type: Data Warehouse. These PG instances are meant for analytics, data warehousing, and often contain large number of materialized views, ingest data from multiple sources, and have small number of concurrent users performing large and long-running queries. These applications rarely perform physical deletes, are optimized for ingestion of data and fast batch imports.</dd>
 </dl>
 
-
-
 > [!IMPORTANT]
->
 > It is critically important to understand what type of application we are dealing with before applying the rules. If agent is engaged in designing the schema, it must first ask the user (or read in the spec) and infer the type of application this is, and record it in its AGENTS.md file or CLAUDE.md file. This decision will guide many of the conventions and default behaviors.
 
 ## Logical vs Physical Deletes
 
-If your application type warrants logical, and not physical deletes, there are some advantages to that. First of all, you never lose any data, so you can always restore someone's account, or provide forensic assistance to law enforcement. 
+If your application type warrants logical, and not physical deletes, there are some advantages to that. First of all, you never lose any data, so you can always restore someone's account, or provide forensic assistance to law enforcement.
 
-Secondly, any row that's physically deleted in PostgreSQL needs to be vacuumed at some point. Vacuuming is an IO-heavy process that, despite all the advancements in parallel vacuuming, may be adding to your database load considerably. 
+Secondly, any row that's physically deleted in PostgreSQL needs to be vacuumed at some point. Vacuuming is an IO-heavy process that, despite all the advancements in parallel vacuuming, may be adding to your database load considerably.
 
-Logical deletes do no such thing. Especially if the column that separates "logically deleted" rows from live rows is only indexed where it is NULL, and never index where it is NOT NULL. 
+> [!CAUTION]
+> **A logical delete does not avoid that cost, and it is worth being precise about why.** Under MVCC, an `UPDATE` writes a *new* row version and marks the old one dead — exactly the dead tuple a `DELETE` would have produced. Setting `deleted_at` on a million rows creates a million dead tuples. What you actually buy with a logical delete is the *data*, the audit trail, and the ability to undo. You do not buy your way out of vacuum.
 
-This is important because logically deleted rows will not need vacuuming just because a data was set on them, as long as it's not in the index. The indexes on the live rows will need to be updated to exclude the logically deleted row, but that's a more lightweight operation.
+What genuinely reduces the cost is a **HOT update** (Heap-Only Tuple): when an `UPDATE` changes no indexed column and the new version fits on the same page, PostgreSQL skips the index write entirely and the dead tuple can be reclaimed by opportunistic page pruning rather than waiting for a vacuum cycle.
+
+And here is the trap, because it is exactly backwards from what intuition suggests: **a partial index `WHERE deleted_at IS NULL` disqualifies the update from HOT.** HOT eligibility considers every column any index *references*, and that includes a partial index's predicate. Setting `deleted_at` from NULL to a timestamp changes the predicate's answer, so the row must leave the index, so the update rewrites index tuples. Measured on PostgreSQL 18 with page headroom, 200 soft deletes produced 174 HOT updates when `deleted_at` was in no index at all, and **zero** when the recommended `WHERE deleted_at IS NULL` partial index was present. Both produced 200 dead tuples.
+
+That does not mean skip the partial index. It stays small because it only covers live rows, and on a table where most rows are deleted that is a large read win. It means the tradeoff is real and should be chosen deliberately: a small, hot index on the read path, paid for with non-HOT updates and index churn on the write path. For `PG-strict` the partial index is nearly always still correct — the read pattern dominates, and `deleted_at IS NULL` appears in essentially every query.
 
 ### If Your Backend is Ruby on Rails
 
 You have a choice of two battle-tested gems to implement your logical deletes:
 
-* https://github.com/jhawthorn/discard
-* https://github.com/rubysherpas/paranoia
+- https://github.com/jhawthorn/discard
+- https://github.com/rubysherpas/paranoia
+
+## Money and Other Exact Numbers
+
+> [!CAUTION]
+> **Never store money in `float`, `double precision`, or Ruby's `Float`.** Binary floating point cannot represent 0.10, and a tax engine that is off by a hundredth of a cent on ten million line items is off by real money in a real audit. This is not a style preference.
+
+**The default is integer minor units — cents — in a `bigint`.** `amount_cents bigint NOT NULL`, paired with `currency char(3) NOT NULL` holding an ISO 4217 code. Integers add, subtract and compare exactly, they are 8 bytes, they survive every serialization boundary between Postgres, Ruby, JSON and JavaScript without a single rounding surprise, and `bigint` cents holds about 92 quadrillion of them, which is more than any of us will need.
+
+Name the column for what it holds. `amount_cents`, not `amount` — the suffix is what stops somebody assigning `19.99` to it three years from now and being wrong by two orders of magnitude.
+
+**The exception is genuine fractional quantities**: crypto (satoshis are 1e-8, wei are 1e-18), FX rates, per-unit tax rates, commodity weights. There, use `numeric(p, s)` with the precision and scale written down, because `numeric` is arbitrary-precision decimal and arithmetic on it is exact. It is slower than integer arithmetic and stored as a variable-length value, and that is the correct price to pay.
+
+```sql
+amount_cents   bigint         NOT NULL,   -- money: exact, fast, boring
+currency       char(3)        NOT NULL,
+tax_rate       numeric(9, 6)  NOT NULL,   -- a rate is not money
+btc_amount     numeric(24, 8)             -- fractional by nature
+```
+
+**Rounding is a specified behaviour, not an implementation detail.** Tax jurisdictions state their rounding rule in law, and the rules differ — half-up, half-even, round-per-line versus round-per-invoice. Postgres's `round()` on `numeric` is half-away-from-zero; on `double precision` it is half-to-even and therefore doubly wrong for this purpose. Decide the rule per jurisdiction, write it down in the schema or the code that owns it, and test it against the published examples rather than against your intuition.
+
+In Rails, `t.bigint :amount_cents` plus a value object (or `money-rails`) beats `t.decimal`. If you do use `decimal`, always state precision and scale — an unqualified `numeric` accepts anything and silently stores whatever it is given.
 
 ## Schema Naming
 
-Regardless of what application we are building and in what language, we are generally going to lean on Rails conventions for database and table naming: 
+Regardless of what application we are building and in what language, we are generally going to lean on Rails conventions for database and table naming:
 
 1. **Tables names are plural, lower cased, underscored**
-2. **Column names are also lower case, underscored and are constructed using full words**, almost never abbreviations unless it's something extremely well known, such as `llm` or `i18n`.
-3. **Foreign keys are singular**, eg `users` table, maybe referenced by `profiles` with a singular. 
-   1. Each foreign key MUST define `on cascade` behavior. The actual behavior depends on the application. 
-4. **`profiles.user_id`** (a singular item) referencing it.
+1. **Column names are also lower case, underscored and are constructed using full words**, almost never abbreviations unless it's something extremely well known, such as `llm` or `i18n`.
+1. **Foreign keys are singular**, eg `users` table, maybe referenced by `profiles` with a singular.
+   1. Each foreign key MUST state its `ON DELETE` behaviour explicitly — `CASCADE`, `RESTRICT`, `SET NULL` or `NO ACTION`. The right answer depends on the application class. Leaving it unstated means `NO ACTION`, which is a decision nobody made.
+1. **`profiles.user_id`** (a singular item) referencing it.
 
 ### Third Party Schemas
 
-Whenever there is a benefit of copying a third party tables into our own database due to the active integration, webhooks being received for various events, and so on (examples of which include Stripe, Plaid, and many others) sometimes it's very beneficial to store the third party's data in the tables they might publicize and even encourage us to use. 
+Whenever there is a benefit of copying a third party tables into our own database due to the active integration, webhooks being received for various events, and so on (examples of which include Stripe, Plaid, and many others) sometimes it's very beneficial to store the third party's data in the tables they might publicize and even encourage us to use.
 
 This can be very useful and can provide a good additional source of information about what's going on in the application, useful in audits, debugging, troubleshooting, and so on, especially if the application is receiving a lot of webhooks from the third party, each of a different schema mapped to a potential table.
 
 **In those cases, the following rules apply:**
 
-1. Store third party tables always in their dedicated schema named after the third party, eg `stripe.*` or `plaid.*` and so on. 
+1. Store third party tables always in their dedicated schema named after the third party, eg `stripe.*` or `plaid.*` and so on.
 
-2. Our own code, typically, will default to the `public` schema, which is the default schema in PostgreSQL.
+1. Our own code, typically, will default to the `public` schema, which is the default schema in PostgreSQL.
 
-3. The default schema search path is often set to `"$user", public` (you can find that out with `SHOW SEARCH_PATH;`)
+1. The default schema search path is often set to `"$user", public` (you can find that out with `SHOW SEARCH_PATH;`)
 
-4. If you use `psql` you can list the schema with `\dn` command.
+1. If you use `psql` you can list the schema with `\dn` command.
 
-5. Whenever a new schema is added to the mix, it is imperative that the search path is updated either for the user:
+1. Whenever a new schema is added to the mix, it is imperative that the search path is updated either for the user:
 
-   `ALTER USER <USERNAME> SET SEARCH_PATH TO $user, public, stripe, plaid;` 
-   NOTE: this statement would require the user to logout and log back in, and the search path will be updated and persisted. 
+   `ALTER USER <USERNAME> SET SEARCH_PATH TO $user, public, stripe, plaid;` NOTE: this statement would require the user to logout and log back in, and the search path will be updated and persisted.
 
    Search Path can also be set or reset temporarily, per current session, and so on. Decide the most appropriate method but beware that if there are name collisions between the vendors, the first schema's object wins.
 
-6. It's very easy to do cross-schema joins in PostgreSQL, just don't forget to add the schema prefix before the dot for any schema not in the search path.  For this reason you may choose to NOT modify your search path, because that will require you to reference any Stripe or Plaid table with the `stripe.transactions` prefix.
+1. It's very easy to do cross-schema joins in PostgreSQL, just don't forget to add the schema prefix before the dot for any schema not in the search path. For this reason you may choose to NOT modify your search path, because that will require you to reference any Stripe or Plaid table with the `stripe.transactions` prefix.
 
 ## Migrations, Performance & Indexes
 
 ### Database Migrations
 
-Treat the migration as a production operation, not a schema edit. 
+Treat the migration as a production operation, not a schema edit.
 
-Install `strong_migrations` — it will catch the classics before your DBA (or your 3am pager) does. The non-negotiables on PostgreSQL: `add_index` on any table with real rows must be `algorithm: :concurrently` with `disable_ddl_transaction!`; never combine that migration with anything else. 
+Install `strong_migrations` — it will catch the classics before your DBA (or your 3am pager) does. The non-negotiables on PostgreSQL: `add_index` on any table with real rows must be `algorithm: :concurrently` with `disable_ddl_transaction!`; never combine that migration with anything else.
 
-Adding a column with a default is safe on PG 11+, but adding `null: false` to an existing column is not — add a `CHECK (col IS NOT NULL) NOT VALID`, `VALIDATE CONSTRAINT` in a separate migration, then `SET NOT NULL`, which PG 12+ will accept using the validated constraint as proof. 
+Adding a column with a default is safe on PG 11+, but adding `null: false` to an existing column is not — add a `CHECK (col IS NOT NULL) NOT VALID`, `VALIDATE CONSTRAINT` in a separate migration, then `SET NOT NULL`, which PG 12+ will accept using the validated constraint as proof.
 
-Backfills belong in their own batched migration or a rake task, never in the same transaction as DDL. Renaming and dropping columns require the ignored-column dance (`self.ignored_columns +=`, deploy, then drop) because your old app processes are still running mid-deploy. 
+Backfills belong in their own batched migration or a rake task, never in the same transaction as DDL. Renaming and dropping columns require the ignored-column dance (`self.ignored_columns +=`, deploy, then drop) because your old app processes are still running mid-deploy.
 
-And switch to `schema_format = :sql`; `schema.rb` silently loses partial indexes, expression indexes, exclusion constraints, generated columns, and every extension you care about. 
+And switch to `schema_format = :sql`; `schema.rb` silently loses partial indexes, expression indexes, exclusion constraints, generated columns, and every extension you care about.
+
+#### Timeouts, and why a migration takes the site down without ever running
+
+`strong_migrations` catches the dangerous *statements*. It does not save you from the dangerous *wait*, and the wait is what actually causes the outage.
+
+`ALTER TABLE` needs an `ACCESS EXCLUSIVE` lock. If any transaction is currently reading that table — a long analytics query, an idle-in-transaction connection somebody left open in `psql` — your `ALTER` cannot start, so it queues. **And every query that arrives after it queues behind it**, because lock requests are FIFO and a pending `ACCESS EXCLUSIVE` request blocks the `ACCESS SHARE` locks that ordinary `SELECT`s need. Your migration never ran, changed nothing, and took the site down for as long as it was willing to wait.
+
+**So `lock_timeout` is not optional.** Set it low, fail fast, and retry:
+
+```ruby
+class AddCurrencyToInvoices < ActiveRecord::Migration[8.0]
+  def change
+    safety_assured do
+      execute "SET lock_timeout = '3s'"   # fail fast rather than queue the world
+      add_column :invoices, :currency, :string
+    end
+  end
+end
+```
+
+Three seconds is a reasonable default for a table under load: either you get the lock almost immediately or something is holding it and you want to know now, not after the pager has gone off. Retry the migration in a loop if you must; a failed attempt that changed nothing costs you nothing.
+
+**`statement_timeout` is the same argument at the application level, and it is equally non-negotiable.** A web application serving many concurrent users must cap it at **60 seconds at the very most**, and lower is usually better. Nothing good happens to a web request at 60 seconds — the user left, the load balancer gave up, the client retried — and yet the query keeps running, keeps holding its snapshot, keeps pinning the rows autovacuum wants to reclaim, and keeps occupying a connection that the pool needs back. Without the cap, one bad query plan does not degrade the site; it takes it down and holds it there.
+
+Set it per role, not per connection, so nobody can forget:
+
+```sql
+ALTER ROLE app_web        SET statement_timeout = '30s';
+ALTER ROLE app_background SET statement_timeout = '10min';   -- jobs may take longer
+ALTER ROLE app_readonly   SET statement_timeout = '5min';
+```
+
+Round it out with `idle_in_transaction_session_timeout` (kill the `psql` session somebody abandoned inside `BEGIN` — it blocks vacuum and holds locks indefinitely) and, on the pooled roles, a sane `idle_session_timeout`.
 
 ### Primary Keys
 
-Primary keys should never be made composite or based on business-value columns. This is because business requirements change over time. Always create an ID column on all tables, and do not assign it any meaning other than a unique ID that may be referenced from elsewhere. 
+Primary keys should never be made composite or based on business-value columns. This is because business requirements change over time. Always create an ID column on all tables, and do not assign it any meaning other than a unique ID that may be referenced from elsewhere.
 
 You have two choices in choosing the datatype for primary keys, which depends on the application you are building once again.
 
 > [!CAUTION]
->
-> The default datatype for auto-incrementing primary key is `integer` which is 32-bit and is therefore capped at 2.5B. Therefore modern application almost never use the default data type. 
+> The default datatype for auto-incrementing primary key is `integer` which is 32-bit and signed, and is therefore capped at 2,147,483,647 — a shade over 2.1 billion. Therefore modern application almost never use the default data type.
 
 #### Data Types for Primary Keys
 
@@ -107,7 +162,7 @@ Primary keys often leak out to the web front-end in unexpected ways. You may be 
 
 ##### Bigint
 
-If you do not care about any of the above, then use `bigint` which is not 2.6B capped, and can grow as much as you like. And to confuse your competitors you don't even have to start at 1. You can always start the sequence at 1M, throwing anyone assuming they are auto-incrementing from 1 off. This data type is fast, compact (64-bits), but remembering to always start from some high random number may get tedious.
+If you do not care about any of the above, then use `bigint`, which tops out around 9.2 quintillion and will therefore never trouble you. And to confuse your competitors you don't even have to start at 1. You can always start the sequence at 1M, throwing anyone assuming they are auto-incrementing from 1 off. This data type is fast, compact (64-bits), but remembering to always start from some high random number may get tedious.
 
 ##### UUIDv7
 
@@ -119,10 +174,9 @@ If you do not care about any of the above, then use `bigint` which is not 2.6B c
 - `uuidv4()` — an alias for `gen_random_uuid()`, purely so your schema reads honestly about which version you asked for.
 - `uuid_extract_timestamp()` (which arrived in 17) now understands v7, so you can recover the creation time from the key itself.
 
-Also: use ` primary keys`, `timestamptz` not `timestamp` (Rails 7.0+ does this by default), real foreign keys with `add_foreign_key ... validate: false` then validate separately, and `citext` or a `CHECK` rather than three layers of Ruby validation pretending to be a constraint.
+Also: use `uuid` primary keys, `timestamptz` not `timestamp` (Rails 7.0+ does this by default), real foreign keys with `add_foreign_key ... validate: false` then validate separately, and `citext` or a `CHECK` rather than three layers of Ruby validation pretending to be a constraint.
 
 > [!NOTE]
->
 > Early versions of Rails pretended that Rails validations are enough, and you do not need foreign keys. This was mostly motivated by the challenges in creating test fixtures in the right order (when FKs were enabled), and DHH's lack of understanding of databases deep enough to grok why that was a misnomer. **Do use foreign keys on ALL of your tables that have them.**
 
 ##### The Size of UUID
@@ -135,37 +189,199 @@ Also: use ` primary keys`, `timestamptz` not `timestamp` (Rails 7.0+ does this b
 
 For your Rails work — this is the right moment to go UUID:
 
-ruby
-
 ```ruby
 create_table :boomerangs, id: :uuid, default: -> { "uuidv7()" } do |t|
+  t.string :name, null: false
+  t.timestamps
+end
 ```
 
 #### Indexes
 
-Fewer, wider, deliberate.** Every index is a write tax, a bloat source, and a HOT-update killer — updating an indexed column forces a new index tuple even when nothing else changed. So index from actual query plans, not from a feeling that a column "seems searchable." Then audit: `pg_stat_user_indexes` with `idx_scan = 0` over a meaningful window is your kill list. On composite column ordering, the rule that actually matters is *equality columns first, then range/inequality, then sort columns* — an index on `(account_id, created_at)` serves `WHERE account_id = ? ORDER BY created_at DESC LIMIT 20` beautifully, while `(created_at, account_id)` serves it not at all. Selectivity is a tiebreaker, not the primary criterion; access-pattern shape wins.
+**Fewer, wider, deliberate.** Every index is a write tax, a bloat source, and a HOT-update killer — updating an indexed column forces a new index tuple even when nothing else changed. So index from actual query plans, not from a feeling that a column "seems searchable." Then audit: `pg_stat_user_indexes` with `idx_scan = 0` over a meaningful window is your kill list. On composite column ordering, the rule that actually matters is *equality columns first, then range/inequality, then sort columns* — an index on `(account_id, created_at)` serves `WHERE account_id = ? ORDER BY created_at DESC LIMIT 20` beautifully, while `(created_at, account_id)` serves it not at all. Selectivity is a tiebreaker, not the primary criterion; access-pattern shape wins.
 
 **The shared-leading-column question is where most Rails apps get fat.** If you have `(account_id)` and `(account_id, created_at)`, the first is redundant — B-tree leftmost-prefix means the composite answers everything the single-column index answers, so drop it unless you need it for a unique constraint or the size difference genuinely matters for an index-only scan on a huge table. This happens constantly because `add_reference`/`belongs_to` auto-creates the single-column index and then you add the composite three sprints later and never look back. But `(account_id, created_at)` and `(account_id, status)` are *not* redundant with each other — neither is a prefix of the other, and PG can bitmap-AND them if it wants. Before adding the second one, though, ask whether a partial index (`WHERE status = 'pending'`) is smaller and better, because it usually is. Partial indexes are the single most underused feature in Postgres: soft-delete apps should have `WHERE deleted_at IS NULL` on nearly everything.
 
 ##### Index Types, Briefly
 
-* **B-tree** for basically everything ordered and comparable. 
+- **B-tree** for basically everything ordered and comparable.
+- **GIN** for `jsonb` containment, arrays, and `tsvector` full-text. Use `jsonb_path_ops` if you only ever use `@>` — it is meaningfully smaller and faster.
+- **GiST** for ranges, geometry, and exclusion constraints (`tstzrange` + `EXCLUDE` is how you prevent double-booking correctly, rather than with an application-level race condition you'll discover in production).
+- **BRIN** for append-only, naturally-ordered giants — an events table with a monotonic `created_at` gets a usable index at roughly 1/1000th the size.
+- **Expression indexes** for `lower(email)`, though `citext` is cleaner.
+- **`pg_trgm`** for fuzzy matching and `LIKE '%foo%'`, which no B-tree will ever serve.
+- **Hash indexes**: still almost never the answer.
 
-* GIN for `jsonb` containment, arrays, and 
-* `tsvector` full-text. 
-* use `jsonb_path_ops` if you only ever use `@>`, it's meaningfully smaller and faster. 
-* GiST for ranges, geometry, and exclusion constraints (`tstzrange` + `EXCLUDE` is how you prevent double-booking correctly, rather than with an application-level race condition you'll discover in production). 
-* BRIN for append-only, naturally-ordered giants — an events table with a monotonic `created_at` gets a usable index at roughly 1/1000th the size. 
-* Expression indexes for `lower(email)`, though `citext` is cleaner. 
-* Hash indexes: still almost never the answer.
+#### N+1s
 
-#### N+1s 
+Turn on `strict_loading` — per-association at first, then `config.active_record.strict_loading_by_default = true` in dev/test once you've cleaned up — so the failure is a raised exception at development time instead of 400 queries in production. `bullet` in dev is complementary and catches the inverse case (eager-loading you don't use).
 
-Turn on `strict_loading` — per-association at first, then `config.active_record.strict_loading_by_default = true` in dev/test once you've cleaned up — so the failure is a raised exception at development time instead of 400 queries in production. `bullet` in dev is complementary and catches the inverse case (eager-loading you don't use). 
-
-Know the three loaders: `preload` does separate queries and is usually what you want; `eager_load` forces one `LEFT OUTER JOIN` and is right when you filter or order on the association; `includes` guesses between them and will silently switch to `eager_load` the moment you add `references` or a hash condition, which is how a fast page becomes a Cartesian explosion. 
+Know the three loaders: `preload` does separate queries and is usually what you want; `eager_load` forces one `LEFT OUTER JOIN` and is right when you filter or order on the association; `includes` guesses between them and will silently switch to `eager_load` the moment you add `references` or a hash condition, which is how a fast page becomes a Cartesian explosion.
 
 Use `joins` when you're only filtering and don't need the objects. Counter caches for `.count` in loops; `Model.where(id: ids).index_by(&:id)` when the association graph is awkward. And check your serializers and view partials — that's where N+1s hide, not in the controller where everyone looks. Finally, `ORDER BY ... LIMIT` on a joined query is the one shape where `preload` and `eager_load` differ semantically, so read the SQL rather than trusting the DSL.
 
+## Concurrency Control and Locking
+
+> [!IMPORTANT]
+> **This section is mandatory for `PG-strict`, and optional for `PG-lax`.** If the database holds money, taxes, inventory or anything with a legal consequence, the patterns below are not advanced technique — they are the baseline, and skipping them produces bugs that only appear under load, only in production, and only in ways that cost money. For a `PG-lax` social app, `READ COMMITTED` and optimistic locking are fine and the rest is ceremony.
+
+**PostgreSQL defaults to `READ COMMITTED`, and it is weaker than most people assume.** Each *statement* sees a fresh snapshot, so two `SELECT`s in one transaction can return different answers. A read-modify-write across statements — read the balance, compute, write it back — is a lost-update bug with a race window as wide as your application latency.
+
+The three ways out, in order of how often you should reach for them:
+
+1. **`SELECT ... FOR UPDATE`** — take the row lock as part of the read. The second transaction blocks until the first commits, then sees the committed value. In Rails this is `record.lock!` or `Model.lock.find(id)`. This is the right answer the overwhelming majority of the time.
+1. **`SERIALIZABLE`** — Postgres implements true serializable snapshot isolation, and it is genuinely correct. The price is that transactions can fail at `COMMIT` with a serialization failure, so **every** `SERIALIZABLE` transaction needs a retry loop. No retry loop, no serializable isolation; you have merely moved the bug into an error class.
+1. **Optimistic locking** — a `lock_version` column, Rails' default. Fine for user-edited records where a conflict is rare and a human can retry. Wrong for machine-driven contention, where you get a retry storm.
+
+```ruby
+# PG-strict: the balance is read and written under the same lock
+ApplicationRecord.transaction do
+  account = Account.lock.find(account_id)          # SELECT ... FOR UPDATE
+  account.update!(balance_cents: account.balance_cents - amount_cents)
+end
+```
+
+**Deadlocks are an ordering problem, not a locking problem.** Two transactions that lock rows A then B, and B then A, will eventually deadlock; Postgres detects it and kills one after `deadlock_timeout`. The fix is a rule the whole codebase follows — always lock in ascending primary key order, always parent before child — not a bigger lock.
+
+**Advisory locks** (`pg_advisory_xact_lock`) are for mutual exclusion over something that is not a row: a nightly job that must not run twice, a per-tenant serialization point. Use the transaction-scoped variant so the lock releases on commit or rollback rather than leaking when a process dies. Note the interaction with connection pooling below — session-scoped advisory locks and transaction pooling are incompatible.
+
+**Immutability beats locking where it fits.** The `PG-strict` pattern of appending a correcting transaction rather than updating in place removes the contention entirely: inserts do not conflict with each other. If the domain permits an append-only ledger, that is a better answer than any isolation level.
+
+## Connection Pooling
+
+Postgres allocates a full backend process per connection. A few hundred of them is not concurrency, it is a scheduler thrashing, and the memory is real. Applications open far more connections than the database should ever see, which is why a pooler is not optional infrastructure at any meaningful scale.
+
+**pgBouncer has been the answer for well over a decade and has been remarkably, boringly reliable** — a single small C process that does one thing and does not fall over. Its one long-standing wart was that transaction mode could not carry protocol-level prepared statements, which meant Rails users had to run with `prepared_statements: false` and give up the plan cache. Recent pgBouncer versions support prepared statements in transaction mode (via `max_prepared_statements`), so that objection has largely expired — check your deployed version before assuming either way.
+
+It now has a growing field of competitors — pgcat, Supavisor, Odyssey, and the managed poolers baked into RDS and Cloud SQL — most offering multi-threading, better observability, or read/write splitting that pgBouncer deliberately never attempted. Evaluate them on operational maturity rather than feature lists; the reason pgBouncer endures is that it has already failed in every way it is going to.
+
+### Pooling modes
+
+| Mode            | Connection released to pool | Ratio you get                                | What breaks                                                                  |
+| :-------------- | :-------------------------- | :------------------------------------------- | :--------------------------------------------------------------------------- |
+| **Session**     | On client disconnect        | ~1:1. Basically useless as pooling.          | Nothing. Also saves you nothing.                                             |
+| **Transaction** | On `COMMIT`/`ROLLBACK`      | 10:1 to 100:1. **This is the one you want.** | Advisory locks, `LISTEN`/`NOTIFY`, `SET`, temp tables, cursors outside a txn |
+| **Statement**   | After each statement        | Highest                                      | Multi-statement transactions. Don't.                                         |
+
+Transaction mode is the product. The breakage column is the price, and it is mostly avoidable: use *transaction-scoped* advisory locks, move `LISTEN`/`NOTIFY` to a dedicated unpooled connection, and set role-level defaults with `ALTER ROLE ... SET` instead of per-session `SET`.
+
+### Sizing math
+
+The number that matters isn't `max_connections`, it's:
+
+```
+pool_size ≈ (core_count × 2) + effective_spindle_count
+```
+
+For an 8-core box on NVMe that's roughly **16–20 server-side connections**. Everything above that is queueing, not concurrency. People routinely set `default_pool_size = 100` and then wonder why p99 got worse — you have just moved the queue from the pooler into Postgres, where it is more expensive and considerably less observable.
+
+Client side you can accept thousands. **That asymmetry is the entire product.**
+
+## Replicas and Replication Lag
+
+Read replicas are the cheapest way to take load off the primary, and they introduce exactly one new class of bug: **you write to the primary and immediately read from a replica that has not caught up yet.** The row is not missing. It is just not there *yet*, on that machine, for another few milliseconds. Users hit it constantly, because "create a thing and then look at the thing" is the most common flow in any application.
+
+Lag is normally sub-millisecond and occasionally seconds, and it is never zero. Do not try to eliminate it — handle it.
+
+Rails ships `ActiveRecord::Middleware::DatabaseSelector`, which sends reads to the primary for a fixed window (2 seconds by default) after any write in that session. It is a decent blunt default and it is not enough: the window is a guess, and it is per-session, so it does nothing for a background job reading a record another process just wrote.
+
+**The pattern that actually works is an explicit block that reads from the replica and falls back to the primary when the record isn't there yet:**
+
+```ruby
+module EventuallyConsistent
+  # Run the block against a read replica. If the replica has not caught up —
+  # the record is missing, or the result is empty — run it again against the
+  # primary, where it is guaranteed to be visible.
+  #
+  #   eventually_consistent do
+  #     User.find_by!(first_name: "Alan")   # must RAISE or return a value
+  #   end
+  #
+  # @param retry_if_blank [Boolean] also retry on an empty result, not just
+  #   on RecordNotFound. Relations and `find_by` return nil/[] rather than
+  #   raising, and those are the same "not replicated yet" condition.
+  def eventually_consistent(retry_if_blank: true)
+    result = ActiveRecord::Base.connected_to(role: :reading) { yield }
+    return result unless retry_if_blank && blank_result?(result)
+
+    ActiveRecord::Base.connected_to(role: :writing) { yield }
+  rescue ActiveRecord::RecordNotFound
+    ActiveRecord::Base.connected_to(role: :writing) { yield }
+  end
+
+  private
+
+  def blank_result?(result)
+    result.respond_to?(:empty?) ? result.empty? : result.nil?
+  end
+end
+```
+
+> [!CAUTION]
+> **ActiveRecord relations are lazy, and that will defeat this block silently.** `eventually_consistent { User.where(first_name: "Alan") }` returns an *unloaded* relation; the query then executes later, outside the block, against whichever connection happens to be current. Nothing runs on the replica and nothing is retried. Force evaluation **inside** the block — `.first`, `.to_a`, `.load`, `.find_by!`, `.count` — or the whole thing is decoration.
+
+Two more rules that keep this honest:
+
+1. **Reads that must be authoritative do not go to a replica at all.** A balance you are about to debit, a uniqueness check, anything feeding a write decision — read it from the primary, under `FOR UPDATE` if it matters. Retry-on-miss is for display paths, not for correctness paths.
+1. **Measure the lag, do not assume it.** `pg_last_xact_replay_timestamp()` on the replica and `pg_stat_replication` on the primary tell you what it actually is. Alert on it. A replica hours behind because a replication slot filled the disk is a different incident from the one you think you are debugging.
+
+## Observability
+
+You cannot tune what you cannot see, and the single highest-value thing you can do is make the database *readable* — safely — by the people and tools trying to understand it.
+
+### A read-only role, and let the agents use it
+
+Create a genuinely read-only production role. Not "a role we agreed not to write with" — one that cannot write:
+
+```sql
+CREATE ROLE app_readonly LOGIN PASSWORD '…';
+GRANT CONNECT ON DATABASE app_production TO app_readonly;
+GRANT USAGE ON SCHEMA public TO app_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO app_readonly;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO app_readonly;
+ALTER ROLE app_readonly SET statement_timeout = '5min';
+ALTER ROLE app_readonly SET default_transaction_read_only = on;
+```
+
+Point it at a replica if you have one, so an exploratory query cannot compete with production traffic.
+
+**Then give those credentials — and only those — to a trusted PostgreSQL MCP server.** An agent that can read `pg_stat_statements`, `EXPLAIN` a plan and inspect the schema is dramatically more useful at diagnosing a slow endpoint than one being fed pasted query text. And a read-only role plus a statement timeout plus `default_transaction_read_only` means the worst outcome is a wasted five minutes rather than a destroyed table. Vet the MCP server itself the way you would vet anything holding production credentials.
+
+### What to read once you are in
+
+`pg_stat_statements` first, always. It is an extension, it costs nearly nothing, and it answers the only question that matters at the start: *what is actually consuming the time?* Sort by `total_exec_time`, not `mean_exec_time` — the query that takes 3ms and runs two million times is your problem, and it never appears in a slow query log.
+
+PostgreSQL 18 ships roughly **forty-six** `pg_stat*` views, and the useful ones beyond the obvious are:
+
+- **`pg_stat_activity`** — what is running *right now*, and crucially `wait_event_type` / `wait_event`, which tell you whether you are CPU-bound, lock-bound or IO-bound instead of guessing.
+- **`pg_stat_io`** — reads, writes, extends and evictions broken out by backend type and context. This is how you learn that your "slow queries" are actually checkpoint storms.
+- **`pg_stat_user_tables`** — `n_dead_tup`, `n_tup_hot_upd`, and `last_autovacuum`. The HOT ratio here is what the Logical Deletes section is really about, and a table where autovacuum has not run in weeks is a bloat incident waiting to be discovered.
+- **`pg_stat_user_indexes`** — `idx_scan = 0` over a meaningful window is your kill list, as noted in the Indexes section.
+- **`pg_stat_progress_create_index`** and **`pg_stat_progress_vacuum`** — how far along that `CREATE INDEX CONCURRENTLY` actually is, rather than staring at a hung terminal.
+- **`pg_stat_replication`** — lag, per replica, in bytes and in time.
+
+Add `auto_explain` with a threshold (`auto_explain.log_min_duration = '500ms'`, `log_analyze = on`) so the plan for a slow query is in the log at the moment it was slow, rather than the plan you get re-running it later against a warm cache and different statistics. And when you do explain by hand, it is `EXPLAIN (ANALYZE, BUFFERS)` — without `BUFFERS` you cannot distinguish "read from memory" from "read from disk", which is usually the entire question.
+
 ## Vector Search
 
+`pgvector` is the reason you do not need a separate vector database for most workloads: keeping embeddings in the same transaction as the row they describe removes an entire class of consistency bug, and the join back to your relational data is free.
+
+**Store the dimension in the type** — `vector(1536)` — because a mismatched dimension should be a constraint violation at insert, not a confusing distance result at query time. Above 2000 dimensions a `vector` cannot be indexed at all; use `halfvec` (16-bit floats, half the size, indexable to 4000 dimensions) which costs almost nothing in recall for typical embeddings.
+
+**Match the operator class to your distance function or the index is silently ignored.** `vector_cosine_ops` with `<=>`, `vector_l2_ops` with `<->`, `vector_ip_ops` with `<#>`. This is the single most common pgvector mistake: the index exists, the query is a sequential scan, and nothing warns you. Check with `EXPLAIN`.
+
+**HNSW over IVFFlat** for essentially every new build. HNSW gives better recall at a given speed, does not need to be rebuilt as data changes, and — decisively — can be built on an empty table, whereas IVFFlat must be built *after* the data is loaded because its centroids are derived from it. IVFFlat's remaining advantage is faster build time and smaller index size, which matters at very large scale.
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+
+ALTER TABLE documents ADD COLUMN embedding vector(1536);
+
+CREATE INDEX CONCURRENTLY ON documents
+  USING hnsw (embedding vector_cosine_ops)
+  WITH (m = 16, ef_construction = 64);
+```
+
+Tuning, briefly: `m` and `ef_construction` are build-time and trade index size and build time for recall; `hnsw.ef_search` (default 40) is query-time and trades latency for recall — raise it until recall is acceptable, then stop. Build indexes with a large `maintenance_work_mem`, because an HNSW build that does not fit in memory takes hours instead of minutes.
+
+Two things people discover late. **Filtered vector search is the hard part**: `WHERE tenant_id = ? ORDER BY embedding <=> ?` may over-filter after the index scan and return fewer rows than `LIMIT` asked for. Partial HNSW indexes per high-cardinality filter, or raising `ef_search`, are the usual answers. And **embeddings are large** — 1536 dimensions at 4 bytes is 6KB per row, which will be TOASTed out of line and quietly dominate your table size. `halfvec` halves it.
