@@ -137,6 +137,35 @@ module SpecPlanBuild
     # @return [Array<SpecPlanBuild::PullRequest>]
     def pull_requests = @pull_requests ||= PullRequests.new(dir: feature.path).all
 
+    # The specification's own Goal section, verbatim and at most two
+    # paragraphs. Anything that paraphrases the spec is a second copy that
+    # drifts; quoting it is not — which is why the pull request body and the
+    # index both read it from here rather than each writing their own.
+    #
+    # @return [Array<String>] paragraphs, empty when there is no Goal to read
+    def goal
+      body = read("spec.md").to_s
+      section = body[/^\#{"#"}{2,3}\s*Goals?\b[^\n]*\n+(.*?)(?=\n\#{"#"}{1,3}\s|\z)/mi, 1]
+
+      paragraphs(section) || paragraphs(body.sub(/\A\s*\#{"#"}[^\n]*\n/, "")) || []
+    end
+
+    # Specifications written before the template existed have no Goal section,
+    # and they are exactly the ones an index most needs to describe. So the
+    # opening prose stands in — skipping headings, quotes, lists and tables,
+    # which describe the document rather than the work.
+    #
+    # @param text [String, nil]
+    # @return [Array<String>, nil] nil when there is no prose to be had
+    def paragraphs(text)
+      found = text.to_s.strip.split(/\n{2,}/)
+        .map(&:strip)
+        .reject { |p| p.empty? || p.match?(/\A[\#>|\-*\d`_=]/) }
+        .first(2)
+
+      found.empty? ? nil : found
+    end
+
     # @return [String, nil] why the folder's name is not justified
     def violation = status.violation(self)
 
