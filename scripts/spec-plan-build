@@ -1,0 +1,67 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# spec-plan-build — spec → plan → build.
+#
+#   spec-plan-build create tax rule dsl      # the next numbered plan folder
+#   spec-plan-build create --after 002 …     # a plan written after the fact
+#   spec-plan-build status                   # every plan, its state, its PRs
+#   spec-plan-build resync dirs              # folder emoji vs folder contents
+#   spec-plan-build resync prs               # [NNN.MM] prefixes on PR titles
+#   spec-plan-build docs -o context/SPEC-PLAN-BUILD.md
+#
+# Deliverables go to STDOUT; progress goes to STDERR. Anything that writes to
+# disk or to GitHub is a dry run until you pass --commit.
+#
+# © 2026 Konstantin Gredeskoul
+
+# Resolve the bundle from this repository rather than from wherever the caller
+# happens to be standing: this is installed on PATH and run from other projects'
+# roots, where the local Gemfile knows nothing about dry-cli or finite_machine.
+ENV["BUNDLE_GEMFILE"] ||= File.expand_path("../Gemfile", __dir__)
+
+begin
+  require "bundler/setup"
+rescue LoadError, StandardError => e
+  warn "spec-plan-build: could not load the bundle from #{ENV["BUNDLE_GEMFILE"]}"
+  warn "  #{e.class}: #{e.message.lines.first.to_s.strip}"
+  warn "  Run `bundle install` in #{File.dirname(ENV["BUNDLE_GEMFILE"])}"
+  exit 69
+end
+
+require_relative "../lib/spec_plan_build"
+
+# Names dry-cli can resolve. Anything else on the front of ARGV means the user
+# went straight for the flags, so `status` — the read-only one — is implied.
+KNOWN = %w[create new c status st resync docs version --version -v -h --help].freeze
+
+argv = ARGV.dup
+argv = ["status"] if argv.empty?
+# A leading FLAG means the user went straight for the options, so `status`
+# — the read-only command — is implied. A leading WORD that is not a command is
+# a typo, and must fail rather than quietly run something else.
+argv = ["status", *argv] if argv.first.start_with?("-") && !KNOWN.include?(argv.first)
+
+# `--push-pr` takes an OPTIONAL part letter: bare means "continue this plan's
+# sequence", `--push-pr C` means "use C". dry-cli has no optional-value option,
+# so the bare form is filled in here rather than made to look like a mistake.
+argv = argv.each_with_object([]) do |token, out|
+  out << token
+  next unless ["--push-pr", "-p"].include?(token)
+
+  following = argv[argv.index(token) + 1]
+  out << "auto" unless following&.match?(/\A[A-Z]\z/)
+end
+
+# dry-cli prints the command list for an unresolved command and exits 1, and
+# it treats a bare `--help` as exactly that. Asking for help is not a failure,
+# so the status is forced back to 0 for the help forms only.
+help = %w[-h --help help].include?(argv.first)
+
+begin
+  Dry::CLI.new(SpecPlanBuild::CLI).call(arguments: help ? [] : argv)
+rescue SystemExit => e
+  exit(help ? 0 : e.status)
+end
+
+exit 0 if help

@@ -11,7 +11,7 @@
 #   let!(:tree) do
 #     plans do |t|
 #       t.plan "001.00", :new,  "initial-spec", files: {"spec.md" => "# Spec"}
-#       t.plan "002.00", :done, "dev-foundation", prs: [t.merged(2, "Ship it")]
+#       t.plan "002.00", :approved, "dev-foundation", prs: [t.merged(2, "Ship it")]
 #     end
 #   end
 module PlansFixture
@@ -41,6 +41,20 @@ module PlansFixture
       files.each { |name, body| File.write(File.join(path, name), body) }
       File.write(File.join(path, "pull-requests.md"), pull_requests_table(prs)) if prs
 
+      path
+    end
+
+    # A folder written exactly as given, so an example can build a name this
+    # tool would never produce itself: an unpadded number, a hand-typed
+    # separator, a number-and-emoji pair that disagree.
+    #
+    # @param dirname [String] verbatim
+    # @param files [Hash{String => String}]
+    # @return [String] absolute path to the folder
+    def raw(dirname, files: {})
+      path = File.join(root, dirname)
+      FileUtils.mkdir_p(path)
+      files.each { |name, body| File.write(File.join(path, name), body) }
       path
     end
 
@@ -93,6 +107,12 @@ module PlansFixture
 
   # @return [String] the temp `.plans` directory for this example
   def plans_root = @plans_root
+
+  # Drop ANSI escape sequences so an assertion tests content, not presentation.
+  #
+  # @param text [String]
+  # @return [String]
+  def strip_ansi(text) = text.gsub(/\e\[[0-9;]*[a-zA-Z]/, "")
 
   # Populate the example's `.plans` tree.
   #

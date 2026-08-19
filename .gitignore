@@ -3,3 +3,4 @@
 coverage/
 .rspec_status
 tmp/
+.idea/

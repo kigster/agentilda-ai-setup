@@ -28,8 +28,10 @@ module SpecPlanBuild
     # @param words [Array<String>] the topic; becomes the slug
     # @param after [String, nil] anchor for a retroactive plan, e.g. "002"
     # @param status [String, Symbol, nil] override the default state
+    # @param prs [Array<Hash>, nil] pull requests to record, already fetched;
+    #   their presence is what makes the folder 🕰️ Retroactive rather than ⚪️
     # @return [Dry::Monads::Result] Success(absolute path) or Failure(message)
-    def create(words:, after: nil, status: nil)
+    def create(words:, after: nil, status: nil, prs: nil)
       resolved = resolve_status(status, after) or
         return Failure("unknown status: #{status}")
 
@@ -39,7 +41,7 @@ module SpecPlanBuild
       ordinal = after ? retroactive_ordinal(after) : Ordinal.next_major(existing)
       return ordinal if ordinal.is_a?(Dry::Monads::Result)
 
-      build(ordinal, resolved, slug)
+      build(ordinal, resolved, slug).fmap { |path| record_pull_requests(path, prs) }
     rescue SpecPlanBuild::Error => e
       Failure(e.message)
     end
@@ -85,6 +87,21 @@ module SpecPlanBuild
       end
 
       Ordinal.next_minor(existing, major: anchor.major)
+    end
+
+    # Write the pull requests the folder was created from, so 🕰️ Retroactive
+    # is justified the moment the folder exists — that state means "the work is
+    # live and undocumented", and it is the recorded pull requests that make
+    # the first half of that true.
+    #
+    # @param path [String] the new folder
+    # @param prs [Array<Hash>, nil]
+    # @return [String] the path, unchanged
+    def record_pull_requests(path, prs)
+      return path if prs.nil? || prs.empty?
+
+      File.write(File.join(path, PullRequests::FILENAME), PullRequests.render(prs))
+      path
     end
 
     # @param ordinal [SpecPlanBuild::Ordinal]

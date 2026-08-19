@@ -12,8 +12,8 @@ RSpec.describe SpecPlanBuild::Resync::Prs, :tree do
   let!(:tree) do
     plans do |t|
       t.plan "001.00", :new, "initial-spec", files: {"spec.md" => spec_body}
-      t.plan "002.00", :done, "dev-foundation", prs: [t.merged(2, "Ship it")]
-      t.plan "018.01", :done, "verify-returns", prs: [t.merged(41, "Backfill")]
+      t.plan "002.00", :approved, "dev-foundation", prs: [t.merged(2, "Ship it")]
+      t.plan "018.01", :approved, "verify-returns", prs: [t.merged(41, "Backfill")]
     end
   end
 
@@ -74,10 +74,35 @@ RSpec.describe SpecPlanBuild::Resync::Prs, :tree do
           files: [".plans/001.00-⚪️-initial-spec/spec.md", ".plans/002.00-✅-dev-foundation/plan.md"])]
       end
 
-      it "refuses to pick a winner and flags it for a human" do
+      # Refusing to pick a winner was honest but useless: the work exists, no
+      # plan describes it, and left unnumbered it never appears in the index.
+      # So it is given a plan of its own rather than a shrug.
+      it "adopts it into a plan of its own rather than flagging it" do
         aggregate_failures do
-          expect(changes.first).to be_ambiguous
-          expect(changes.first.new_title).to be_nil
+          expect(changes.first).not_to be_ambiguous
+          expect(changes.first).to be_adopted
+          expect(changes.first.new_title).to eq("[002.01] Sweeping change")
+        end
+      end
+
+      it "numbers it after the furthest plan it touches, not the nearest" do
+        expect(changes.first.ordinal.to_s).to eq("002.01")
+      end
+
+      it "still says why it could not be resolved the ordinary way" do
+        expect(changes.first.reason).to match(/none is obviously primary.*adopted into 002\.01/)
+      end
+
+      context "with adoption switched off" do
+        subject(:resync) do
+          described_class.new(tree: SpecPlanBuild::Tree.new(dir: plans_root), github:, adopt: false)
+        end
+
+        it "goes back to flagging it for a human" do
+          aggregate_failures do
+            expect(changes.first).to be_ambiguous
+            expect(changes.first.new_title).to be_nil
+          end
         end
       end
     end
@@ -105,8 +130,23 @@ RSpec.describe SpecPlanBuild::Resync::Prs, :tree do
     context "when a branch names a plan that does not exist" do
       let(:pulls) { [pull(17, "Typo'd branch", branch: "kig/099.00-nope")] }
 
-      it "flags it instead of inventing a folder" do
-        expect(changes.first).to be_ambiguous
+      # Nothing in the diff to go on, so it lands after the furthest plan the
+      # tree knows about — and takes .02, because .01 is already occupied.
+      it "adopts it rather than pointing at a folder that is not there" do
+        aggregate_failures do
+          expect(changes.first).to be_adopted
+          expect(changes.first.ordinal.to_s).to eq("018.02")
+        end
+      end
+
+      context "with adoption switched off" do
+        subject(:resync) do
+          described_class.new(tree: SpecPlanBuild::Tree.new(dir: plans_root), github:, adopt: false)
+        end
+
+        it "flags it instead of inventing a folder" do
+          expect(changes.first).to be_ambiguous
+        end
       end
     end
   end
@@ -126,7 +166,8 @@ RSpec.describe SpecPlanBuild::Resync::Prs, :tree do
       resync.call(commit: true)
     end
 
-    it "never edits a pull request it could not resolve" do
+    it "never edits a pull request it could not resolve, when it may not adopt" do
+      resync = described_class.new(tree: SpecPlanBuild::Tree.new(dir: plans_root), github:, adopt: false)
       allow(github).to receive(:pulls).and_return([pull(14, "Sweeping", branch: "kig/fix",
         files: [".plans/001.00-⚪️-initial-spec/spec.md", ".plans/002.00-✅-dev-foundation/plan.md"])])
       expect(github).not_to receive(:retitle)

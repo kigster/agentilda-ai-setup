@@ -1,73 +1,68 @@
 ---
-name: create-a-plan
-description: "Create a folder in a current or specified directory, which follows strict naming conventions defined in the ~/.agents/context/SPECS-AND-PLANS.md, and is implemented by the ~/.agents/scripts/create-plan-folder. Subsequently create file spec.md and follow the rest of the skil defined below to populate it, as well as the plan.md, using various grillling tools."
-category: product
-catalog_summary: "Creates the folder structure for a new plan, following the conventions defined in ~/.agents/context/SPECS-AND-PLANS.md. Grills the user on any questions related to the specification."
-display_order: 1
+name: print-plan-folders
+description: "Print the status of all folders under .plans and their corresponding PRs"
+allowed-tools: [
+  "Bash(spec-plan-build *)",
+  "Bash(/usr/bin/find . -type d -and \( -name ".plans" -or -name "plans" \) -print )",
+  "Bash(grep -v worktree)",
+  "Bash(head -1)",
+  "Bash(command -V spec-plan-build >/dev/null || { export PATH=\"${HOME}/.agents/scripts:${HOME}/.claude/scripts:${PATH}\"; })",
+  "Bash(command -V spec-plan-build >/dev/null || { echo \"spec-plan-build is not in the PATH. Please ensure it is installed and available.\"; exit 1; })"
+]
 ---
 
-# Creative Plan
+# Print Plan Folders
 
-This skill is meant to define a single sizeable feature on a project, but can also be used to jump start a brand new project.
-
-This skill must create a clear concise specification and the execution plan that an agent can use to implement this feature, hopefully without any further questions.
-
-1. creating a folder where this feature will be documented
-2. creating a file `spec.md` where the feature requirements will be documented.
-3. grilling the user on any questions related to the specification.
-4. once specification is in a good shape, take an attempt to create `plan.md` in the same folder.
-5. repeat grilling the user this time about your implementation plan. Whenever possible create plan in such a way that it's possible to execute concurrently by multiple agents working in tandem to accomplish a common goal. Once grilling to extract explicitly Goаls and Non-Goals.
-6. once signed offs ask if the user wants to start implementing this feature.
-
-## Files Allowed in these Folders
-
-There are only five files that can legally exist:
-
-### Must Exist:
-
-1. `spec.md`
-2. `plan.md`
-
-### Once implementation starts
-
-3. `pull-requests.md`
-
-### May Exist:
-
-4. `blocked.md`
-5. `rejected.md`
-
-
-______________________________________________________________________
+> [!NOTE]
+>
+> This skill is part of the **Spec → Plan → Build** workflow. It is used to print the status of all folders under `.plans` and their corresponding PRs.
 
 ## When to use
 
-### Starting a new project (website, app, brand, campaign)
+- The user wants to get the status of every spec or a plan and they have a `.plans` folder and they were using it to keep track of progress
 
-- The default for folder with specs and plans is at the root of the project, and is called `.plans`
-- if the project is already created, but `.plans` does not exist, create the `.plans` folder.
-- for the brand new project you can use `/.agents/scripts/create-plan-folder white keyowrs otp  specification` always. This is the beginning of all specs and it should be consistent.
-- for the initial project specification, you are allowed NOT to generate a plan. This is because the first specification will be more general than the rest and can be potentially higher level. But it may identify and create other specifications (and plan folders), and therefore the on the new project during the grilling session you are also allowed to create additional plan folders beyond 001, and this is typically the main user-case for doing so.
+## The tool
 
-### When Project Already Exist
+A Ruby script `spec-plan-build` must live in the global `PATH`. Within `.agents` with `direnv` enabled it will be added to the `$PATH`, but reliably the LLM should append to the shell initializer a statement that adds the path of the script: `${HOME}/.agents/scripts` (and `bin` as well) if you need it.
 
-For an existing project with the `.plans` folder and the initial specification already written, you can use script `~/.agents/scripts/create-plan-folder [ -D dir ] <color> <specification>` to create a new plan folder for a specific specification. 
+Therefore, it's critical that you check if this script is available in the `$PATH`, otherwise you need to:
 
-Let's break down `<color>` and `<specification>`:
+1. Detect the shell user is currently using by running the following command: `/bin/ps -o"args" -p $$ | tail -1 | tr -d "-" | xargs basename`
+2. Add the `${HOME}/.agents/scripts` and `${HOME}/.agents/bin` to the `$PATH` in their dot file (either `~/.zshrc` or `~/.bashrc` for those two shells)
+3. Source the modified shell initialization file
+4. You may need to execute `hash -r`
+5. Ensure that the script is now in the path by running `command -v spec-plan-build`
 
-- `<color>`: a single word color name (e.g. `blue`, `red`, `green`). This is used to color-code the plan folder and make it easy to identify at a glance. For the exact mapping please refer to [the color mapping](./references/color-mapping.md).
+Now we are ready to perform one of several requests this skill provides. 
 
-- `<specification>`: a two-four (max five) words describing the feature. The script will join them into a slug, and include in the name of the directory.
+## Using the Tool
 
-## When to use 
+First, cd to the root of the project tree and run the following bash script: 
 
-- Only when the user explicitly invokes to create a new feature specification with the plan.
-______________________________________________________________________
+```bash
+command -V spec-plan-build >/dev/null || { 
+  export PATH="${HOME}/.agents/scripts:${HOME}/.claude/scripts:${PATH}"
+}
+command -V spec-plan-build >/dev/null || {
+  echo "spec-plan-build is not in the PATH. Please ensure it is installed and available."
+  exit 1
+}
+if [[ -d .plans ]]; then
+  spec-plan-build status                     # every plan, its state, its PRs
+else
+  dir=`/usr/bin/find . -type d -and \( -name ".plans" -or -name "plans" \) -print \
+      | grep -v worktree \
+      | head -1 || \
+      { echo "No .plans folder found. Please ensure you are in the root of the project tree."; exit 1 }`
+  if [[ -n ${dir} ]]; then
+    cd "${dir}" && spec-plan-build status
+  else
+    echo "No .plans folder found. Please ensure you are in the root of the project tree."
+  fi
+fi
+```
 
-## Specification Template
+## Reference files
 
-Please refer to the [specification template](./references/specification-template.md) for a sample description of the format.
-
-## Plan Format
-
-The plan format is a markdown file with a structured template that includes sections for the feature description, constraints, and success criteria. See the [specification template](./references/specification-template.md) for details.
+- [`${HOME}/.agents/context/feature-building/spec-plan-build.md`](${HOME}/.agents/context/feature-building/spec-plan-build.md) — the
+  specification structure.

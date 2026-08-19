@@ -13,8 +13,8 @@ RSpec.describe SpecPlanBuild::Resync::Dirs, :tree do
       let!(:tree) do
         plans do |t|
           t.plan "001.00", :new, "initial-spec", files: {"spec.md" => spec_body}
-          t.plan "002.00", :ready, "dev-foundation", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}
-          t.plan "003.00", :done, "ledger", prs: [t.merged(3, "Ship it")]
+          t.plan "002.00", :planned, "dev-foundation", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}
+          t.plan "003.00", :approved, "ledger", prs: [t.merged(3, "Ship it")]
         end
       end
 
@@ -31,7 +31,7 @@ RSpec.describe SpecPlanBuild::Resync::Dirs, :tree do
       end
 
       it "proposes the state the contents justify" do
-        expect(changes.map { |c| [c.from, c.to] }).to eq([[:new, :ready]])
+        expect(changes.map { |c| [c.from, c.to] }).to eq([[:new, :planned]])
       end
 
       it "keeps the number and the slug, changing only the emoji" do
@@ -39,15 +39,96 @@ RSpec.describe SpecPlanBuild::Resync::Dirs, :tree do
       end
     end
 
-    context "when a folder claims Done with an open pull request" do
+    # `018.09` < `018.1` < `018.10`: one mixed-width folder sorts into the
+    # middle of the two-digit range and silently reorders the whole index.
+    # That is the entire reason the number is padded, so resync repairs it.
+    context "when a folder's number was written before the NNN.MM rule" do
       let!(:tree) do
         plans do |t|
-          t.plan "004.00", :done, "deploy", prs: [t.merged(1, "a"), t.open(2, "b")]
+          t.raw "018-⚪️-verify-returns", files: {"spec.md" => spec_body}
         end
       end
 
-      it "walks it back to In Progress" do
-        expect(changes.map(&:to)).to eq([:wip])
+      it "pads the number, leaving the emoji and the slug alone" do
+        expect(File.basename(changes.first.target)).to eq("018.00-⚪️-verify-returns")
+      end
+
+      it "does not pretend the state changed" do
+        expect(changes.map { |c| [c.from, c.to] }).to eq([[:new, :new]])
+      end
+
+      it "says the number was the problem, not the contents" do
+        expect(changes.first.reason).to eq("018 is not padded to 018.00")
+      end
+
+      it "renames it on --commit" do
+        resync.call(commit: true)
+
+        expect(names).to eq(["018.00-⚪️-verify-returns"])
+      end
+    end
+
+    context "when a retroactive number is written with one digit" do
+      let!(:tree) do
+        plans do |t|
+          t.raw "18.1-⚪️-schedule-k1", files: {"spec.md" => spec_body}
+        end
+      end
+
+      it "pads both halves" do
+        expect(File.basename(changes.first.target)).to eq("018.01-⚪️-schedule-k1")
+      end
+    end
+
+    # Both defects at once. The state change is the more consequential fact,
+    # so that is what the reason names.
+    context "when a folder is both unpadded and wearing the wrong emoji" do
+      let!(:tree) do
+        plans do |t|
+          t.raw "007-⚪️-tenancy", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}
+        end
+      end
+
+      it "repairs the number and the emoji in one move" do
+        expect(File.basename(changes.first.target)).to eq("007.00-⭐️-tenancy")
+      end
+
+      it "reports the state change rather than the padding" do
+        expect(changes.first.reason).to match(/contents now justify/)
+      end
+    end
+
+    # The same plan written twice — once each way — is a folder collision, and
+    # a rename that quietly does nothing would leave the tree misnamed while
+    # the report claimed it had been fixed.
+    context "when the padded name is already taken by another folder" do
+      let!(:tree) do
+        plans do |t|
+          t.raw "005-⚪️-ledger", files: {"spec.md" => spec_body}
+          t.raw "005.00-⚪️-ledger", files: {"spec.md" => spec_body}
+        end
+      end
+
+      it "refuses rather than silently leaving the folder misnamed" do
+        expect { resync.call(commit: true) }
+          .to raise_error(SpecPlanBuild::Error, /005-⚪️-ledger.*already exists/)
+      end
+    end
+
+    context "when a folder claims Approved & Merged with an open pull request" do
+      let!(:tree) do
+        plans do |t|
+          t.plan "004.00", :approved, "deploy",
+            files: {"spec.md" => spec_body, "plan.md" => "# Plan"},
+            prs: [t.merged(1, "a"), t.open(2, "b")]
+        end
+      end
+
+      # 🟡 rather than 🔴: an open pull request proves the work is back in the
+      # review phase, but nothing on disk says whether a reviewer has seen it,
+      # so it lands on the floor of that family.
+      it "walks it back to the weakest state the family can prove" do
+        expect(changes.map(&:to)).to eq([:building])
       end
 
       it "records why, so the rename is auditable rather than mysterious" do
@@ -105,7 +186,7 @@ RSpec.describe SpecPlanBuild::Resync::Dirs, :tree do
     end
 
     it "reports what it did" do
-      expect(resync.call(commit: true).map(&:to)).to eq([:ready])
+      expect(resync.call(commit: true).map(&:to)).to eq([:planned])
     end
 
     it "is idempotent — a second run finds nothing left to do" do

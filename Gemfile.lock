@@ -1,6 +1,8 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    aasm (6.0.0)
+      concurrent-ruby (~> 1.0)
     ast (2.4.3)
     bigdecimal (4.1.2)
     concurrent-ruby (1.3.8)
@@ -57,9 +59,6 @@ GEM
       dry-initializer (~> 3.2)
       dry-schema (~> 1.14)
       zeitwerk (~> 2.6)
-    finite_machine (0.14.1)
-      concurrent-ruby (~> 1.0)
-      sync (~> 0.5)
     json (2.21.2)
     language_server-protocol (3.17.0.6)
     lint_roller (1.1.0)
@@ -129,7 +128,6 @@ GEM
       unicode-display_width (>= 1.5, < 3.0)
       unicode_utils (~> 1.4)
     strings-ansi (0.2.0)
-    sync (0.5.0)
     tty-box (0.7.0)
       pastel (~> 0.8)
       strings (~> 0.2.0)
@@ -155,6 +153,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  aasm
   concurrent-ruby
   coverage-badge
   dry-cli
@@ -168,7 +167,7 @@ DEPENDENCIES
   dry-schema
   dry-types
   dry-validation
-  finite_machine
+  parallel
   pastel
   rspec
   rspec-its
@@ -180,10 +179,13 @@ DEPENDENCIES
   tty-progressbar
   tty-screen
   tty-spinner
+  unicode-display_width
 
 CHECKSUMS
+  aasm (6.0.0) sha256=c96ce60ea9574eb194e33f29d801be430b8cade2f31c8a5d137a9870ee39d404
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
   bigdecimal (4.1.2) sha256=53d217666027eab4280346fba98e7d5b66baaae1b9c3c1c0ffe89d48188a3fbd
+  bundler (4.0.18) sha256=02d9a17429de1847b4e0c9f27a9ee4b20c0a74c0a641b4e77195d6019e3618ac
   concurrent-ruby (1.3.8) sha256=b2f1be836e968ccc78ccfce277ea79c72a88633f22306782c16ff23fb415d1e1
   coverage-badge (0.1.1) sha256=f4ada4edadfa98cd99a50ab49f04ffc1af926e9f00513a063b774bd683eda131
   diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
@@ -200,7 +202,6 @@ CHECKSUMS
   dry-schema (1.16.0) sha256=cd3aaeabc0f1af66ec82a29096d4c4fb92a0a58b9dae29a22b1bbceb78985727
   dry-types (1.9.1) sha256=baebeecdb9f8395d6c9d227b62011279440943e3ef2468fe8ccc1ba11467f178
   dry-validation (1.11.1) sha256=70900bb5a2d911c8aab566d3e360c6bff389b8bf92ea8e04885ce51c41ff8085
-  finite_machine (0.14.1) sha256=11bd6063726047dbe48b7733bca822062f0da6bb6024edf3005eed16702245b1
   json (2.21.2) sha256=1f1d3b7cf2b3ba1a69beca0bb6db13d5438b80bff3cd54cdaaa620b9b07c1c6a
   language_server-protocol (3.17.0.6) sha256=5ef2c0c138f8267e1bc631d3328347d354f96724b0af22f2c79516120443b7f0
   lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
@@ -229,7 +230,6 @@ CHECKSUMS
   standard-performance (1.9.0) sha256=49483d31be448292951d80e5e67cdcb576c2502103c7b40aec6f1b6e9c88e3f2
   strings (0.2.1) sha256=933293b3c95cf85b81eb44b3cf673e3087661ba739bbadfeadf442083158d6fb
   strings-ansi (0.2.0) sha256=90262d760ea4a94cc2ae8d58205277a343409c288cbe7c29416b1826bd511c88
-  sync (0.5.0) sha256=668356cc07c59ac7ed9ecf34fec3929831f179c07adb1f3e1c3b7a1609a638fd
   tty-box (0.7.0) sha256=17f453a0c1df43871fdb6de461ee797b78574dacc652372fa2ae98a00785df8b
   tty-color (0.6.0) sha256=6f9c37ca3a4e2367fb2e6d09722762647d6f455c111f05b59f35730eeb24332a
   tty-command (0.10.1) sha256=0c6c471fcb932d55518734eb4e2e07e9efdd2918713cc39bb7393ba862471192

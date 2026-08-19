@@ -1,140 +1,247 @@
-# Custom System for Building Multi-Step Software
+# Spec → Plan → Build
 
-Each software project is to have a root folder named `.plans`
+> [!IMPORTANT]
+> **This file is auto generated.**
+>
+> To regenerate it, run `spec-plan-build docs` (which by the default writes to `context/feature-building/spec-plan-build.md`). To override the destination, use the -o | --output <file> option.
+>
+> After changing the state machine. Editing it by hand puts it back into the condition it was written to end: three copies of the same table, quietly disagreeing.
 
-You can copy this document as a README.md into that folder, so that this information lives next to the plans themselves.
+Every project keeps its plans in a `.plans/` directory at its root. Each medium-to-large feature gets one folder, and the folder's **name is its state**: the number identifies it forever, the emoji says what phase it is in, and the slug says what it is.
 
-For each medium to large sized feature, you are to create a folder under `.plans/` that starts with a numeric number that's monotonically increasing with each new feature. The naming convention of these directories serves both as the status of the feature as the documentation about how and why things were implemented the way they were.
+There are three phases, and each one has a file that proves it happened:
 
-## Color Mapping
+| Phase     | State             | The file that proves it |
+| :-------- | :---------------- | :---------------------- |
+| **spec**  | ⚪️ New            | `spec.md`               |
+| **plan**  | ⭐️ Planned        | `plan.md`               |
+| **build** | 🟡 → 🟢 → 👀 → ✅ | `pull-requests.md`      |
 
-The Authoritative Source: [SPECS_AND_PLANS](~/.agents/context/SPECS-AND-PLANS.md)
+Those files are not paperwork. They are what the tool checks: a folder may not claim a phase whose file is missing, and `spec-plan-build resync dirs` renames any folder whose emoji its contents do not support.
 
-## The Pattern:
+## The number
 
-```bash
-\d\d\d\.\d\d-[status]-<feature-name-slug>
+A plan's number is its identity. It is set once, when the folder is created, and never changes: branch names, pull request titles and every `pull-requests.md` join on it, and renumbering breaks all of them silently.
 
-# Example:
-cd 002.00-✅-dev-foundation
-cd 002.01-✅-schedule-k1-form-series   # written retroactively; see below
+The shape is always `NNN.MM`:
+
+```
+.plans/000.00-⚪️-initial-spec
+.plans/001.00-✅-dev-foundation
+.plans/001.01-✅-schedule-k1-backfill   <- shipped between 001 and 002,
+.plans/002.00-⭐️-tenancy-households        specified afterwards
 ```
 
-## Files Allowed to Exist in These Folders:
+- **`NNN` counts from `000`.** The first plan of a project is `000.00`; after that it is the highest major plus one, zero-padded to three digits.
+- **`MM` is `00` for an ordinary plan** — one specified before it was built.
+- **`MM` from `01` to `99` marks a retroactive plan**: work that shipped with no specification, documented after the fact. `spec-plan-build create --after 001` takes the next free slot in the gap after 001.
 
-|      Expected     |    Allowed    |
-| :----------------:| :-----------: |
-|     `spec.md`      | `blocked.md`  |
-|     `plan.md`      | `rejected.md` |
-| `pull-requests.md` | `delayed.md`  |
+`001.01` is a **sibling of 001 that arrived later, not a part of 001**. The dot reads as containment in almost every other numbering scheme, and here it does not — which is worth saying wherever the scheme is described, because the containment reading is the one a new reader brings.
 
-## The Short Map & File Requirements
+Two digits, always. One would sort into the middle of the two-digit range — `001.09` < `001.1` < `001.10` — so a single mixed-width folder silently reorders the index. Two digits also retire the question of running out: 99 slots per gap, against a gap that closes the moment the next plan is created.
 
-| Symbol |           Meaning           |   Files Required   | Description                                                                                                                                                                                                                                                    |
-| :----: | :-------------------------: | :----------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|   ⚪️   |           **new**           |     `spec.md`      | a new feature or spec that has not been planned NOR implemented yet.                                                                                                                                                                                           |
-|   ⭐️   |          **ready**          |     `plan.md`      | the feature or spec is ready to be implemented.                                                                                                                                                                                                                |
-|   🟡   |  **work in<br> progress**   | `pull-requests.md` | the feature or spec is being implemented.                                                                                                                                                                                                                      |
-|   ✅   |          **done**           | `pull-requests.md` | the feature or spec has been implemented.                                                                                                                                                                                                                      |
-|   🅱️   |  **product<br> blockages**  |    `blocked.md`    | Product Specification Block: we *cannot* proceed; a PM must decide something first.                                                                                                                                                                            |
-|   ⭕️   | **implementation blockage** |    `blocked.md`    | we *cannot* proceed; an engineer/CTO must decide something first.                                                                                                                                                                                              |
-|   ⛔️   |        **rejected**         |   `rejected.md`    | it never going to be implemented.                                                                                                                                                                                                                              |
-|   ☢️   |        **deferred**         |    `delayed.md`    | this is a deferred time bomb. Deferral with no trigger is indistinguishable from rot, and this status exists precisely so that deferrals stay honest instead of quietly becoming ✅. Record the decision, the date, and who made it so that we can spank them. |
+> [!NOTE]
+> Padding every plan to `NNN.MM` is a deliberate choice, and it costs something. A bare `018` next to `018.01` would have told you at a glance which plan was specified in advance and which was written afterwards. With uniform padding that distinction is no longer readable from the number alone — it is carried by `MM > 0`, which you have to know to look for. What padding buys is alignment and one shape to parse everywhere.
 
-## Detailed Breakdown
+**A retroactive `spec.md` must open with a dated line saying so**, naming the pull requests it describes. It documents what exists; it does not pretend to have decided anything in advance. Anchor by *when the work merged*, not by what it is about — compare merge dates against folder creation dates (`git log --diff-filter=A`). Anchoring by topic invites an argument nobody can settle, and the number is a slot, not a claim about subject matter.
 
-- The [status] in the folder name is a single emoji.
+## The states
 
-1. For specifications created (eg, `spec.md` exists) but not yet planned, the `[status]` is ⚪️ (new)
+| Symbol | Meaning                | Key                | Files required                           | Description                                                               |
+| :----: | :--------------------- | :----------------- | :--------------------------------------- | :------------------------------------------------------------------------ |
+|   ⚪️   | **New**                | `new`              | `spec.md`                                | a specification exists; it has not been planned yet                       |
+|   ⭐️   | **Planned**            | `planned`          | `spec.md`, `plan.md`                     | specified and planned; nobody has started building                        |
+|   🟡   | **Building**           | `building`         | `spec.md`, `plan.md`, `pull-requests.md` | work is under way; pull requests are raised as each unit lands            |
+|   🟢   | **Ready for Review**   | `ready_for_review` | `spec.md`, `plan.md`, `pull-requests.md` | every pull request is green on CI and waiting for a reviewer              |
+|   👀   | **In Review**          | `in_review`        | `spec.md`, `plan.md`, `pull-requests.md` | a reviewer has picked it up and has not ruled yet                         |
+|   🔴   | **Changes Requested**  | `rejected`         | `spec.md`, `plan.md`, `pull-requests.md` | the review asked for fixes; resubmit once they are made                   |
+|   ✅   | **Approved & Merged**  | `approved`         | `pull-requests.md`                       | reviewed, approved, and every pull request merged                         |
+|   😎   | **Deployed**           | `deployed`         | `deployed.md`                            | live in production; `deployed.md` names the release, date and SHA         |
+|   😱   | **Rolled Back**        | `rolled_back`      | `rollback.md`                            | it shipped and was pulled; `rollback.md` names what broke                 |
+|   💩   | **Scrapped by Review** | `shit`             | `rewrite.md`                             | the review scrapped the work; the plan survives, the pull requests do not |
+|   ⭕️   | **Technical Block**    | `blocked`          | `blocked.md`                             | cannot proceed; an engineer or the CTO must decide something first        |
+|   🅱️   | **Product Block**      | `product_blocked`  | `blocked.md`                             | cannot proceed; a product manager must decide something first             |
+|   ☢️   | **Deferred**           | `deferred`         | `delayed.md`                             | could proceed and chose not to yet; `delayed.md` must name the trigger    |
+|   🕰️   | **Retroactive**        | `retroactive`      | —                                        | the feature is live, but has neither a specification nor a plan           |
+|   ❌   | **Discarded**          | `discarded`        | `discarded.md`                           | dropped for good; `discarded.md` says why. A terminal state               |
 
-1. For specifications that have just `spec.md` and `plan.md` the [status] is ⭐️ (ready)
+"Files required" is a **minimum**, not an exact match: a ⚪️ folder that has grown a `plan.md` still satisfies ⚪️, and is ⭐️ anyway. That is why `resync dirs` moves a folder to the furthest state its contents justify rather than only fixing outright lies.
 
-1. For specifications are in progress, the `[status]` is 🟡 (work in progress)
+Some states share their requirements on purpose, and are told apart only by the folder name. ⭕️ Technical Block and 🅱️ Product Block both mean "a human must decide before this can move"; *which* human is recorded nowhere but the emoji. 🟡 🟢 👀 🔴 all mean "the work exists and pull requests are open"; whether anyone has started reviewing is written down nowhere either.
 
-1. For specifications that are done, i.e. all open PRs within have been merged, the `[status]` becomes ✅ (done)
+So nothing re-derives one of them from a folder's contents — otherwise every ⭕️ would silently become 🅱️ the first time anything resynced. A folder falling back into that group from outside lands on its weakest member, 🟡 Building, because that is all its contents can prove.
 
-1. For specifications that are blocked due to ambiguity, contradiction to previous assumption, or any other reason in such a way that the plan can not be produced without breaking some past product decision, the `[status]` becomes 🅱️ and the agent must surface the blocking situation to the user and wait for human's decisions on how to proceed. The file `blocked.md` must be created in such a folder that describes in detail the reason this can not proceed forward without human's (typically Product Manager's) decision or approval. It's meant for humans and should be broken down into questions B1, B2, etc.
+🟣 Merged is deliberately **not** a folder state. It describes a pull request, and a folder that claimed it would be claiming a pull request's condition as its own.
 
-1. Another type of block that may occur is for technical reasons. For such cases, the `[status]` becomes ⭕️ (implementation constrained) and the agent must surface the blocking situation to the engineer or a CTO and wait for human's decisions on how to proceed. The file `blocked.md` must be created in such a folder that describes in detail the reason this can not proceed forward without human's (typically CTO's) decision or approval. It's meant for humans and should be broken down into questions B1, B2, etc.
+## Transitions
 
-1. For specifications that are intentionally delayed where the remaining work is **deliberately deferred** — not blocked, not declined, simply not now — the `[status]` is ☢️ ("revisit later").
+| From                  | May become     | `promote` goes to    |
+| :-------------------- | :------------- | :------------------- |
+| ⚪️ New                | ⭐️ ⭕️ 🅱️ ☢️ ❌ | ⭐️ Planned           |
+| ⭐️ Planned            | 🟡 ⭕️ 🅱️ ☢️ ❌ | 🟡 Building          |
+| 🟡 Building           | 🟢 ⭕️ 🅱️ ☢️ ❌ | 🟢 Ready for Review  |
+| 🟢 Ready for Review   | 👀 ❌          | 👀 In Review         |
+| 👀 In Review          | ✅ 🔴 💩 ❌    | ✅ Approved & Merged |
+| 🔴 Changes Requested  | 🟢 ❌          | 🟢 Ready for Review  |
+| ✅ Approved & Merged  | 🟡 😎 ❌       | 😎 Deployed          |
+| 😎 Deployed           | 😱 ❌          | —                    |
+| 😱 Rolled Back        | 🟡 🟢 ❌       | 🟢 Ready for Review  |
+| 💩 Scrapped by Review | ⭐️ 🟡 ❌       | ⭐️ Planned           |
+| ⭕️ Technical Block    | ⚪️ ⭐️ 🟡 ☢️ ❌ | —                    |
+| 🅱️ Product Block      | ⚪️ ⭐️ 🟡 ☢️ ❌ | —                    |
+| ☢️ Deferred           | ⚪️ ⭐️ 🟡 ❌    | —                    |
+| 🕰️ Retroactive        | ⚪️ ⭐️ 🟡 ✅ ❌ | ⭐️ Planned           |
+| ❌ Discarded          | _terminal_     | —                    |
 
-1. For specifications that have been written, possibly planned, possibly part-implemented, but ultimately rejected on the product grounds, or it was decided not to implement this feature because some other feature is either contradictory or in conflict with this one. The file `rejected.md` should be created with explanations and links and references to any related specs ⛔️. This is a terminal state.
+A bare promote walks the **spine** — spec → plan → build. Everything off it (blocking, deferring, rejecting) has to be named explicitly. That is the whole reason there is a machine here rather than a rename: a transition is refused when the destination's requirements are not already met, and that refusal is information — it means the phase has not actually happened yet.
 
-______________________________________________________________________
+![Every state a plan folder may be in, and every transition between them](../../docs/img/plan-spec-build.png)
 
-## The Number
+<details>
+<summary>Mermaid source for the diagram above</summary>
 
-A plan's number is its identity. It is set once, when the folder is created, and never changes: branch names, pull request titles and `pull-requests.md` all join on it, and renumbering breaks every one of those links silently.
+<!--
+REDRAWING THE PNG: only when this block changes.
 
-### Pull request titles carry it
+The image above is drawn by hand from this source and is the version
+worth reading. This block is generated from the state machine, so any
+movement in it — a state added, a transition rerouted, an emoji
+swapped — is the signal that docs/img/plan-spec-build.png
+is stale and has to be redrawn. If this block did not move, neither did
+the machine: reuse the existing PNG.
+-->
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    new : ⚪️ New
+    planned : ⭐️ Planned
+    building : 🟡 Building
+    ready_for_review : 🟢 Ready for Review
+    in_review : 👀 In Review
+    rejected : 🔴 Changes Requested
+    approved : ✅ Approved & Merged
+    deployed : 😎 Deployed
+    rolled_back : 😱 Rolled Back
+    shit : 💩 Scrapped by Review
+    blocked : ⭕️ Technical Block
+    product_blocked : 🅱️ Product Block
+    deferred : ☢️ Deferred
+    retroactive : 🕰️ Retroactive
+    discarded : ❌ Discarded
+
+    retroactive --> new
+    blocked --> new
+    product_blocked --> new
+    deferred --> new
+    new --> planned
+    retroactive --> planned
+    shit --> planned
+    blocked --> planned
+    product_blocked --> planned
+    deferred --> planned
+    planned --> building
+    shit --> building
+    approved --> building
+    rolled_back --> building
+    retroactive --> building
+    blocked --> building
+    product_blocked --> building
+    deferred --> building
+    building --> ready_for_review
+    rejected --> ready_for_review
+    rolled_back --> ready_for_review
+    ready_for_review --> in_review
+    in_review --> approved
+    retroactive --> approved
+    in_review --> rejected
+    in_review --> shit
+    approved --> deployed
+    deployed --> rolled_back
+    new --> blocked
+    planned --> blocked
+    building --> blocked
+    new --> product_blocked
+    planned --> product_blocked
+    building --> product_blocked
+    new --> deferred
+    planned --> deferred
+    building --> deferred
+    blocked --> deferred
+    product_blocked --> deferred
+    new --> discarded
+    planned --> discarded
+    building --> discarded
+    ready_for_review --> discarded
+    in_review --> discarded
+    rejected --> discarded
+    approved --> discarded
+    deployed --> discarded
+    rolled_back --> discarded
+    shit --> discarded
+    blocked --> discarded
+    product_blocked --> discarded
+    deferred --> discarded
+    retroactive --> discarded
+```
+
+</details>
+
+## Files allowed in a plan folder
+
+| File               | Required by                                                                                |
+| :----------------- | :----------------------------------------------------------------------------------------- |
+| `spec.md`          | the specification; written first                                                           |
+| `plan.md`          | the execution plan; written from the spec                                                  |
+| `pull-requests.md` | 🟡 Building, 🟢 Ready for Review, 👀 In Review, 🔴 Changes Requested, ✅ Approved & Merged |
+| `deployed.md`      | 😎 Deployed                                                                                |
+| `rollback.md`      | 😱 Rolled Back                                                                             |
+| `rewrite.md`       | 💩 Scrapped by Review                                                                      |
+| `blocked.md`       | ⭕️ Technical Block, 🅱️ Product Block                                                       |
+| `delayed.md`       | ☢️ Deferred                                                                                |
+| `discarded.md`     | ❌ Discarded                                                                               |
+
+Nothing else belongs there. A folder holding notes, diagrams or scratch files is a folder nobody can audit at a glance.
+
+## Pull requests carry the number
 
 A pull request that implements a plan says so in its title:
 
 ```
-[003] Make the core deterministic and require as_of
+[003.00] Make the core deterministic and require as_of
 ```
 
-`pull-requests.md` in each plan folder is generated from these titles, so the prefix is the join key between a pull request and a plan, not decoration. Name branches `NNN-slug` (or `<user>/NNN-slug`) and the number carries itself from branch creation through to a merged, squashed pull request with nobody having to remember it.
+`pull-requests.md` is generated from these titles, so the prefix is the join key between a pull request and a plan, not decoration. Name branches `<user>/NNN.MM-slug` and the number carries itself from branch creation through to a merged, squashed pull request with nobody having to remember it.
 
-Resolve it with `plan-number --title "<title>"` (`~/.agents/scripts/plan-number`), which reads the branch name first and falls back to the diff only when that touches exactly one plan folder. **It refuses rather than guessing.** A wrong number does not announce itself: it files the work under a plan that did not do it and leaves the plan that did looking untouched.
+`spec-plan-build resync prs` fills in missing prefixes. It reads the branch name first and falls back to the diff only when that touches exactly one plan folder. **It refuses rather than guessing.** A wrong number does not announce itself: it files the work under a plan that did not do it, and leaves the plan that did looking untouched.
 
-### `[XXX]` when there is no plan
+### `[DEV.00]` when there is no plan
 
-Not every pull request implements a feature. Dependency bumps, CI configuration, hotfixes and documentation typos implement no plan, and forcing a number onto them produces a number chosen to satisfy the rule. Those are titled:
-
-```
-[XXX] Bump json from 2.21.1 to 2.21.2
-```
-
-`XXX` means **"this deliberately belongs to no specification"**, and it exists so that "no plan" is *asserted* rather than merely absent. A title with no prefix at all is ambiguous between "no plan applies" and "nobody looked"; `[XXX]` is the author saying which.
-
-Two rules keep it from becoming the lazy default:
-
-- **`plan-number` will never emit `XXX` on its own.** Only `--none` produces it. Emitting it on a failed lookup would launder "I could not tell" into "there is definitely none", which is the same lie as guessing a number, told in the other direction.
-- **CI rejects `[XXX]` on a pull request that edits any plan's `spec.md` or `plan.md`.** That is the one case where the assertion can be checked against evidence, and a pull request writing a plan's specification is that plan's work however its title reads.
-
-### `NNN.MM` for a plan written after the fact
-
-Sometimes a substantial feature ships with no specification at all, and the gap is only noticed later. Writing a `spec.md` dated today and filing it as an ordinary plan would be **fabricated provenance**: the document's form claims the work was specified in advance when it was not, which is the same defect as a sign-off nobody gave.
-
-So retroactive documentation gets its own number shape. Find the two plans the work landed between and take a decimal slot in that gap:
+Not every pull request implements a feature. Dependency bumps, CI configuration, hotfixes and developer tooling implement no plan, and forcing a number onto them produces a number chosen to satisfy the rule. Those are titled:
 
 ```
-018-✅-yaml-round-trip-editing
-018.01-✅-verify-against-filed-returns    <- shipped between 018 and 019, specced afterwards
-019-⚪️-tax-law-tuning-service
+[DEV.00] Bump json from 2.21.1 to 2.21.2
 ```
 
-`NNN.MM` is a **sibling of NNN that arrived later, not a part of NNN**. The dot reads as containment in almost every other numbering scheme and here it does not; say so wherever the scheme is documented, because the containment reading is what a new reader will bring.
+`DEV.00` means **"this deliberately belongs to no specification"**, and it exists so that "no plan" is *asserted* rather than merely absent. A title with no prefix is ambiguous between "no plan applies" and "nobody looked".
 
-Rules:
-
-1. **The decimal is always exactly two digits**, `.01` through `.99`. One digit sorts into the middle of the two-digit range — `018.09` < `018.1` < `018.10` — so a single mixed-width folder silently reorders the index, and it reads as a typo whichever way you meet it. Two digits also retire the question of running out: 99 slots per gap, against a gap that closes the moment the next plan is created, since nothing merging today can land between 018 and 019.
-
-1. **The decimal is the retroactivity marker.** There is no separate status emoji for "documented after the fact" and there should not be: the number already carries it, and a fact carried by the identifier cannot be lost when somebody edits the front matter. The status emoji keeps meaning exactly what it means for every other plan.
-
-1. **Every retroactive `spec.md` opens with a dated line saying so**, naming the pull requests it describes. It documents what exists; it does not pretend to have decided anything.
-
-1. **Anchor by when the work merged, not by what it is about.** Mechanical and auditable: compare the pull request's merge date against the creation date of each plan folder (`git log --diff-filter=A`). Anchoring by topic invites an argument nobody can settle, and the number is a slot, not a claim about subject matter.
-
-1. **`000.MM` is legitimate** and means "before the plan discipline existed". Early foundational work usually lands here, and it sorts first, which is where it belongs.
-
-1. **Reserve the decimal for retroactive backfill only.** The moment it is also used to split a live plan into parts, the notation means two things and neither is readable from the number alone. Forward subdivision needs a different device.
-
-1. **Do not pad ordinary plans to `NNN.00`.** The asymmetry between `018` and `018.01` is the signal: one was specified before it was built and the other was not, and you can see which without opening either. A uniform `.00` buys column alignment and pays for it by hiding the distinction the notation exists to draw.
-
-### If Linear arrives, this scheme retires
-
-This numbering is homegrown because there is nothing else to join on. If the work moves to Linear, **the Linear issue key replaces it**: `[EQL-142] <title>` in pull request titles, `EQL-142-<status>-<slug>` for the folder, and the issue itself becomes the thing `pull-requests.md` is generated against.
-
-Recording that here matters more than it looks. A numbering scheme with no stated exit becomes permanent by default: it accretes tooling, the tooling accretes rules, and by the time a real issue tracker shows up, migrating is a project rather than a decision. The exit is cheap only while it is written down and unbuilt.
-
-Two things to hold to when that day comes:
-
-- **Existing numbers do not get rewritten.** A plan's number is its identity and merged pull request titles are immutable history; `001` stays `001` forever and new plans start taking issue keys. A mixed index is ugly for a while and honest permanently, which beats a renumbering that breaks every link that ever pointed at a plan.
-- **Do not teach the tooling to accept issue keys before Linear exists.** A validator that accepts `[EQL-142]` while there is no Linear to check it against is a guard that passes anything shaped like an answer, which is worse than one that fails loudly on the first real use.
+`resync prs` will propose it, but marks every such title as **assumed** and never applies one without you seeing it. Emitting it silently on a failed lookup would launder "I could not tell" into "there is definitely none", which is the same lie as guessing a number, told in the other direction.
 
 ### What does not deserve a retroactive plan
 
-Most unmatched pull requests. The test is whether **somebody would need to read it** — a capability with behaviour, an interface, or invariants that are not obvious from the code. "Fix a typo", "remove dead code" and "bump a dependency" are `[XXX]` and always were. Backfilling those produces an index that is longer without being more informative, which makes the real plans harder to find.
+Most unmatched pull requests. The test is whether **somebody would need to read it** — a capability with behaviour, an interface, or invariants that are not obvious from the code. "Fix a typo", "remove dead code" and "bump a dependency" are `[DEV.00]` and always were. Backfilling those produces an index that is longer without being more informative, which makes the real plans harder to find.
+
+## If a real issue tracker arrives, this scheme retires
+
+This numbering is homegrown because there is nothing else to join on. If the work moves to Linear or Jira, **the issue key replaces it**: `[EQL-142] <title>` in pull request titles, `EQL-142-<status>-<slug>` for the folder, and the issue becomes the thing `pull-requests.md` is generated against.
+
+Recording that matters more than it looks. A numbering scheme with no stated exit becomes permanent by default: it accretes tooling, the tooling accretes rules, and by the time a real tracker shows up, migrating is a project rather than a decision. The exit is cheap only while it is written down and unbuilt.
+
+Two things to hold to when that day comes:
+
+- **Existing numbers are not rewritten.** A plan's number is its identity and merged pull request titles are immutable history. `000` stays `000` forever and new plans start taking issue keys. A mixed index is ugly for a while and honest permanently, which beats a renumbering that breaks every link that ever pointed at a plan.
+- **Do not teach the tooling to accept issue keys before the tracker exists.** A validator that accepts `[EQL-142]` with nothing to check it against is a guard that passes anything shaped like an answer, which is worse than one that fails loudly on first use.
+
+______________________________________________________________________
+
+Generated by `spec-plan-build docs` — version 1.0.0.

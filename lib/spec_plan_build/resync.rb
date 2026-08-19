@@ -7,12 +7,23 @@ module SpecPlanBuild
   # not certain, because both write to things other people join on: folder
   # names, and pull request titles.
   module Resync
-    # `resync dirs` — makes every folder's emoji match what the folder holds.
+    # `resync dirs` — makes every folder's name say what the folder is.
     #
-    # It only ever touches folders whose name is *not* justified by their
-    # contents. A folder whose status already holds is left alone, which is
-    # what stops ⭕️ Blocked and 🅱️ Product Blocked — deliberately identical
-    # invariants, distinguished only by the name — from collapsing into one.
+    # Two things can be wrong with a name, and both are repaired here:
+    #
+    # - **The emoji is wrong** — the contents justify a different state. A
+    #   folder whose status already holds is left alone, which is what stops
+    #   ⭕️ Blocked and 🅱️ Product Blocked — deliberately identical invariants,
+    #   distinguished only by the name — from collapsing into one.
+    # - **The number is not in `NNN.MM` form** — a folder written `018-⚪️-foo`
+    #   before the padding rule, or `18.1-⚪️-foo` by hand. These read fine and
+    #   sort wrong, which is the whole reason the rule exists: `018.09` <
+    #   `018.1` < `018.10` puts a single mixed-width folder in the middle of
+    #   the range. Both are renamed to `018.00-⚪️-foo` and `018.01-⚪️-foo`.
+    #
+    # The two cases collapse into one rule — **rename any folder that is not
+    # already named what it should be named** — which is why the emoji fix and
+    # the renumber cannot disagree about the target.
     class Dirs
       # A proposed rename.
       #
@@ -52,47 +63,64 @@ module SpecPlanBuild
         changes = plan
         return changes unless commit
 
-        changes.each { |change| rename(change) }
+        UI.stepping(changes, "Renaming") { |change| rename(change) }
         tree.reload
         changes
       end
 
       private
 
-      # A folder moves for either of two reasons: its name is a lie, or its
-      # name is merely behind. Invariants are minimum requirements, so a ⚪️
-      # folder that has grown a `plan.md` still satisfies ⚪️ and is ⭐️ anyway.
+      # A folder moves when the name it has is not the name it should have.
+      #
+      # `best_fit` answers "which state do these contents justify", and falls
+      # back to the state already claimed when nothing fits — so a folder with
+      # an unreadable set of contents still gets its number padded rather than
+      # being skipped for a reason that has nothing to do with its number.
+      #
+      # Invariants are minimum requirements, so a ⚪️ folder that has grown a
+      # `plan.md` still satisfies ⚪️ and is ⭐️ anyway.
       #
       # @param subject [SpecPlanBuild::Subject]
       # @return [SpecPlanBuild::Resync::Dirs::Change, nil]
       def change_for(subject)
-        fit = Lifecycle.best_fit(subject)
-        return nil if fit.nil? || fit.key == subject.status.key
-
         feature = subject.feature
+        fit = subject.best_fit || subject.status
+        dirname = feature.dirname_as(fit)
+        return nil if dirname == feature.dirname
+
         Change.new(
           dirname: feature.dirname,
           from: subject.status.key,
           to: fit.key,
           source: feature.path,
-          target: File.join(File.dirname(feature.path), feature.dirname_as(fit)),
-          reason: subject.violation || "contents now justify #{fit.label}"
+          target: File.join(File.dirname(feature.path), dirname),
+          reason: reason_for(subject, fit)
         )
       end
 
-      # Prefer `git mv` so the folder's history follows it.
+      # @param subject [SpecPlanBuild::Subject]
+      # @param fit [SpecPlanBuild::Status] the state the folder is moving to
+      # @return [String] why the current name is wrong
+      def reason_for(subject, fit)
+        feature = subject.feature
+        return subject.violation || "contents now justify #{fit.label}" unless fit.key == subject.status.key
+        return "#{feature.dirname_ordinal} is not padded to #{feature.ordinal}" unless feature.padded?
+
+        "name is not in canonical NNN.MM-<emoji>-<slug> form"
+      end
+
+      # A rename that finds its target occupied has not happened, and saying
+      # nothing about it would leave the folder misnamed with a report
+      # claiming otherwise. Two folders can want the same canonical name —
+      # `018-⚪️-foo` and `018.00-⚪️-foo` are the same plan written twice.
       #
       # @param change [SpecPlanBuild::Resync::Dirs::Change]
       # @return [void]
+      # @raise [SpecPlanBuild::Error] when the target name is already taken
       def rename(change)
-        return if File.exist?(change.target)
+        return if SpecPlanBuild.move_directory(change.source, change.target)
 
-        parent = File.dirname(change.source)
-        tracked = system("git", "-C", parent, "ls-files", "--error-unmatch", change.source,
-          out: File::NULL, err: File::NULL)
-        moved = tracked && system("git", "-C", parent, "mv", change.source, change.target,
-          out: File::NULL, err: File::NULL)
-        FileUtils.mv(change.source, change.target) unless moved
+        raise Error, "cannot rename #{change.dirname} — #{File.basename(change.target)} already exists"
       end
     end
 
@@ -107,7 +135,7 @@ module SpecPlanBuild
     class Prs
       # Titles that already carry a prefix — a plan number, the no-plan marker,
       # or the legacy `[XXX]`.
-      PREFIXED = /\A\[(?:\d{3}(?:\.\d{2})?|DEV\.00|XXX)\]\s/
+      PREFIXED = /\A\[(?:\d{3}(?:\.\d{2})?|DEV\.00|XXX)\](?:\([A-Z]\))?\s/
 
       # Finds a plan number in a branch name: `kig/018.01-verify`, `002-slug`.
       BRANCH_PATTERN = %r{(?:\A|[/\-_])(\d{3}(?:\.\d{2})?)(?:\z|[-_])}
@@ -128,12 +156,15 @@ module SpecPlanBuild
       #   @return [Boolean] a human must decide; never edited
       # @!attribute [r] assumed
       #   @return [Boolean] "no plan" was inferred, not asserted by the author
-      Change = Data.define(:number, :title, :new_title, :ordinal, :reason, :ambiguous, :assumed) do
+      Change = Data.define(:number, :title, :new_title, :ordinal, :reason, :ambiguous, :assumed, :adopted) do
         # @return [Boolean]
         def ambiguous? = ambiguous
 
         # @return [Boolean]
         def assumed? = assumed
+
+        # @return [Boolean] whether a plan folder was minted for this one
+        def adopted? = adopted
 
         # @return [Boolean] safe to apply without a human looking
         def applicable? = !ambiguous && !new_title.nil?
@@ -141,10 +172,18 @@ module SpecPlanBuild
 
       # @param tree [SpecPlanBuild::Tree]
       # @param github [SpecPlanBuild::GitHub]
-      def initialize(tree:, github: GitHub.new)
+      # @param adopt [Boolean] give a plan folder to every pull request that
+      #   resolves to none, rather than flagging it and moving on
+      # @param root [String, nil] repository root, for reading branches
+      def initialize(tree:, github: GitHub.new, adopt: true, root: nil)
         @tree = tree
         @github = github
+        @adopt = adopt
+        @root = root
       end
+
+      # @return [Boolean]
+      def adopt? = @adopt
 
       # @return [SpecPlanBuild::Tree]
       attr_reader :tree
@@ -155,21 +194,65 @@ module SpecPlanBuild
       # What would change, without changing anything.
       #
       # @return [Array<SpecPlanBuild::Resync::Prs::Change>]
-      def plan
-        github.pulls.reject { |pr| pr[:title].to_s.match?(PREFIXED) }.map { |pr| change_for(pr) }
-      end
+      def plan = resolve(candidates).then { |changes| adopt? ? with_adoptions(changes) : changes }
 
-      # @param commit [Boolean] actually retitle
+      # @param commit [Boolean] actually retitle, and mint the folders
       # @return [Array<SpecPlanBuild::Resync::Prs::Change>] what was proposed
       def call(commit: false)
-        changes = plan
-        return changes unless commit
+        changes = resolve(candidates)
+        return adopt? ? with_adoptions(changes) : changes unless commit
 
-        changes.select(&:applicable?).each { |c| github.retitle(number: c.number, title: c.new_title) }
+        changes = with_adoptions(changes, create: true) if adopt?
+        applicable = changes.select(&:applicable?)
+        UI.stepping(applicable, "Retitling") { |c| github.retitle(number: c.number, title: c.new_title) }
         changes
       end
 
+      # @return [Array<SpecPlanBuild::Adoption>] the adopter, memoized
+      def adoption = @adoption ||= Adoption.new(tree:, github:, root: @root)
+
       private
+
+      # @return [Array<Hash>] pull requests with no prefix yet
+      def candidates = github.pulls.reject { |pr| pr[:title].to_s.match?(PREFIXED) }
+
+      # @param pulls [Array<Hash>]
+      # @return [Array<SpecPlanBuild::Resync::Prs::Change>]
+      def resolve(pulls) = pulls.map { |pr| change_for(pr) }
+
+      # Replace every flagged change with one that points at a plan folder the
+      # pull request now owns. The unresolvable ones were unresolvable because
+      # no plan described them — so the answer is a plan, not a shrug.
+      #
+      # @param changes [Array<SpecPlanBuild::Resync::Prs::Change>]
+      # @param create [Boolean] mint the folders, rather than only saying so
+      # @return [Array<SpecPlanBuild::Resync::Prs::Change>]
+      def with_adoptions(changes, create: false)
+        orphans = changes.select(&:ambiguous?)
+        return changes if orphans.empty?
+
+        pulls = orphans.map { |c| pull_by_number.fetch(c.number) }
+        adoptees = create ? adoption.call(pulls) : adoption.plan(pulls)
+        by_number = adoptees.to_h { |a| [a.pull[:number], a] }
+
+        changes.map { |c| (c.ambiguous? && by_number[c.number]) ? adopted(c, by_number[c.number]) : c }
+      end
+
+      # @return [Hash{Integer => Hash}]
+      def pull_by_number = @pull_by_number ||= candidates.to_h { |pr| [pr[:number], pr] }
+
+      # @param change [SpecPlanBuild::Resync::Prs::Change]
+      # @param adoptee [SpecPlanBuild::Adoption::Adoptee]
+      # @return [SpecPlanBuild::Resync::Prs::Change]
+      def adopted(change, adoptee)
+        change.with(
+          ordinal: adoptee.ordinal,
+          new_title: "#{adoptee.ordinal.to_prefix} #{change.title}",
+          reason: "#{change.reason} — adopted into #{adoptee.dirname}",
+          ambiguous: false,
+          adopted: true
+        )
+      end
 
       # @param pull [Hash]
       # @return [SpecPlanBuild::Resync::Prs::Change]
@@ -223,7 +306,7 @@ module SpecPlanBuild
       # @return [SpecPlanBuild::Resync::Prs::Change]
       def resolved(pull, ordinal, why)
         Change.new(number: pull[:number], title: pull[:title], ordinal:, reason: why,
-          new_title: "#{ordinal.to_prefix} #{pull[:title]}", ambiguous: false, assumed: false)
+          new_title: "#{ordinal.to_prefix} #{pull[:title]}", ambiguous: false, assumed: false, adopted: false)
       end
 
       # Nothing resolved, so this is developer work — but that is an assertion
@@ -234,7 +317,7 @@ module SpecPlanBuild
       def no_plan(pull)
         Change.new(number: pull[:number], title: pull[:title], ordinal: nil,
           new_title: "[#{SpecPlanBuild::NO_PLAN_PREFIX}] #{pull[:title]}",
-          reason: "no plan resolved from the branch or the diff", ambiguous: false, assumed: true)
+          reason: "no plan resolved from the branch or the diff", ambiguous: false, assumed: true, adopted: false)
       end
 
       # @param pull [Hash]
@@ -242,7 +325,7 @@ module SpecPlanBuild
       # @return [SpecPlanBuild::Resync::Prs::Change]
       def flag(pull, why)
         Change.new(number: pull[:number], title: pull[:title], new_title: nil, ordinal: nil,
-          reason: why, ambiguous: true, assumed: false)
+          reason: why, ambiguous: true, assumed: false, adopted: false)
       end
     end
   end

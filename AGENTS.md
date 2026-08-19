@@ -81,10 +81,10 @@ For small changes: Up to five lines of description.
 
 For more complex changes: add a body explaining what/why (30 line limit, do not wrap long lines) and reference any issues or tickets. Please ideally keep commits atomic (one logical change per commit) so that they become sort of self-explanatory. If the commit contains several conceptual changes, split them into multiple commits, one conceptual change per commit. Split into multiple commits if addressing completely different concerns.
 
-Use worktrees to work concurrently on multiple projects, and use the `/create-pr` skill and `~/.claude/branch-name.sh` script to generate the branch name based on the short summary of what is being done. Max number of words in the summary is 4.
+Use worktrees to work concurrently on multiple projects, and use the `/create-pr` skill and `~/.agents/bin/create-branch-name` script to generate the branch name based on the short summary of what is being done. Max number of words in the summary is 4.
 
 ```bash
-$ ~/.claude/scripts/branch-name fix dsl alignment bug
+$ ~/.agents/bin/create-branch-name fix dsl alignment bug
 kig/fix-dsl-alignment-bug
 ```
 

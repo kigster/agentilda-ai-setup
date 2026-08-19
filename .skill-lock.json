@@ -1346,6 +1346,8 @@
     "warp",
     "zed",
     "claude-code",
-    "openclaw"
+    "pi",
+    "hermes-agent",
+    "tabnine-cli"
   ]
 }
