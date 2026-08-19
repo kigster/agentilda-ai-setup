@@ -1,5 +1,7 @@
 # `~/.agents` 
 
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/kigster/dot-agents/tree/main.svg?style=svg&circle-token=CCIPRJ_pNgPWKPNmqKb8VHead2bS_f6561ae6a5c2c2ef7003d29a447b3d9c7566b35a)](https://dl.circleci.com/status-badge/redirect/gh/kigster/dot-agents/tree/main)
+
 # Konstantin Gredeskoul's AI setup
 
 A vendor-neutral home for the instructions, context, skills and tooling that several different AI coding agents share, plus **spec-plan-build**: a small Ruby system that keeps a project's specifications, plans and pull requests joined up, and can drive specialist agents over them in parallel.
