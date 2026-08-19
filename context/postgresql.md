@@ -28,61 +28,33 @@ For the purposes of this skill, we'll define the following classes of applicatio
 
 > [!NOTE]
 >
-> Note that the following advice is presented in no particular order. 
+> Note that the following advice is presented in no particular order, but it is slightly biased towards the `PG-strict` type applications, hence the ordering may be suited best for such apps
 
-## Logical vs Physical Deletes
-
-If your application type warrants logical, and not physical deletes, there are some advantages to that. First of all, you never lose any data, so you can always restore someone's account, or provide forensic assistance to law enforcement.
-
-Secondly, any row that's physically deleted in PostgreSQL needs to be vacuumed at some point. Vacuuming is an IO-heavy process that, despite all the advancements in parallel vacuuming, may be adding to your database load considerably.
-
-> [!CAUTION]
-> **A logical delete does not avoid that cost, and it is worth being precise about why.** Under MVCC, an `UPDATE` writes a *new* row version and marks the old one dead — exactly the dead tuple a `DELETE` would have produced. Setting `deleted_at` on a million rows creates a million dead tuples. What you actually buy with a logical delete is the *data*, the audit trail, and the ability to undo. You do not buy your way out of vacuum.
-
-What genuinely reduces the cost is a **HOT update** (Heap-Only Tuple): when an `UPDATE` changes no indexed column and the new version fits on the same page, PostgreSQL skips the index write entirely and the dead tuple can be reclaimed by opportunistic page pruning rather than waiting for a vacuum cycle.
-
-And here is the trap, because it is exactly backwards from what intuition suggests: **a partial index `WHERE deleted_at IS NULL` disqualifies the update from HOT.** HOT eligibility considers every column any index *references*, and that includes a partial index's predicate. Setting `deleted_at` from NULL to a timestamp changes the predicate's answer, so the row must leave the index, so the update rewrites index tuples. Measured on PostgreSQL 18 with page headroom, 200 soft deletes produced 174 HOT updates when `deleted_at` was in no index at all, and **zero** when the recommended `WHERE deleted_at IS NULL` partial index was present. Both produced 200 dead tuples.
-
-That does not mean skip the partial index. It stays small because it only covers live rows, and on a table where most rows are deleted that is a large read win. It means the tradeoff is real and should be chosen deliberately: a small, hot index on the read path, paid for with non-HOT updates and index churn on the write path. For `PG-strict` the partial index is nearly always still correct — the read pattern dominates, and `deleted_at IS NULL` appears in essentially every query.
-
-### If Your Backend is Ruby on Rails
-
-You have a choice of two battle-tested gems to implement your logical deletes:
-
-- https://github.com/jhawthorn/discard
-- https://github.com/rubysherpas/paranoia
-
-## Money and Other Exact Numbers
-
-> [!CAUTION]
-> **Never store money in `float`, `double precision`, or Ruby's `Float`.** Binary floating point cannot represent 0.10, and a tax engine that is off by a hundredth of a cent on ten million line items is off by real money in a real audit. This is not a style preference.
-
-**The default is integer minor units — cents — in a `bigint`.** `amount_cents bigint NOT NULL`, paired with `currency char(3) NOT NULL` holding an ISO 4217 code. Integers add, subtract and compare exactly, they are 8 bytes, they survive every serialization boundary between Postgres, Ruby, JSON and JavaScript without a single rounding surprise, and `bigint` cents holds about 92 quadrillion of them, which is more than any of us will need.
-
-Name the column for what it holds. `amount_cents`, not `amount` — the suffix is what stops somebody assigning `19.99` to it three years from now and being wrong by two orders of magnitude.
-
-**The exception is genuine fractional quantities**: crypto (satoshis are 1e-8, wei are 1e-18), FX rates, per-unit tax rates, commodity weights. There, use `numeric(p, s)` with the precision and scale written down, because `numeric` is arbitrary-precision decimal and arithmetic on it is exact. It is slower than integer arithmetic and stored as a variable-length value, and that is the correct price to pay.
-
-```sql
-amount_cents   bigint         NOT NULL,   -- money: exact, fast, boring
-currency       char(3)        NOT NULL,
-tax_rate       numeric(9, 6)  NOT NULL,   -- a rate is not money
-btc_amount     numeric(24, 8)             -- fractional by nature
-```
-
-**Rounding is a specified behaviour, not an implementation detail.** Tax jurisdictions state their rounding rule in law, and the rules differ — half-up, half-even, round-per-line versus round-per-invoice. Postgres's `round()` on `numeric` is half-away-from-zero; on `double precision` it is half-to-even and therefore doubly wrong for this purpose. Decide the rule per jurisdiction, write it down in the schema or the code that owns it, and test it against the published examples rather than against your intuition.
-
-In Rails, `t.bigint :amount_cents` plus a value object (or `money-rails`) beats `t.decimal`. If you do use `decimal`, always state precision and scale — an unqualified `numeric` accepts anything and silently stores whatever it is given.
-
-## Schema Naming
+## Schema, Table & Column Naming
 
 Regardless of what application we are building and in what language, we are generally going to lean on Rails conventions for database and table naming:
 
 1. **Tables names are plural, lower cased, underscored**
-1. **Column names are also lower case, underscored and are constructed using full words**, almost never abbreviations unless it's something extremely well known, such as `llm` or `i18n`.
-1. **Foreign keys are singular**, eg `users` table, maybe referenced by `profiles` with a singular.
-   1. Each foreign key MUST state its `ON DELETE` behaviour explicitly — `CASCADE`, `RESTRICT`, `SET NULL` or `NO ACTION`. The right answer depends on the application class. Leaving it unstated means `NO ACTION`, which is a decision nobody made.
-1. **`profiles.user_id`** (a singular item) referencing it.
+1. **Column names are singular (unless it's an array), also lower case, underscored and are constructed using proper English words**, almost never abbreviations unless it's something extraordinarily well known, such as `llm` or `i18n`.
+1. **Foreign keys are also singular**, eg `users` table, may be referenced by `profiles` with a singular column **`profiles.user_id`**.
+1. Each foreign key MUST state its `ON DELETE` behaviour explicitly — `CASCADE`, `RESTRICT`, `SET NULL` or `NO ACTION`. The right answer depends on the application class (see above). Leaving it unstated means `NO ACTION`, which is a decision nobody made.
+
+### PolyMorphic Tables & STI (Single Table Inheritance) Table
+
+If you are dealing with Rails, Django, or similar frameworks, you have very likely come across both polymorphic tables (for instance — `edibles`  with `edible_id` and `edible_type`  mapping to a class in your language such as `strawberries` and `bananas`), where each class may use only a fraction of the columns of the entire table. 
+
+STI is another way to have many classes map to a single table, this time using class inheritance, implemented in the database as a `type` column which typically by the default carriers the class name that needs to be instantiated upon read.
+
+As a complimentary approach to STI, Rails recently introduced so called "Delegated Types", which are kind of like STI, but where the mapping between classes and the tables is actually 1-1, and there is a polymorphic table in the middle joining them all into one happy family.  So it's more like polymorphic table, honestly, than it is an STI table. For a reference please see [this blog post by Vincent, an Iterative Thinker](https://dev.to/vincentgithinji/single-table-inheritance-vs-delegated-types-in-rails-whats-the-deal-32oe).
+
+There are a couple of important points you should know about these mappings between classes and database tables.
+
+1. Both support the foreign keys out to other tables, but other tables can not have foreign keys onto them. For instance, `fruit_salads.banana_id` can not be a FK into the `edibles` table, but it can be with the Delegated Types.
+2. With STI you also have multiple classes occupying different rows in a single table, so outbound FKs are cool, inbound not so much.
+3. With STI you have a single column — typically `type`, that differentiates the classes, and contains the fully qualified actual classname. **And that is the problem.** Imagine you decided to refactor your codebase, and `Shloopify::Checkout::Cart` became `AmazonBoughtUs::Checkout::Cart`, and the `carts` are stored in the STI table because why not, there many kinds of shopping carts, some roll, some you have to carry, some charge you before you give them your credit card. Jokes aside, this is a gnarly data migration. So the advice is simple: use a single word in lower case designated to each class to tell which class this row belongs to. And in Rails the magical method that helps you resolve all that is called `find_sti_class`.   If instead of the first classname we simply stored `shloop`, we could change the codebase to now resolve `shloop` to the second class, bypassing the need for a giant multi-day data migration.
+4. Do index the `type` column. By itself, and in a composite index with `id, type` → this will be used for joins.
+5. With polymorphic tables, the same exact concept applies to polymorphic tables: you do not want the fully qualified classname to be in the `edible_type`, you want it to contain `banana` and `strawberry`. The trick in this case is much simpler, you merely need to define a class method `polymorphic_name` on each class you don't want to participate in the polymorphic table using it's fully qualified classname.
+6. And for the love of god, please create the index on ID first and sort the type so that in the index similar objects are next to each other: `create index on edibles (edible_id, edible_type desc)`;
 
 ### Third Party Schemas
 
@@ -107,6 +79,77 @@ This can be very useful and can provide a good additional source of information 
    Search Path can also be set or reset temporarily, per current session, and so on. Decide the most appropriate method but beware that if there are name collisions between the vendors, the first schema's object wins.
 
 1. It's very easy to do cross-schema joins in PostgreSQL, just don't forget to add the schema prefix before the dot for any schema not in the search path. For this reason you may choose to NOT modify your search path, because that will require you to reference any Stripe or Plaid table with the `stripe.transactions` prefix.
+
+.
+
+## Logical vs Physical Deletes
+
+If your application type warrants logical, and not physical deletes, there are some advantages to that. First of all, you never lose any data, so you can always restore someone's account, or provide forensic assistance to law enforcement.
+
+Secondly, any row that's physically deleted in PostgreSQL needs to be vacuumed at some point. Vacuuming is an IO-heavy process that, despite all the advancements in parallel vacuuming, may be adding to your database load considerably.
+
+> [!CAUTION]
+>
+> **A logical delete does not avoid that cost, and it is worth being precise about why.** Under MVCC, an `UPDATE` writes a *new* row version and marks the old one dead — exactly the dead tuple a `DELETE` would have produced. Setting `deleted_at` on a million rows creates a million dead tuples. What you actually buy with a logical delete is the *data*, the audit trail, and the ability to undo. You do not buy your way out of vacuum.
+
+What genuinely reduces the cost is a **HOT update** (Heap-Only Tuple): when an `UPDATE` to a row (especially one with a large number of columns) changes only the columns that are **not indexed**. This allows the previous physical row version and the new version to fit on the same disk page. In this case PostgreSQL skips the index write entirely and the dead tuple can be reclaimed by opportunistic page pruning rather than waiting for a vacuum cycle.
+
+### If Your Backend is Ruby on Rails
+
+You have a choice of two battle-tested gems to implement your logical deletes:
+
+- https://github.com/jhawthorn/discard
+- https://github.com/rubysherpas/paranoia
+
+## 
+
+### Indexes
+
+
+
+#### Indexes
+
+**Fewer, wider, deliberate.** 
+Every index is a write tax, a bloat source, and a HOT-update killer — updating an indexed column forces a new index tuple even when nothing else changed. So index from actual query plans, not from a feeling that a column "seems searchable." Then audit: `pg_stat_user_indexes` with `idx_scan = 0` over a meaningful window is your kill list. On composite column ordering, the rule that actually matters is *equality columns first, then range/inequality, then sort columns* — an index on `(account_id, created_at)` serves `WHERE account_id = ? ORDER BY created_at DESC LIMIT 20` beautifully, while `(created_at, account_id)` serves it not at all. Selectivity is a tiebreaker, not the primary criterion; access-pattern shape wins.
+
+**The shared-leading-column question is where most Rails apps get fat.**
+If you have `(account_id)` and `(account_id, created_at)`, the first is redundant — B-tree leftmost-prefix means the composite answers everything the single-column index answers, so drop it unless you need it for a unique constraint or the size difference genuinely matters for an index-only scan on a huge table. This happens constantly because `add_reference`/`belongs_to` auto-creates the single-column index and then you add the composite three sprints later and never look back. But `(account_id, created_at)` and `(account_id, status)` are *not* redundant with each other — neither is a prefix of the other, and PG can bitmap-AND them if it wants. Before adding the second one, though, ask whether a partial index (`WHERE status = 'pending'`) is smaller and better, because it usually is. Partial indexes are the single most underused feature in Postgres: soft-delete apps should have `WHERE deleted_at IS NULL` on nearly everything.
+
+##### Index Types, Briefly
+
+- **B-tree** for basically everything ordered and comparable.
+- **GIN** for `jsonb` containment, arrays, and `tsvector` full-text. Use `jsonb_path_ops` if you only ever use `@>` — it is meaningfully smaller and faster.
+- **GiST** for ranges, geometry, and exclusion constraints (`tstzrange` + `EXCLUDE` is how you prevent double-booking correctly, rather than with an application-level race condition you'll discover in production).
+- **BRIN** for append-only, naturally-ordered giants — an events table with a monotonic `created_at` gets a usable index at roughly 1/1000th the size.
+- **Expression indexes** for `lower(email)`, though `citext` is cleaner.
+- **`pg_trgm`** for fuzzy matching and `LIKE '%foo%'`, which no B-tree will ever serve.
+- **Hash indexes**: still almost never the answer.
+
+And here is the trap, because it is exactly backwards from what intuition suggests: **a partial index `WHERE deleted_at IS NULL` disqualifies the update from HOT.** HOT eligibility considers every column any index *references*, and that includes a partial index's predicate. Setting `deleted_at` from NULL to a timestamp changes the predicate's answer, so the row must leave the index, so the update rewrites index tuples. Measured on PostgreSQL 18 with page headroom, 200 soft deletes produced 174 HOT updates when `deleted_at` was in no index at all, and **zero** when the recommended `WHERE deleted_at IS NULL` partial index was present. Both produced 200 dead tuples.
+
+That does not mean skip the partial index. It stays small because it only covers live rows, and on a table where most rows are deleted that is a large read win. It means the tradeoff is real and should be chosen deliberately: a small, hot index on the read path, paid for with non-HOT updates and index churn on the write path. For `PG-strict` the partial index is nearly always still correct — the read pattern dominates, and `deleted_at IS NULL` appears in essentially every query.
+
+## Money and Other Exact Numbers
+
+> [!CAUTION]
+> **Never store money in `float`, `double precision`, or Ruby's `Float`.** Binary floating point cannot represent 0.10, and a tax engine that is off by a hundredth of a cent on ten million line items is off by real money in a real audit. This is not a style preference.
+
+**The default is integer minor units — cents — in a `bigint`.** `amount_cents bigint NOT NULL`, paired with `currency char(3) NOT NULL` holding an ISO 4217 code. Integers add, subtract and compare exactly, they are 8 bytes, they survive every serialization boundary between Postgres, Ruby, JSON and JavaScript without a single rounding surprise, and `bigint` cents holds about 92 quadrillion of them, which is more than any of us will need.
+
+Name the column for what it holds. `amount_cents`, not `amount` — the suffix is what stops somebody assigning `19.99` to it three years from now and being wrong by two orders of magnitude.
+
+**The exception is genuine fractional quantities**: crypto (satoshis are 1e-8, wei are 1e-18), FX rates, per-unit tax rates, commodity weights. There, use `numeric(p, s)` with the precision and scale written down, because `numeric` is arbitrary-precision decimal and arithmetic on it is exact. It is slower than integer arithmetic and stored as a variable-length value, and that is the correct price to pay.
+
+```sql
+amount_cents   bigint         NOT NULL,   -- money: exact, fast, boring
+currency       char(3)        NOT NULL,
+tax_rate       numeric(9, 6)  NOT NULL,   -- a rate is not money
+btc_amount     numeric(24, 8)             -- fractional by nature
+```
+
+**Rounding is a specified behaviour, not an implementation detail.** Tax jurisdictions state their rounding rule in law, and the rules differ — half-up, half-even, round-per-line versus round-per-invoice. Postgres's `round()` on `numeric` is half-away-from-zero; on `double precision` it is half-to-even and therefore doubly wrong for this purpose. Decide the rule per jurisdiction, write it down in the schema or the code that owns it, and test it against the published examples rather than against your intuition.
+
+In Rails, `t.bigint :amount_cents` plus a value object (or `money-rails`) beats `t.decimal`. If you do use `decimal`, always state precision and scale — an unqualified `numeric` accepts anything and silently stores whatever it is given.
 
 ## Migrations, Performance & Indexes
 
@@ -204,21 +247,7 @@ create_table :boomerangs, id: :uuid, default: -> { "uuidv7()" } do |t|
 end
 ```
 
-#### Indexes
-
-**Fewer, wider, deliberate.** Every index is a write tax, a bloat source, and a HOT-update killer — updating an indexed column forces a new index tuple even when nothing else changed. So index from actual query plans, not from a feeling that a column "seems searchable." Then audit: `pg_stat_user_indexes` with `idx_scan = 0` over a meaningful window is your kill list. On composite column ordering, the rule that actually matters is *equality columns first, then range/inequality, then sort columns* — an index on `(account_id, created_at)` serves `WHERE account_id = ? ORDER BY created_at DESC LIMIT 20` beautifully, while `(created_at, account_id)` serves it not at all. Selectivity is a tiebreaker, not the primary criterion; access-pattern shape wins.
-
-**The shared-leading-column question is where most Rails apps get fat.** If you have `(account_id)` and `(account_id, created_at)`, the first is redundant — B-tree leftmost-prefix means the composite answers everything the single-column index answers, so drop it unless you need it for a unique constraint or the size difference genuinely matters for an index-only scan on a huge table. This happens constantly because `add_reference`/`belongs_to` auto-creates the single-column index and then you add the composite three sprints later and never look back. But `(account_id, created_at)` and `(account_id, status)` are *not* redundant with each other — neither is a prefix of the other, and PG can bitmap-AND them if it wants. Before adding the second one, though, ask whether a partial index (`WHERE status = 'pending'`) is smaller and better, because it usually is. Partial indexes are the single most underused feature in Postgres: soft-delete apps should have `WHERE deleted_at IS NULL` on nearly everything.
-
-##### Index Types, Briefly
-
-- **B-tree** for basically everything ordered and comparable.
-- **GIN** for `jsonb` containment, arrays, and `tsvector` full-text. Use `jsonb_path_ops` if you only ever use `@>` — it is meaningfully smaller and faster.
-- **GiST** for ranges, geometry, and exclusion constraints (`tstzrange` + `EXCLUDE` is how you prevent double-booking correctly, rather than with an application-level race condition you'll discover in production).
-- **BRIN** for append-only, naturally-ordered giants — an events table with a monotonic `created_at` gets a usable index at roughly 1/1000th the size.
-- **Expression indexes** for `lower(email)`, though `citext` is cleaner.
-- **`pg_trgm`** for fuzzy matching and `LIKE '%foo%'`, which no B-tree will ever serve.
-- **Hash indexes**: still almost never the answer.
+- 
 
 #### N+1s
 
