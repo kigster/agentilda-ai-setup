@@ -13,6 +13,10 @@ module SpecPlanBuild
   # That lives in the heredocs below, in one place, and is emitted alongside the
   # generated parts.
   class Documentation
+    # The hand-drawn state diagram, relative to the document's default home in
+    # `context/feature-building/`.
+    DIAGRAM_IMAGE = "../../docs/img/plan-spec-build.png"
+
     # @return [String] the whole document
     def render
       [
@@ -184,6 +188,15 @@ module SpecPlanBuild
       MARKDOWN
     end
 
+    # The picture is a hand-drawn PNG, not the mermaid block, because mermaid
+    # lays fifteen states out in a way nobody wants to read.
+    #
+    # The mermaid source is still emitted underneath it, and still derived from
+    # the machine — which is precisely what makes it the staleness check for a
+    # hand-drawn image. Regenerating this document rewrites that block from
+    # {STATUSES} and {StateMachine.inbound}, so a diff there means the PNG no
+    # longer matches. No diff there, no redraw.
+    #
     # @return [String]
     def diagram
       edges = StateMachine.inbound.flat_map { |to, froms|
@@ -191,6 +204,22 @@ module SpecPlanBuild
       }
 
       <<~MARKDOWN
+        ![Every state a plan folder may be in, and every transition between them](#{DIAGRAM_IMAGE})
+
+        <details>
+        <summary>Mermaid source for the diagram above</summary>
+
+        <!--
+        REDRAWING THE PNG: only when this block changes.
+
+        The image above is drawn by hand from this source and is the version
+        worth reading. This block is generated from the state machine, so any
+        movement in it — a state added, a transition rerouted, an emoji
+        swapped — is the signal that #{DIAGRAM_IMAGE.delete_prefix("../../")}
+        is stale and has to be redrawn. If this block did not move, neither did
+        the machine: reuse the existing PNG.
+        -->
+
         ```mermaid
         stateDiagram-v2
             direction LR
@@ -198,6 +227,8 @@ module SpecPlanBuild
 
         #{edges.join("\n")}
         ```
+
+        </details>
 
       MARKDOWN
     end

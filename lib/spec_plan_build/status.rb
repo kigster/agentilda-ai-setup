@@ -76,6 +76,10 @@ module SpecPlanBuild
   # 🟣 Merged is deliberately absent: it is a pull request's status, not a
   # folder's, and giving it a folder state invites folders that claim a pull
   # request's condition as their own.
+  #
+  # Adding a state here, or changing an emoji, makes the hand-drawn
+  # `docs/img/plan-spec-build.png` stale — `just docs` will show you, because
+  # the mermaid source in the generated document moves with this list.
   STATUSES = [
     Status.new(
       key: :new, emoji: "⚪️", label: "New", requires: %w[spec.md],

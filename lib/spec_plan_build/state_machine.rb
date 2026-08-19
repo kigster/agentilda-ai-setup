@@ -76,11 +76,14 @@ module SpecPlanBuild
       %i[building ready_for_review in_review rejected]
     ].freeze
 
-    # States the agent loop leaves alone: work that is finished (✅ 🚀), work
-    # that was dropped (⛔️), and work waiting on a human (⭕️ 🅱️ ☢️).
+    # States the agent loop leaves alone: work that is finished (✅ 😎), work
+    # that was dropped (❌), and work waiting on a human (⭕️ 🅱️ ☢️).
     # Everything else is fair game for a specialist.
     SETTLED = %i[approved deployed discarded blocked product_blocked deferred].freeze
 
+    # Rerouting a transition below makes the hand-drawn
+    # `docs/img/plan-spec-build.png` stale — `just docs` will show you, because
+    # the mermaid source in the generated document is derived from this block.
     aasm do
       # The vocabulary is defined once, in {STATUSES}. This machine may not
       # quietly know a different set.

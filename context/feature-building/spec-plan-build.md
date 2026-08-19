@@ -95,9 +95,99 @@ So nothing re-derives one of them from a folder's contents — otherwise every �
 
 A bare promote walks the **spine** — spec → plan → build. Everything off it (blocking, deferring, rejecting) has to be named explicitly. That is the whole reason there is a machine here rather than a rename: a transition is refused when the destination's requirements are not already met, and that refusal is information — it means the phase has not actually happened yet.
 
-**![state-diagram](../../docs/img/plan-spec-build.png)**
+![Every state a plan folder may be in, and every transition between them](../../docs/img/plan-spec-build.png)
 
-### 1Files allowed in a plan folder
+<details>
+<summary>Mermaid source for the diagram above</summary>
+
+<!--
+REDRAWING THE PNG: only when this block changes.
+
+The image above is drawn by hand from this source and is the version
+worth reading. This block is generated from the state machine, so any
+movement in it — a state added, a transition rerouted, an emoji
+swapped — is the signal that docs/img/plan-spec-build.png
+is stale and has to be redrawn. If this block did not move, neither did
+the machine: reuse the existing PNG.
+-->
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    new : ⚪️ New
+    planned : ⭐️ Planned
+    building : 🟡 Building
+    ready_for_review : 🟢 Ready for Review
+    in_review : 👀 In Review
+    rejected : 🔴 Changes Requested
+    approved : ✅ Approved & Merged
+    deployed : 😎 Deployed
+    rolled_back : 😱 Rolled Back
+    shit : 💩 Scrapped by Review
+    blocked : ⭕️ Technical Block
+    product_blocked : 🅱️ Product Block
+    deferred : ☢️ Deferred
+    retroactive : 🕰️ Retroactive
+    discarded : ❌ Discarded
+
+    retroactive --> new
+    blocked --> new
+    product_blocked --> new
+    deferred --> new
+    new --> planned
+    retroactive --> planned
+    shit --> planned
+    blocked --> planned
+    product_blocked --> planned
+    deferred --> planned
+    planned --> building
+    shit --> building
+    approved --> building
+    rolled_back --> building
+    retroactive --> building
+    blocked --> building
+    product_blocked --> building
+    deferred --> building
+    building --> ready_for_review
+    rejected --> ready_for_review
+    rolled_back --> ready_for_review
+    ready_for_review --> in_review
+    in_review --> approved
+    retroactive --> approved
+    in_review --> rejected
+    in_review --> shit
+    approved --> deployed
+    deployed --> rolled_back
+    new --> blocked
+    planned --> blocked
+    building --> blocked
+    new --> product_blocked
+    planned --> product_blocked
+    building --> product_blocked
+    new --> deferred
+    planned --> deferred
+    building --> deferred
+    blocked --> deferred
+    product_blocked --> deferred
+    new --> discarded
+    planned --> discarded
+    building --> discarded
+    ready_for_review --> discarded
+    in_review --> discarded
+    rejected --> discarded
+    approved --> discarded
+    deployed --> discarded
+    rolled_back --> discarded
+    shit --> discarded
+    blocked --> discarded
+    product_blocked --> discarded
+    deferred --> discarded
+    retroactive --> discarded
+```
+
+</details>
+
+## Files allowed in a plan folder
 
 | File               | Required by                                                                                |
 | :----------------- | :----------------------------------------------------------------------------------------- |

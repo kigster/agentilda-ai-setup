@@ -47,6 +47,17 @@ RSpec.describe SpecPlanBuild::Documentation do
       end
     end
 
+    # The picture is drawn by hand, and the document that shows it is
+    # regenerated from the machine — so the generator has to emit the reference
+    # itself. It did not once, and one `just docs` silently deleted the image
+    # from the document while leaving the file on disk.
+    it "keeps the hand-drawn diagram, so regenerating does not delete it" do
+      aggregate_failures do
+        expect(document).to include(described_class::DIAGRAM_IMAGE)
+        expect(document).to match(/REDRAWING THE PNG: only when this block changes/)
+      end
+    end
+
     it "names 🟣 Merged as deliberately not a folder state" do
       expect(document).to match(/🟣 Merged is deliberately \*\*not\*\* a folder state/)
     end
