@@ -75,12 +75,29 @@ module SpecPlanBuild
     # @return [String] proper name, e.g. "Law as Data"
     def title = SpecPlanBuild.titleize(slug)
 
-    # The folder name this feature would carry in a given state — the number
-    # and the slug never move, only the emoji.
+    # The folder name this feature would carry in a given state — the slug
+    # never moves, and the number is always rendered canonically, so this is
+    # also what repairs a folder written `018-⚪️-foo` before the `NNN.MM` rule.
     #
     # @param status [SpecPlanBuild::Status]
     # @return [String]
     def dirname_as(status) = "#{ordinal}-#{status.emoji}-#{slug}"
+
+    # The number exactly as the folder writes it, which is not always the
+    # canonical rendering: `018-⚪️-foo` yields "018" where {#ordinal} renders
+    # "018.00".
+    #
+    # @return [String]
+    def dirname_ordinal = dirname.to_s[/\A[\d.]+/].to_s
+
+    # @return [Boolean] whether the number is written in full `NNN.MM` form
+    def padded? = dirname_ordinal == ordinal.to_s
+
+    # Whether the folder is already named the way this tool would name it —
+    # number padded, emoji matching the state it claims, slug unchanged.
+    #
+    # @return [Boolean]
+    def canonical? = dirname == dirname_as(status)
 
     # @param other [Object]
     # @return [Integer, nil]

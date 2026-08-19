@@ -44,6 +44,20 @@ module PlansFixture
       path
     end
 
+    # A folder written exactly as given, so an example can build a name this
+    # tool would never produce itself: an unpadded number, a hand-typed
+    # separator, a number-and-emoji pair that disagree.
+    #
+    # @param dirname [String] verbatim
+    # @param files [Hash{String => String}]
+    # @return [String] absolute path to the folder
+    def raw(dirname, files: {})
+      path = File.join(root, dirname)
+      FileUtils.mkdir_p(path)
+      files.each { |name, body| File.write(File.join(path, name), body) }
+      path
+    end
+
     # A folder whose name carries no number at all — should be skipped.
     #
     # @param name [String]

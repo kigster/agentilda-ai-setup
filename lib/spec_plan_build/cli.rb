@@ -130,9 +130,9 @@ module SpecPlanBuild
 
     # `spec-plan-build resync …`
     module Resync
-      # `resync dirs` — reconcile folder emoji with folder contents.
+      # `resync dirs` — reconcile folder names with folder contents.
       class Dirs < Base
-        desc "Rename plan folders so their emoji matches their contents"
+        desc "Rename plan folders so the name matches the contents and the NNN.MM form"
 
         option :commit, type: :boolean, default: false,
           desc:          "Actually rename the folders (default: dry run)"
@@ -149,7 +149,7 @@ module SpecPlanBuild
             .call(commit: commit?(options))
 
           if changes.empty?
-            success("Every folder's emoji already matches its contents.") unless quiet?(options)
+            success("Every folder is already named NNN.MM-<emoji>-<slug> and the emoji matches.") unless quiet?(options)
             return
           end
 

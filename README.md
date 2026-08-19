@@ -37,6 +37,14 @@ ______________________________________________________________________
 
 ## Spec → Plan → Build
 
+This repo comes with an opinionated and formalized workflow for designing product features and moving forward.
+
+> [!IMPORTANT]
+> 
+> The process involves: 
+> 1. Creating a `.plans` folder at the root of your repo
+> 2. Using the skill `/create-plan
+
 Every project keeps its plans in a `.plans/` directory. Each feature gets one folder, and **the folder's name is its state**.
 
 ```

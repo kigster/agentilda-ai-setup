@@ -7,12 +7,23 @@ module SpecPlanBuild
   # not certain, because both write to things other people join on: folder
   # names, and pull request titles.
   module Resync
-    # `resync dirs` — makes every folder's emoji match what the folder holds.
+    # `resync dirs` — makes every folder's name say what the folder is.
     #
-    # It only ever touches folders whose name is *not* justified by their
-    # contents. A folder whose status already holds is left alone, which is
-    # what stops ⭕️ Blocked and 🅱️ Product Blocked — deliberately identical
-    # invariants, distinguished only by the name — from collapsing into one.
+    # Two things can be wrong with a name, and both are repaired here:
+    #
+    # - **The emoji is wrong** — the contents justify a different state. A
+    #   folder whose status already holds is left alone, which is what stops
+    #   ⭕️ Blocked and 🅱️ Product Blocked — deliberately identical invariants,
+    #   distinguished only by the name — from collapsing into one.
+    # - **The number is not in `NNN.MM` form** — a folder written `018-⚪️-foo`
+    #   before the padding rule, or `18.1-⚪️-foo` by hand. These read fine and
+    #   sort wrong, which is the whole reason the rule exists: `018.09` <
+    #   `018.1` < `018.10` puts a single mixed-width folder in the middle of
+    #   the range. Both are renamed to `018.00-⚪️-foo` and `018.01-⚪️-foo`.
+    #
+    # The two cases collapse into one rule — **rename any folder that is not
+    # already named what it should be named** — which is why the emoji fix and
+    # the renumber cannot disagree about the target.
     class Dirs
       # A proposed rename.
       #
@@ -59,30 +70,58 @@ module SpecPlanBuild
 
       private
 
-      # A folder moves for either of two reasons: its name is a lie, or its
-      # name is merely behind. Invariants are minimum requirements, so a ⚪️
-      # folder that has grown a `plan.md` still satisfies ⚪️ and is ⭐️ anyway.
+      # A folder moves when the name it has is not the name it should have.
+      #
+      # `best_fit` answers "which state do these contents justify", and falls
+      # back to the state already claimed when nothing fits — so a folder with
+      # an unreadable set of contents still gets its number padded rather than
+      # being skipped for a reason that has nothing to do with its number.
+      #
+      # Invariants are minimum requirements, so a ⚪️ folder that has grown a
+      # `plan.md` still satisfies ⚪️ and is ⭐️ anyway.
       #
       # @param subject [SpecPlanBuild::Subject]
       # @return [SpecPlanBuild::Resync::Dirs::Change, nil]
       def change_for(subject)
-        fit = subject.best_fit
-        return nil if fit.nil? || fit.key == subject.status.key
-
         feature = subject.feature
+        fit = subject.best_fit || subject.status
+        dirname = feature.dirname_as(fit)
+        return nil if dirname == feature.dirname
+
         Change.new(
           dirname: feature.dirname,
           from: subject.status.key,
           to: fit.key,
           source: feature.path,
-          target: File.join(File.dirname(feature.path), feature.dirname_as(fit)),
-          reason: subject.violation || "contents now justify #{fit.label}"
+          target: File.join(File.dirname(feature.path), dirname),
+          reason: reason_for(subject, fit)
         )
       end
 
+      # @param subject [SpecPlanBuild::Subject]
+      # @param fit [SpecPlanBuild::Status] the state the folder is moving to
+      # @return [String] why the current name is wrong
+      def reason_for(subject, fit)
+        feature = subject.feature
+        return subject.violation || "contents now justify #{fit.label}" unless fit.key == subject.status.key
+        return "#{feature.dirname_ordinal} is not padded to #{feature.ordinal}" unless feature.padded?
+
+        "name is not in canonical NNN.MM-<emoji>-<slug> form"
+      end
+
+      # A rename that finds its target occupied has not happened, and saying
+      # nothing about it would leave the folder misnamed with a report
+      # claiming otherwise. Two folders can want the same canonical name —
+      # `018-⚪️-foo` and `018.00-⚪️-foo` are the same plan written twice.
+      #
       # @param change [SpecPlanBuild::Resync::Dirs::Change]
       # @return [void]
-      def rename(change) = SpecPlanBuild.move_directory(change.source, change.target)
+      # @raise [SpecPlanBuild::Error] when the target name is already taken
+      def rename(change)
+        return if SpecPlanBuild.move_directory(change.source, change.target)
+
+        raise Error, "cannot rename #{change.dirname} — #{File.basename(change.target)} already exists"
+      end
     end
 
     # `resync prs` — puts an `[NNN.MM]` prefix on every pull request title that
