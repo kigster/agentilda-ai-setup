@@ -15,6 +15,13 @@ module SpecPlanBuild
     # Tools no agent may use under this autonomy level, whatever its definition
     # asks for. Git itself is reachable through Bash, which is why the
     # after-check exists as well.
+    #
+    # The exception is an agent that declares `network: true`. Closed is the
+    # right default — most specialists here read the repository and write to
+    # it, and a model that decides to go looking online mid-task is a model
+    # doing something nobody asked for. But a researcher inverts that: reading
+    # the internet is the entire job, and denying it silently produced an
+    # agent that ran, found nothing, and reported success.
     DENIED_TOOLS = %w[WebFetch WebSearch].freeze
 
     # Shell fragments that mean "this is leaving the machine".
@@ -63,13 +70,21 @@ module SpecPlanBuild
     # @param subject [SpecPlanBuild::Subject]
     # @return [Array<String>]
     def invocation(agent, subject, root: @root)
-      argv = ["claude", "-p", prompt_for(agent, subject, root),
-        "--add-dir", root,
-        "--disallowedTools", DENIED_TOOLS.join(",")]
+      argv = ["claude", "-p", prompt_for(agent, subject, root), "--add-dir", root]
+      denied = denied_for(agent)
+      argv += ["--disallowedTools", denied.join(",")] unless denied.empty?
       argv += ["--allowedTools", agent.allowed_tools.join(",")] unless agent.allowed_tools.empty?
       argv += ["--model", agent.model] if agent.model
       argv
     end
+
+    # What this particular agent may not touch. Everything, unless it has
+    # asked for the internet in its own definition — which is a decision
+    # recorded in a reviewable file rather than a flag someone passes.
+    #
+    # @param agent [SpecPlanBuild::Agent]
+    # @return [Array<String>]
+    def denied_for(agent) = agent.network ? [] : DENIED_TOOLS
 
     private
 
