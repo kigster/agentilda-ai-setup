@@ -77,6 +77,19 @@ module SpecPlanBuild
         JSON.pretty_generate(team:, actions: actions.map(&:to_h_json))
       end
 
+      # Plans in a state nobody has decided how to file, and why not.
+      #
+      # They are reported rather than dropped quietly, and rather than filed
+      # somewhere plausible. An issue in the wrong column reads exactly like
+      # an issue in the right one, and nobody goes looking for a mistake that
+      # renders correctly.
+      #
+      # @return [Hash{SpecPlanBuild::Status => Array<String>}] state => ordinals
+      def unplaced
+        @unplaced ||= (chosen - subjects).group_by(&:status)
+          .transform_values { |group| group.map { |s| s.feature.ordinal.to_s } }
+      end
+
       # Pull requests that name no unit the plan declares. Reported rather
       # than guessed at: a pull request whose title says "PR-4" against a plan
       # that stops at PR-3 is a discrepancy someone should look at, and
@@ -106,8 +119,11 @@ module SpecPlanBuild
       attr_reader :force
 
       # @return [Array<SpecPlanBuild::Subject>]
-      def subjects
-        @subjects ||= tree.subjects.select { |s|
+      def subjects = @subjects ||= chosen.select { |s| SpecPlanBuild::Linear.placement(s.status) }
+
+      # @return [Array<SpecPlanBuild::Subject>] before the placement question
+      def chosen
+        @chosen ||= tree.subjects.select { |s|
           (since.nil? || s.feature.ordinal >= since) &&
             (statuses.nil? || statuses.include?(s.status.key))
         }

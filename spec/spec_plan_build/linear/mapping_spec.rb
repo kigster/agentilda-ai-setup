@@ -7,8 +7,14 @@ RSpec.describe SpecPlanBuild::Linear do
     # The failure this guards is silent: a sixteenth state gets added to
     # STATUSES, nothing here changes, and its plans import as whatever the
     # fallback happens to be with no indication anything was missed.
-    it "places every state the folder names can carry" do
-      expect(described_class::PLACEMENTS.keys).to match_array(SpecPlanBuild::STATUSES.map(&:key))
+    it "accounts for every state the folder names can carry, placed or deliberately not" do
+      accounted = described_class::PLACEMENTS.keys + described_class::UNPLACED.keys
+
+      expect(accounted).to match_array(SpecPlanBuild::STATUSES.map(&:key))
+    end
+
+    it "never both places a state and declares it unplaceable" do
+      expect(described_class::PLACEMENTS.keys & described_class::UNPLACED.keys).to be_empty
     end
 
     it "uses only the five types Linear actually has" do
@@ -44,13 +50,38 @@ RSpec.describe SpecPlanBuild::Linear do
       expect(placement).to have_attributes(type: "started", name: "In Progress")
     end
 
-    it "refuses a state nobody has placed, rather than guessing at one" do
-      unplaced = SpecPlanBuild::Status.new(key: :invented, emoji: "🦆", label: "Invented",
-        requires: [], note: "", invariant: nil)
-
-      expect { described_class.placement(unplaced) }
-        .to raise_error(SpecPlanBuild::Error, /no Linear placement/)
+    # An issue in the wrong column reads exactly like an issue in the right
+    # one, so the honest answer to "where does 💩 go" is to decline to say.
+    it "declines to place a state whose column is a question about the team, not the plan" do
+      aggregate_failures do
+        expect(described_class.placement(SpecPlanBuild.status(:shit))).to be_nil
+        expect(described_class.placement(SpecPlanBuild.status(:rolled_back))).to be_nil
+      end
     end
+
+    it "declines to place a state nobody has considered at all" do
+      expect(described_class.placement(invented)).to be_nil
+    end
+  end
+
+  describe ".reason_unplaced" do
+    it "gives the reason a state was deliberately left out" do
+      expect(described_class.reason_unplaced(SpecPlanBuild.status(:shit)))
+        .to match(/the plan survives and its pull requests do not/)
+    end
+
+    # Deliberately left out and never thought about are different problems,
+    # and the report should not read the same for both.
+    it "says something louder about a state nobody has thought about" do
+      expect(described_class.reason_unplaced(invented))
+        .to match(/has ever been decided.*add one to Linear::PLACEMENTS/)
+    end
+  end
+
+  # @return [SpecPlanBuild::Status] a sixteenth state, as a future edit would add it
+  def invented
+    SpecPlanBuild::Status.new(key: :invented, emoji: "🦆", label: "Invented",
+      requires: [], note: "", invariant: nil)
   end
 
   describe ".key!" do

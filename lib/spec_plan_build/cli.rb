@@ -461,6 +461,7 @@ module SpecPlanBuild
           return if quiet?(options)
 
           import.pending.each { |action| say(line(action)) }
+          report_unplaced(import)
           report_unattached(import)
           dry_run_footer(import.pending.size, "Linear change#{"s" unless import.pending.size == 1}")
           say_transport
@@ -501,6 +502,36 @@ module SpecPlanBuild
           verb = paint(action.op.to_s.ljust(6), (action.op == :create) ? :green : :yellow)
           noun = (action.kind == :project) ? paint("project", :magenta) : "issue  "
           "#{verb} #{noun}  #{action.title}  #{paint("(#{action.reason})", :bright_black)}"
+        end
+
+        # @param import [SpecPlanBuild::Linear::Import]
+        # @return [void]
+        def report_unplaced(import)
+          return if import.unplaced.empty?
+
+          listed = import.unplaced.map { |status, ordinals|
+            "  #{status} — #{ordinals.join(", ")}\n" +
+              wrapped(SpecPlanBuild::Linear.reason_unplaced(status))
+          }
+          warn("Not imported, because nothing here knows where they belong:\n\n" \
+               "#{listed.join("\n\n")}\n\n" \
+               "Decide where they go on your board and add it to Linear::PLACEMENTS. " \
+               "Filing them somewhere plausible would be worse than leaving them out.")
+        end
+
+        # A box re-wraps a line that overruns it, and the wrapped remainder
+        # comes back at column zero — which reads as a new entry rather than
+        # the continuation of one. Wrapping it here keeps the indent.
+        #
+        # @param text [String]
+        # @param width [Integer] narrower than the narrowest box
+        # @return [String]
+        def wrapped(text, width: 58)
+          text.split.each_with_object([+""]) { |word, lines|
+            lines << +"" if lines.last.length + word.length + 1 > width
+            lines.last << " " unless lines.last.empty?
+            lines.last << word
+          }.map { |line| "    #{line}" }.join("\n")
         end
 
         # @param import [SpecPlanBuild::Linear::Import]

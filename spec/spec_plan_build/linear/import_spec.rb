@@ -148,6 +148,30 @@ RSpec.describe SpecPlanBuild::Linear::Import, :tree do
     end
   end
 
+  describe "a plan whose state nobody has decided how to file" do
+    before do
+      plans do |t|
+        t.plan "009.00", :shit, "scrapped-work", files: {"rewrite.md" => "Start again."}
+        t.plan "010.00", :rolled_back, "pulled", files: {"rollback.md" => "It broke checkout."}
+      end
+    end
+
+    it "proposes nothing for it" do
+      expect(import.actions.map(&:ordinal)).not_to include("009.00", "010.00")
+    end
+
+    # Skipping quietly and filing it somewhere plausible are the same failure
+    # wearing different clothes: nobody finds out.
+    it "reports it, grouped by the state that stopped it" do
+      expect(import.unplaced.transform_keys(&:key))
+        .to eq(shit: ["009.00"], rolled_back: ["010.00"])
+    end
+
+    it "still imports every plan whose state it does know" do
+      expect(import.actions.map(&:ordinal)).to include("001.00", "002.00", "003.00")
+    end
+  end
+
   describe "#unattached" do
     # Filing it under the nearest unit would bury exactly the discrepancy
     # somebody needs to see.

@@ -12,9 +12,11 @@ module SpecPlanBuild
     # contract, and the name we would prefer if the team happens to have one.
     # {Push} resolves the name first and falls back to the type.
     #
-    # Four of the fifteen states have no Linear equivalent at all — a state
-    # like ⭕️ Technical Block is a reason, not a position in a workflow — so
-    # they map to the nearest position and carry a label saying which reason.
+    # Several states have no Linear equivalent at all — ⭕️ Technical Block is
+    # a reason, not a position in a workflow — so they map to the nearest
+    # position and carry a label saying which reason.
+    #
+    # Two states are left out entirely; see {UNPLACED}.
     #
     # @!attribute [r] type
     #   @return [String] Linear's canonical type: backlog, unstarted, started,
@@ -28,13 +30,14 @@ module SpecPlanBuild
     # Linear's five workflow state types, in lifecycle order.
     TYPES = %w[backlog unstarted started completed canceled].freeze
 
-    # Every plan state, placed. Keyed by {SpecPlanBuild::Status#key}.
+    # Every plan state this tool is willing to place, keyed by
+    # {SpecPlanBuild::Status#key}.
     #
-    # This table must name every entry in {SpecPlanBuild::STATUSES}; a spec
-    # asserts it does. That is the whole guard against the failure this file
-    # is most prone to: a sixteenth state gets added, nothing here changes,
-    # and its plans quietly import as Backlog with no indication anything was
-    # missed.
+    # Between this and {UNPLACED} every entry in {SpecPlanBuild::STATUSES} is
+    # named exactly once, and a spec asserts it. That is the guard against the
+    # failure this file is most prone to: a sixteenth state gets added,
+    # nothing here changes, and its plans quietly import as Backlog with no
+    # indication anything was missed.
     PLACEMENTS = {
       new: Placement.new(type: "backlog", name: "Backlog", labels: []),
       planned: Placement.new(type: "unstarted", name: "Todo", labels: []),
@@ -44,8 +47,6 @@ module SpecPlanBuild
       rejected: Placement.new(type: "started", name: "In Review", labels: %w[changes-requested]),
       approved: Placement.new(type: "completed", name: "Done", labels: []),
       deployed: Placement.new(type: "completed", name: "Done", labels: %w[deployed]),
-      rolled_back: Placement.new(type: "started", name: "In Progress", labels: %w[rolled-back]),
-      shit: Placement.new(type: "unstarted", name: "Todo", labels: %w[scrapped]),
       blocked: Placement.new(type: "unstarted", name: "Todo", labels: %w[blocked]),
       product_blocked: Placement.new(type: "unstarted", name: "Todo", labels: %w[blocked-on-product]),
       deferred: Placement.new(type: "backlog", name: "Backlog", labels: %w[deferred]),
@@ -53,14 +54,37 @@ module SpecPlanBuild
       discarded: Placement.new(type: "canceled", name: "Canceled", labels: [])
     }.freeze
 
+    # States deliberately left out, and why.
+    #
+    # Both are real positions in this tool's lifecycle and neither is
+    # obviously any position on a Linear board. Where they belong is a
+    # statement about how a particular team works, and this tool does not know
+    # that. Guessing would be worse than not knowing: an issue filed in the
+    # wrong column reads exactly like an issue filed in the right one, and
+    # nobody goes looking for a mistake that renders correctly.
+    #
+    # A plan in one of these states is reported and skipped. To import them,
+    # decide where they belong and move the entry into {PLACEMENTS}.
+    UNPLACED = {
+      shit: "the plan survives and its pull requests do not; whether that is work still to do " \
+            "or work abandoned depends on what the team does next",
+      rolled_back: "it shipped and was pulled; whether that reopens this work or opens new work " \
+                   "depends on what broke"
+    }.freeze
+
     # Where a plan in this state belongs on a Linear board.
     #
     # @param status [SpecPlanBuild::Status]
-    # @return [SpecPlanBuild::Linear::Placement]
-    # @raise [SpecPlanBuild::Error] when the state has never been placed
-    def self.placement(status)
-      PLACEMENTS.fetch(status.key) do
-        raise Error, "#{status} has no Linear placement — add one to Linear::PLACEMENTS"
+    # @return [SpecPlanBuild::Linear::Placement, nil] nil when nobody has decided
+    def self.placement(status) = PLACEMENTS[status.key]
+
+    # Why a state is not imported, for the report that says so.
+    #
+    # @param status [SpecPlanBuild::Status]
+    # @return [String] the reason, or the louder one for a state nobody has considered at all
+    def self.reason_unplaced(status)
+      UNPLACED.fetch(status.key) do
+        "no Linear placement has ever been decided for it — add one to Linear::PLACEMENTS"
       end
     end
   end

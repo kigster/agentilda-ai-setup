@@ -127,7 +127,9 @@ spec-plan-build linear import --prefix TAX --format json   # for /plan-linear-im
 
 The JSON is shaped as the Linear MCP server's own `save_project` and `save_issue` arguments, so both transports read one contract and cannot drift apart.
 
-A pull request that names no work unit its plan declares is **reported, never guessed at** — filing it under the nearest unit would bury exactly the discrepancy worth seeing.
+Two states — 💩 Scrapped by Review and 😱 Rolled Back — are **not imported at all**. Where they belong on a board is a statement about how a team works, not about the plan, and this tool does not know that. It says so and skips them; deciding is one entry in `Linear::PLACEMENTS`.
+
+A pull request that names no work unit its plan declares is likewise **reported, never guessed at** — filing it under the nearest unit would bury exactly the discrepancy worth seeing.
 
 ______________________________________________________________________
 

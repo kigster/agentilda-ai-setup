@@ -52,6 +52,7 @@ Rules that matter:
 1. **A plan's project before its issues.** An issue names its project by name, and the name has to exist first. Actions arrive in that order already; keep them in it.
 1. **Do not invent arguments.** No assignee, no priority, no cycle, no estimate. If `.plans` does not say it, this import does not claim it.
 1. **`state` and `labels` are names.** `save_issue` resolves them against the team. If the team has no state by that name, say so and stop rather than guessing at a different column — the mapping is in `Linear::PLACEMENTS`.
+1. **Do not file the plans it skipped.** 💩 Scrapped by Review and 😱 Rolled Back are left out on purpose, and the dry run says which plans that cost. Where they belong is the user's call; show them the list rather than picking a column.
 
 ## Then write down what you did
 
