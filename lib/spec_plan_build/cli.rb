@@ -194,6 +194,39 @@ module SpecPlanBuild
       end
     end
 
+    # `spec-plan-build index` — the plans as one browsable page.
+    class Index < Base
+      desc "Write .plans/INDEX.md: every plan, its goal, its pull requests and its documents"
+
+      option :output, aliases: ["-o"],
+        desc:            "Write somewhere other than <plans>/INDEX.md; - for STDOUT"
+      option :project, aliases: ["-p"],
+        desc:             "Heading for the page, default: the repository's directory name"
+
+      example [
+        "                     # write .plans/INDEX.md",
+        "-o -                 # print it instead",
+        "-p 'Equilibris App'  # override the heading"
+      ]
+
+      # @param options [Hash]
+      # @return [void]
+      def call(**options)
+        index = SpecPlanBuild::Index.new(tree: tree_for(options), project: options[:project])
+
+        if options[:output] == "-"
+          $stdout.write(index.render)
+          return
+        end
+
+        path = index.write(options[:output])
+        puts path
+        return if quiet?(options)
+
+        success("Wrote #{path}\n\nRegenerate it after any `resync dirs`, which renames folders\nand would otherwise leave every link here pointing at nothing.")
+      end
+    end
+
     # `spec-plan-build status` — backs /spec-status.
     class Status < Base
       desc "Print every plan, its state, and its pull requests"
@@ -544,6 +577,7 @@ module SpecPlanBuild
     register "status", Status, aliases: %w[st]
     register "run", Run
     register "docs", Docs
+    register "index", Index, aliases: %w[idx]
     register "version", Version, aliases: %w[--version -v]
 
     register "resync" do |prefix|

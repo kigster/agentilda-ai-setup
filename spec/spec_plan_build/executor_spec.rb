@@ -37,4 +37,41 @@ RSpec.describe SpecPlanBuild::Executor, :tree do
       expect(argv.join(" ")).to match(/may NOT commit, push/)
     end
   end
+
+  # The autonomy boundary is closed by default and opened per agent, in the
+  # agent's own file. A researcher whose whole job is reading the internet was
+  # otherwise handed --disallowedTools WebFetch,WebSearch on every invocation,
+  # and duly ran, found nothing, and reported success.
+  describe "the network boundary" do
+    def agent_with(network:)
+      SpecPlanBuild::Agent.new(
+        name: "x", description: "", handles: [:new], advances_to: :planned, model: nil,
+        allowed_tools: [], forbids: [], network:, prompt: "do it", path: "x.md"
+      )
+    end
+
+    it "denies the web to an agent that did not ask for it" do
+      argv = described_class.new(root:, command:).invocation(agent_with(network: false), subject_plan)
+
+      expect(argv.each_cons(2).to_a).to include(["--disallowedTools", "WebFetch,WebSearch"])
+    end
+
+    it "grants it to one that did" do
+      argv = described_class.new(root:, command:).invocation(agent_with(network: true), subject_plan)
+
+      expect(argv).not_to include("--disallowedTools")
+    end
+
+    it "defaults to closed when the definition says nothing" do
+      expect(agent_with(network: false).network).to be(false)
+    end
+
+    # Opening the network does not open anything else: the harness still
+    # checks afterwards that HEAD did not move.
+    it "leaves the commit boundary alone either way" do
+      argv = described_class.new(root:, command:).invocation(agent_with(network: true), subject_plan)
+
+      expect(argv).to include("--add-dir")
+    end
+  end
 end

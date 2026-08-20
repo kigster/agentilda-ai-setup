@@ -114,6 +114,7 @@ end
   resolver
   resync
   reporter
+  index
   agent
   worktree
   publisher

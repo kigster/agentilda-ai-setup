@@ -162,10 +162,7 @@ module SpecPlanBuild
     # @param subject [SpecPlanBuild::Subject]
     # @return [String]
     def summary_text(subject)
-      body = subject.read("spec.md").to_s
-      goal = body[/^\#{"#"}{2,3}\s*Goals?\b[^\n]*\n+(.*?)(?=\n\#{"#"}{1,3}\s|\z)/mi, 1]
-
-      text = goal.to_s.strip.split(/\n{2,}/).first(2).join("\n\n").strip
+      text = subject.goal.join("\n\n")
       text.empty? ? "See `#{subject.feature.dirname}/spec.md`." : text
     end
 

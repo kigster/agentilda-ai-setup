@@ -23,12 +23,14 @@ module SpecPlanBuild
   #   @return [Array<String>]
   # @!attribute [r] forbids
   #   @return [Array<String>] capabilities the harness must refuse
+  # @!attribute [r] network
+  #   @return [Boolean] whether this agent may reach the internet
   # @!attribute [r] prompt
   #   @return [String] the markdown body
   # @!attribute [r] path
   #   @return [String]
   Agent = Data.define(:name, :description, :handles, :advances_to, :model,
-    :allowed_tools, :forbids, :prompt, :path) do
+    :allowed_tools, :forbids, :network, :prompt, :path) do
     # @return [Boolean] whether this agent changes anything on disk
     def read_only? = advances_to.nil?
 
@@ -87,6 +89,7 @@ module SpecPlanBuild
         model: meta["model"],
         allowed_tools: Array(meta["allowed_tools"]).map(&:to_s),
         forbids: Array(meta["forbids"]).map(&:to_s),
+        network: meta["network"] == true,
         prompt: match[2].strip,
         path: path
       )

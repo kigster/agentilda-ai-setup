@@ -35,6 +35,20 @@ RSpec.describe SpecPlanBuild::Runner, :tree do
         expect(calls.uniq).to contain_exactly(["yoda-writer", "000.00"], ["palpatine-planner", "001.00"])
       end
 
+      # leah-researcher declares no `advances_to`, which makes her read-only:
+      # she deepens a spec.md that stays ⚪️ throughout rather than moving a
+      # folder between states, and the loop only offers work to agents that
+      # have something to advance. She is called by hand, not by the runner.
+      #
+      # This is also what stops her taking ⚪️ New from yoda-writer — agents
+      # are offered work in definition order and the runner takes the first,
+      # so an advancing leah would win on alphabetical order alone.
+      it "does not offer work to a read-only agent, however many states it handles" do
+        runner.call
+
+        expect(calls.map(&:first)).not_to include("leah-researcher")
+      end
+
       it "never offers a blocked plan to anyone — that is what blocked means" do
         runner.call
 

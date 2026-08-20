@@ -91,6 +91,10 @@ spec-retro after *words:
 spec-status *args:
     {{ spb }} status {{ args }}
 
+# Write .plans/INDEX.md — every plan, its goal, PRs and documents
+spec-index *args:
+    {{ spb }} index {{ args }}
+
 # Show which folder emojis disagree with their contents
 resync-dirs-check:
     {{ spb }} resync dirs
