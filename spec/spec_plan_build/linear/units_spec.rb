@@ -150,13 +150,13 @@ RSpec.describe SpecPlanBuild::Linear::Units, :tree do
       expect(found.map(&:key)).to eq([described_class::WHOLE])
     end
 
-    it "labels that unit with the plan's words rather than a pull request number" do
+    it "titles that unit with the plan's words rather than a pull request number" do
       plans do |t|
         t.plan "012.00", :new, "small-thing", files: {"spec.md" => spec_body(title: "Small Thing")}
       end
       found = described_class.new(subject: SpecPlanBuild::Tree.new(dir: plans_root).find("012.00")).all
 
-      expect(found.first.label).to eq("Small Thing")
+      expect(found.first.title).to eq("Small Thing")
     end
   end
 

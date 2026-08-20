@@ -59,16 +59,21 @@ RSpec.describe SpecPlanBuild::Linear::Import, :tree do
       expect(blocked.args).to include(state: "Todo", labels: %w[blocked])
     end
 
-    # Descriptions are rewritten wholesale on every update; Linear attachments
-    # are append-only. The same list sent twice is idempotent in one and a
-    # growing pile in the other.
-    it "puts the pull requests in the description, where a re-send is harmless" do
-      expect(issue.args[:description]).to include("/pull/2", "Merged 🟣")
+    # An issue is a unit of work; a pull request is an artifact implementing
+    # it. Linear has a relationship for that, and a markdown bullet is not it.
+    it "attaches the pull requests rather than listing them in the body" do
+      aggregate_failures do
+        expect(issue.args[:links]).to eq([{url: "https://github.com/example/repo/pull/2",
+                                           title: "#2 — Spec 002 PR-1: Test rig"}])
+        expect(issue.args[:description]).not_to include("/pull/2")
+      end
     end
 
-    it "attaches them as links too, but only when the issue is being created" do
-      expect(issue.args[:links]).to eq([{url: "https://github.com/example/repo/pull/2",
-                                         title: "#2 — Spec 002 PR-1: Test rig"}])
+    # PR-1 is this tool's key for a section of plan.md. It means nothing to
+    # anyone reading Linear, and the attachment already says what it was
+    # trying to say.
+    it "keeps its own unit key out of the title" do
+      expect(issue.args[:title]).to eq("[002.00] Test rig")
     end
 
     it "points back at the folder, so a reader can find the source of truth" do
@@ -119,7 +124,17 @@ RSpec.describe SpecPlanBuild::Linear::Import, :tree do
       record("002.00", "002.00-✅-dev-foundation", digest: "deadbeef")
       action = import.actions.find { |a| a.unit == "PR-1" }
 
-      expect(action.args.keys).not_to include(:team, :project, :links)
+      expect(action.args.keys).not_to include(:team, :project)
+    end
+
+    # Linear keys an attachment on its URL, so re-sending one updates it. That
+    # is what lets a pull request raised after the first import still reach
+    # the issue it belongs to.
+    it "still sends the pull requests on an update, so a later one is not stranded" do
+      record("002.00", "002.00-✅-dev-foundation", digest: "deadbeef")
+      action = import.actions.find { |a| a.unit == "PR-1" }
+
+      expect(action.args[:links]).to include(hash_including(url: %r{/pull/2}))
     end
 
     context "with --force" do

@@ -169,10 +169,10 @@ module SpecPlanBuild
         args = {team:, project: project_name(subject), title:,
                 description: issue_description(subject, unit),
                 state: placement.name, labels: placement.labels}
-        digest = Issues.digest(args.merge(links: unit.pull_requests.map(&:url)))
+        args = args.merge(links: links_for(unit))
+        digest = Issues.digest(args)
 
         op, reason = decide(recorded&.identifier, recorded&.digest, digest, "issue")
-        args = args.merge(links: links_for(unit)) if op == :create
         args = args.merge(id: recorded.identifier).except(:team, :project) if op == :update && recorded
 
         Action.new(kind: :issue, op:, ordinal: subject.feature.ordinal.to_s, unit: unit.key,
@@ -211,6 +211,15 @@ module SpecPlanBuild
         cleaned.empty? ? subject.feature.title : cleaned
       end
 
+      # What the issue is called.
+      #
+      # Deliberately *not* "PR-1 — …". An issue is a unit of work; a pull
+      # request is an artifact that implements one. `PR-1` is this tool's
+      # internal key for a section of `plan.md`, it means nothing to anyone
+      # reading Linear, and stating the relationship in the title states
+      # badly what the attachment states properly. The key stays in
+      # `linear.md`, where it is doing a job.
+      #
       # An undivided plan's one issue is the plan, so it takes the plan's own
       # words rather than the folder slug titleized back into "Yard
       # Documentation Gate".
@@ -219,7 +228,7 @@ module SpecPlanBuild
       # @param unit [SpecPlanBuild::Linear::Unit]
       # @return [String]
       def issue_title(subject, unit)
-        words = unit.whole? ? heading(subject) : unit.label
+        words = unit.whole? ? heading(subject) : unit.title
         "[#{subject.feature.ordinal}] #{words}"
       end
 
@@ -232,7 +241,7 @@ module SpecPlanBuild
           subject.goal.join("\n\n"),
           "**State**: #{subject.status} — #{subject.status.note}",
           "**Folder**: `#{SpecPlanBuild::PLANS_DIR}/#{subject.feature.dirname}`",
-          loose.empty? ? nil : "**Pull requests naming no unit**\n\n#{bullets(loose)}",
+          loose.empty? ? nil : "**Pull requests naming no unit**\n\n#{listed(loose)}",
           provenance
         ].compact.reject(&:empty?).join("\n\n")
       end
@@ -243,24 +252,30 @@ module SpecPlanBuild
       def issue_description(subject, unit)
         [
           truncate(unit.body),
-          unit.pull_requests.empty? ? nil : "**Pull requests**\n\n#{bullets(unit.pull_requests)}",
           "**Plan**: `#{SpecPlanBuild::PLANS_DIR}/#{subject.feature.dirname}`" \
             "#{" · unit `#{unit.key}`" unless unit.whole?}",
           provenance
         ].compact.reject(&:empty?).join("\n\n")
       end
 
-      # Pull requests go into the description as markdown rather than only as
-      # Linear attachments, because a description is rewritten wholesale on
-      # every update while attachments are append-only — the same list sent
-      # twice is idempotent in one and a growing pile in the other.
+      # The one place a pull request is named in prose rather than attached:
+      # these belong to no issue, so there is nothing to attach them to.
       #
       # @param prs [Array<SpecPlanBuild::PullRequest>]
       # @return [String]
-      def bullets(prs)
+      def listed(prs)
         prs.map { |pr| "- #{pr.url ? "[#{pr.label}](#{pr.url})" : pr.label} — #{pr.state}" }.join("\n")
       end
 
+      # A pull request is attached to its issue, not listed in its body.
+      #
+      # Linear has a first-class relationship for this and renders it as what
+      # it is — an artifact implementing the work, carrying its own state. A
+      # markdown bullet is a claim about a relationship; an attachment is the
+      # relationship. Links are keyed on the URL, so re-sending one updates
+      # rather than duplicates, which is what lets these go out on every
+      # operation instead of only on create.
+      #
       # @param unit [SpecPlanBuild::Linear::Unit]
       # @return [Array<Hash>]
       def links_for(unit)

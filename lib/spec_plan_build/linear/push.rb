@@ -123,18 +123,25 @@ module SpecPlanBuild
         attempt(action) do
           node = case action.op
           when :skip then skipped_issue(action, subject)
-          when :update then api.update_issue(action.args[:id], issue_input(action))
-          else create_issue(action)
+          when :update then attach(api.update_issue(action.args[:id], issue_input(action)), action)
+          else attach(api.create_issue(issue_input(action).merge(teamId: team[:id],
+            projectId: project_id(action))), action)
           end
 
           [node["identifier"], node["url"]]
         end
       end
 
+      # Attaching the pull requests is part of writing the issue, not a
+      # decoration on top of it: the attachment is how Linear represents "this
+      # pull request implements this work". Linear keys an attachment on its
+      # URL, so sending the same one again updates it rather than piling up a
+      # second copy — which is what makes this safe on an update.
+      #
+      # @param node [Hash] the issue Linear returned
       # @param action [SpecPlanBuild::Linear::Action]
-      # @return [Hash]
-      def create_issue(action)
-        node = api.create_issue(issue_input(action).merge(teamId: team[:id], projectId: project_id(action)))
+      # @return [Hash] the same node
+      def attach(node, action)
         Array(action.args[:links]).each { |l| api.link(issue_id: node["id"], url: l[:url], title: l[:title]) }
         node
       end

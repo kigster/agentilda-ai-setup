@@ -15,9 +15,6 @@ module SpecPlanBuild
     Unit = Data.define(:key, :title, :body, :pull_requests) do
       # @return [Boolean] whether this stands for the plan as a whole
       def whole? = key == Units::WHOLE
-
-      # @return [String] "PR-1 — RLS substrate", or just the title when whole
-      def label = whole? ? title : "#{key} — #{title}"
     end
 
     # Reads the work units out of a plan folder.
