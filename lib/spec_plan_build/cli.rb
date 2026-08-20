@@ -384,6 +384,152 @@ module SpecPlanBuild
       end
     end
 
+    # `spec-plan-build linear …`
+    module Linear
+      # `linear import` — the plans, as Linear projects and issues.
+      class Import < Base
+        desc "Create Linear projects and issues from the plans, one per work unit"
+
+        option :prefix, aliases: ["-p", "--team"],
+          desc:            "The Linear team key that prefixes its issues, e.g. TAX"
+        option :commit, type: :boolean, default: false,
+          desc:          "Actually create and update in Linear (default: dry run)"
+        option :format, default: "text", values: %w[text json],
+          desc:          "json emits the exact arguments the Linear MCP tools take"
+        option :since, aliases: ["-s"],
+          desc:           "Skip plans numbered below this, e.g. 010.00"
+        option :status,
+          desc: "Only plans in these states: a comma-separated list of status keys"
+        option :force, type: :boolean, default: false,
+          desc:         "Update every issue, whether the plan has changed or not"
+
+        example [
+          "--prefix TAX                     # show what would be created",
+          "--prefix TAX --commit            # do it, using LINEAR_API_KEY",
+          "--prefix TAX --format json       # hand it to the MCP transport instead",
+          "--prefix TAX --since 010.00      # only the recent plans",
+          "--prefix TAX --status building,in_review"
+        ]
+
+        # @param options [Hash]
+        # @return [void]
+        def call(**options)
+          tree = tree_for(options)
+          import = build(tree, options)
+
+          return $stdout.puts(import.to_json) if options[:format] == "json"
+
+          if import.pending.empty?
+            success("Linear is already in step with #{tree.dir}.") unless quiet?(options)
+            return
+          end
+
+          commit?(options) ? push(import, tree, options) : preview(import, options)
+        rescue SpecPlanBuild::Error => e
+          error(e.message)
+          exit 69
+        end
+
+        private
+
+        # @param tree [SpecPlanBuild::Tree]
+        # @param options [Hash]
+        # @return [SpecPlanBuild::Linear::Import]
+        def build(tree, options)
+          SpecPlanBuild::Linear::Import.new(tree:,
+            team: SpecPlanBuild::Linear.key!(options[:prefix]),
+            since: options[:since], statuses: statuses(options),
+            force: options.fetch(:force, false))
+        end
+
+        # @param options [Hash]
+        # @return [Array<Symbol>, nil]
+        def statuses(options)
+          return nil unless options[:status]
+
+          options[:status].to_s.split(",").map { |word|
+            SpecPlanBuild.status(word.strip)&.key ||
+              raise(SpecPlanBuild::Error, "no such state: #{word.strip}")
+          }
+        end
+
+        # @param import [SpecPlanBuild::Linear::Import]
+        # @param options [Hash]
+        # @return [void]
+        def preview(import, options)
+          import.pending.each { |action| puts row(action) }
+          return if quiet?(options)
+
+          import.pending.each { |action| say(line(action)) }
+          report_unattached(import)
+          dry_run_footer(import.pending.size, "Linear change#{"s" unless import.pending.size == 1}")
+          say_transport
+        end
+
+        # @param import [SpecPlanBuild::Linear::Import]
+        # @param tree [SpecPlanBuild::Tree]
+        # @param options [Hash]
+        # @return [void]
+        def push(import, tree, options)
+          api = SpecPlanBuild::Linear::API.new(token: SpecPlanBuild::Linear::API.token_from_env)
+          results = UI.spinning("Pushing #{import.pending.size} changes to Linear") {
+            SpecPlanBuild::Linear::Push.new(import:, api:, tree:).call
+          }
+
+          done, failed = results.select { |r| r.action.pending? }.partition(&:ok?)
+          done.each { |r| puts "#{r.action.op}\t#{r.identifier}\t#{r.action.title}" }
+          return if quiet?(options)
+
+          done.each { |r| say("#{paint(r.identifier.to_s, :green)}  #{r.action.title}") }
+          failed.each { |r| say("#{paint("FAILED", :red)}  #{r.action.title} — #{r.error}", bullet: "!") }
+
+          success("#{done.size} change#{"s" unless done.size == 1} pushed. " \
+                  "Each plan's #{SpecPlanBuild::Linear::Issues::FILENAME} now records what it owns.")
+          error("#{failed.size} change#{"s" unless failed.size == 1} did not land.") unless failed.empty?
+        end
+
+        # @param action [SpecPlanBuild::Linear::Action]
+        # @return [String] the machine-readable line
+        def row(action)
+          [action.op, action.kind, action.ordinal, action.unit || "-",
+            action.identifier || "-", action.title].join("\t")
+        end
+
+        # @param action [SpecPlanBuild::Linear::Action]
+        # @return [String]
+        def line(action)
+          verb = paint(action.op.to_s.ljust(6), (action.op == :create) ? :green : :yellow)
+          noun = (action.kind == :project) ? paint("project", :magenta) : "issue  "
+          "#{verb} #{noun}  #{action.title}  #{paint("(#{action.reason})", :bright_black)}"
+        end
+
+        # @param import [SpecPlanBuild::Linear::Import]
+        # @return [void]
+        def report_unattached(import)
+          return if import.unattached.empty?
+
+          listed = import.unattached.map { |ordinal, prs|
+            "  #{ordinal}  #{prs.map(&:label).join("\n            ")}"
+          }
+          warn("These pull requests name no work unit their plan declares, so no issue " \
+               "claims them:\n\n#{listed.join("\n")}\n\n" \
+               "They are listed on the project instead. Either the plan is missing a unit, " \
+               "or the pull request title is missing its PR-n.")
+        end
+
+        # @return [void]
+        def say_transport
+          return if SpecPlanBuild::Linear::API.token_from_env
+
+          info("--commit needs #{SpecPlanBuild::Linear::API::TOKEN_VARIABLE} in the environment.\n\n" \
+               "Without it, drive the same plan through the Linear MCP server instead:\n\n" \
+               "  spec-plan-build linear import --prefix <KEY> --format json\n\n" \
+               "and hand the result to /plan-linear-import, which calls save_project and\n" \
+               "save_issue with those arguments verbatim.")
+        end
+      end
+    end
+
     # `spec-plan-build docs` — regenerate the conventions document.
     class Docs < Base
       desc "Generate the conventions document from the state machine itself"
@@ -583,6 +729,10 @@ module SpecPlanBuild
     register "resync" do |prefix|
       prefix.register "dirs", Resync::Dirs
       prefix.register "prs", Resync::Prs
+    end
+
+    register "linear" do |prefix|
+      prefix.register "import", Linear::Import
     end
   end
 end

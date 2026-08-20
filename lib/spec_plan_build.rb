@@ -115,6 +115,7 @@ end
   resync
   reporter
   index
+  linear
   agent
   worktree
   publisher

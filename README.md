@@ -1,4 +1,4 @@
-# `~/.agents` 
+# `~/.agents`
 
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/kigster/dot-agents/tree/main.svg?style=svg&circle-token=CCIPRJ_pNgPWKPNmqKb8VHead2bS_f6561ae6a5c2c2ef7003d29a447b3d9c7566b35a)](https://dl.circleci.com/status-badge/redirect/gh/kigster/dot-agents/tree/main)
 
@@ -42,10 +42,10 @@ ______________________________________________________________________
 This repo comes with an opinionated and formalized workflow for designing product features and moving forward.
 
 > [!IMPORTANT]
-> 
-> The process involves: 
+> The process involves:
+>
 > 1. Creating a `.plans` folder at the root of your repo
-> 2. Using the skill `/create-plan
+> 1. Using the skill \`/create-plan
 
 Every project keeps its plans in a `.plans/` directory. Each feature gets one folder, and **the folder's name is its state**.
 
@@ -92,6 +92,7 @@ spec-plan-build create --after 002 k1 sync   # 002.01-⬜️-k1-sync (retroactiv
 spec-plan-build status                       # the table; exits 1 if a name lies
 spec-plan-build resync dirs                  # folder emoji vs folder contents
 spec-plan-build resync prs                   # [NNN.MM] prefixes on PR titles
+spec-plan-build linear import --prefix TAX   # the plans, as Linear projects and issues
 spec-plan-build docs                         # regenerate the conventions
 ```
 
@@ -108,6 +109,25 @@ It will never reclassify between ⭕️ Blocked and 🅱️ Product Blocked. Tho
 Reads the branch name first, then the diff, and only when the diff touches exactly one plan. Anything ambiguous is **reported and never edited**, even with `--commit`. A pull request that resolves to no plan is proposed as `[DEV.00]` and marked *assumed*, because asserting "this implements no specification" is the author's call, not the tool's.
 
 Requires `gh`. If `gh` prints nothing while exiting zero — the signature of an invalid `GH_TOKEN` shadowing a working keyring login — the tool says so rather than reporting an empty repository.
+
+### `linear import`
+
+Each plan folder becomes a Linear **project**; each `PR-n` work unit inside its `plan.md` becomes an **issue** in that project, carrying the pull requests that implement it. `--prefix` is the team key — the part before the dash in `TAX-41` — and Linear assigns the numbers itself.
+
+It runs **one way**. The folder is the source of truth and Linear is a window onto it; nothing typed into Linear travels back to `.plans`.
+
+The whole decision is made from disk, which is what makes the dry run worth reading: it is not a description of what a push would do, it is the object the push consumes. Each plan then records what it owns in a committed `linear.md`, and that record — a fingerprint per issue — is what makes the second run cost nothing.
+
+Two transports apply the same plan:
+
+```bash
+spec-plan-build linear import --prefix TAX --commit        # needs LINEAR_API_KEY
+spec-plan-build linear import --prefix TAX --format json   # for /plan-linear-import, over MCP
+```
+
+The JSON is shaped as the Linear MCP server's own `save_project` and `save_issue` arguments, so both transports read one contract and cannot drift apart.
+
+A pull request that names no work unit its plan declares is **reported, never guessed at** — filing it under the nearest unit would bury exactly the discrepancy worth seeing.
 
 ______________________________________________________________________
 

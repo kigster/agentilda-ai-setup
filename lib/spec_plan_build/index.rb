@@ -26,6 +26,7 @@ module SpecPlanBuild
       "spec.md" => "Spec",
       "plan.md" => "Plan",
       "pull-requests.md" => "Pull Requests",
+      "linear.md" => "Linear",
       "blocked.md" => "Blocked",
       "delayed.md" => "Deferred",
       "rewrite.md" => "Rewrite",

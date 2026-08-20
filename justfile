@@ -111,6 +111,18 @@ resync-prs-check:
 resync-prs:
     {{ spb }} resync prs --commit
 
+# Show what would be created in Linear: `just linear-check TAX`
+linear-check prefix *args:
+    {{ spb }} linear import --prefix {{ prefix }} {{ args }}
+
+# Create the Linear projects and issues: `just linear-import TAX`
+linear-import prefix *args:
+    {{ spb }} linear import --prefix {{ prefix }} --commit {{ args }}
+
+# Emit the same import as JSON, for the Linear MCP transport
+linear-json prefix *args:
+    {{ spb }} linear import --prefix {{ prefix }} --format json {{ args }}
+
 # Regenerate context/feature-building/spec-plan-build.md from the state machine
 docs: bundle
     {{ spb }} docs --output context/feature-building/spec-plan-build.md
