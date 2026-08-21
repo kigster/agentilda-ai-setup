@@ -1,6 +1,8 @@
-wSpeaking of Auto-Vacuum, you probably know that it's kind of important, right? So why is this important? (Great interview question if you want to break your candidate).
+# PostgreSQL Analyze Command
 
-#### TX Wraparound And a Very Bad Long Day (Week?) @ The Office
+Why we Auto-Vacuum.
+
+## TX Wraparound And a Very Bad Long Day (Week?) @ The Office
 
 Well, very very briefly, each transaction in PostgreSQL is tagged with a 32-bit integer, and unlike nearly every other integer in this database it is **unsigned** — so there is no "2 billion in each direction", the space is 2³² ≈ 4.295B, full stop. Only half of it (2³¹ ≈ 2.147B) can "live in the past" at any given moment, which is where the real ~2.1B horizon comes from.
 
