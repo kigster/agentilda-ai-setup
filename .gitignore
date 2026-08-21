@@ -7,3 +7,5 @@ tmp/
 
 # Developer secrets. Encrypted to .env.encrypted via sopsy; the plaintext never lands in git.
 .env
+.rubymate/
+/plugins/*

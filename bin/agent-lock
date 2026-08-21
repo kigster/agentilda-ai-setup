@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# agent-lock.sh — advisory, cross-session file locks for concurrent AI agents.
+#
+# Several agents routinely run against one checkout at the same time. Git does
+# not help: they share a branch and a working tree, so there is no conflict to
+# resolve — the last writer simply wins and the loser's work vanishes with no
+# error anywhere. This gives them a place to declare intent before writing.
+#
+# Advisory, not enforced. It works because every agent checks, which is why
+# the rule lives in ~/.claude/CLAUDE.md rather than only here.
+#
+# Usage:
+#   agent-lock.sh acquire <path> [intent]   claim a path; exit 1 if held
+#   agent-lock.sh release <path>            release a path you hold
+#   agent-lock.sh check   <path>            who holds it; exit 1 if held
+#   agent-lock.sh list                      every live lock
+#   agent-lock.sh mine                      locks held by this agent
+#   agent-lock.sh release-all               release every lock this agent holds
+#   agent-lock.sh break   <path>            steal a lock; announce it first
+#
+# Identity comes from $AGENT_ID, else $CLAUDE_SESSION_ID, else the job dir
+# name, else the pid. Set AGENT_ID to something a human can recognise.
+#
+# © 2026 Konstantin Gredeskoul
+
+set -euo pipefail
+
+LOCK_DIR="${AGENT_LOCK_DIR:-$HOME/.claude/locks}"
+STALE_MINUTES="${AGENT_LOCK_STALE_MINUTES:-120}"
+
+agent_id() {
+  if [[ -n "${AGENT_ID:-}" ]]; then
+    printf '%s' "$AGENT_ID"
+  elif [[ -n "${CLAUDE_SESSION_ID:-}" ]]; then
+    printf '%s' "${CLAUDE_SESSION_ID:0:8}"
+  elif [[ -n "${CLAUDE_JOB_DIR:-}" ]]; then
+    printf '%s' "$(basename "$CLAUDE_JOB_DIR")"
+  else
+    printf 'pid-%s' "$$"
+  fi
+}
+
+# A lock name that is stable no matter which directory the agent runs from:
+# <repo>--<path relative to repo root>, with separators flattened.
+slug() {
+  local target="$1" root name rel
+  root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  name="$(basename "$root")"
+  rel="$(python3 -c 'import os,sys; print(os.path.relpath(os.path.abspath(sys.argv[1]), sys.argv[2]))' "$target" "$root")"
+  printf '%s--%s' "$name" "$(printf '%s' "$rel" | tr '/ ' '__' | tr -cd 'A-Za-z0-9._-')"
+}
+
+lockfile() { printf '%s/%s.lock' "$LOCK_DIR" "$(slug "$1")"; }
+
+holder() { [[ -f "$1" ]] && sed -n '1p' "$1" || true; }
+
+is_stale() {
+  [[ -n "$(find "$1" -mmin "+${STALE_MINUTES}" 2>/dev/null)" ]]
+}
+
+describe() {
+  local f="$1"
+  printf '  %-28s %s\n' "$(holder "$f")" "$(sed -n '2p' "$f")"
+  printf '    claimed %s  intent: %s\n' "$(sed -n '3p' "$f")" "$(sed -n '4p' "$f")"
+  is_stale "$f" && printf '    STALE — older than %s minutes\n' "$STALE_MINUTES"
+  return 0
+}
+
+cmd_acquire() {
+  local target="${1:?path required}" intent="${2:-unspecified}"
+  local f me payload
+  f="$(lockfile "$target")"
+  me="$(agent_id)"
+  mkdir -p "$LOCK_DIR"
+
+  payload="$me
+$(cd "$(dirname "$target")" 2>/dev/null && pwd)/$(basename "$target")
+$(date -u +%Y-%m-%dT%H:%M:%SZ)
+$intent"
+
+  if (set -o noclobber; printf '%s\n' "$payload" > "$f") 2>/dev/null; then
+    echo "ACQUIRED $target  (holder: $me)"
+    return 0
+  fi
+
+  # Re-entrant: already ours.
+  if [[ "$(holder "$f")" == "$me" ]]; then
+    echo "ALREADY YOURS $target"
+    return 0
+  fi
+
+  echo "HELD by another agent — do not write $target"
+  describe "$f"
+  if is_stale "$f"; then
+    echo "  The lock is stale. Announce in the shared channel, then:"
+    echo "    $0 break $target"
+  fi
+  return 1
+}
+
+cmd_release() {
+  local target="${1:?path required}" f me
+  f="$(lockfile "$target")"
+  me="$(agent_id)"
+  [[ -f "$f" ]] || { echo "NOT LOCKED $target"; return 0; }
+  if [[ "$(holder "$f")" != "$me" ]]; then
+    echo "REFUSED — $target is held by $(holder "$f"), not $me"
+    return 1
+  fi
+  rm -f "$f"
+  echo "RELEASED $target"
+}
+
+cmd_check() {
+  local target="${1:?path required}" f
+  f="$(lockfile "$target")"
+  [[ -f "$f" ]] || { echo "FREE $target"; return 0; }
+  echo "HELD $target"
+  describe "$f"
+  return 1
+}
+
+cmd_list() {
+  mkdir -p "$LOCK_DIR"
+  shopt -s nullglob
+  local files=("$LOCK_DIR"/*.lock)
+  ((${#files[@]})) || { echo "No locks held."; return 0; }
+  echo "Locks held (${#files[@]}):"
+  for f in "${files[@]}"; do describe "$f"; done
+}
+
+cmd_mine() {
+  mkdir -p "$LOCK_DIR"
+  shopt -s nullglob
+  local me found=0
+  me="$(agent_id)"
+  for f in "$LOCK_DIR"/*.lock; do
+    [[ "$(holder "$f")" == "$me" ]] || continue
+    found=1
+    describe "$f"
+  done
+  ((found)) || echo "No locks held by $me."
+}
+
+cmd_release_all() {
+  mkdir -p "$LOCK_DIR"
+  shopt -s nullglob
+  local me count=0
+  me="$(agent_id)"
+  for f in "$LOCK_DIR"/*.lock; do
+    [[ "$(holder "$f")" == "$me" ]] || continue
+    rm -f "$f"
+    count=$((count + 1))
+  done
+  echo "Released $count lock(s) held by $me."
+}
+
+cmd_break() {
+  local target="${1:?path required}" f
+  f="$(lockfile "$target")"
+  [[ -f "$f" ]] || { echo "NOT LOCKED $target"; return 0; }
+  echo "BREAKING lock on $target, previously:"
+  describe "$f"
+  rm -f "$f"
+  echo "Broken. You are responsible for having announced this first."
+}
+
+case "${1:-}" in
+  acquire)     shift; cmd_acquire "$@" ;;
+  release)     shift; cmd_release "$@" ;;
+  check)       shift; cmd_check "$@" ;;
+  list)        cmd_list ;;
+  mine)        cmd_mine ;;
+  release-all) cmd_release_all ;;
+  break)       shift; cmd_break "$@" ;;
+  *)
+    sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+    exit 2
+    ;;
+esac

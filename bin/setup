@@ -37,7 +37,7 @@
 
 set -euo pipefail
 
-AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../config" && pwd)"
 CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
 
 # Folders that belong to the Ruby project rather than to any agent, and have no
@@ -200,8 +200,9 @@ say "Installing External Skills via download, for all agents AND Claude."
 
 set +e
 
-./external-skills-for-agents.sh
-./external-skills-for-claude.sh
+./bin/external-skills-for-agents.sh
+./bin/external-skills-for-claude.sh
+./
 
 # --------------------------------------------------------------- summary ----
 
