@@ -22,9 +22,9 @@ module SpecPlanBuild
       def self.inherited(klass)
         super
         klass.option :dir, default: SpecPlanBuild::PLANS_DIR, aliases: ["-D"],
-          desc:          "The .plans directory"
+          desc: "The .plans directory"
         klass.option :quiet, type: :boolean, default: false, aliases: ["-q"],
-          desc:         "Suppress progress output on STDERR"
+          desc: "Suppress progress output on STDERR"
       end
 
       private
@@ -35,7 +35,7 @@ module SpecPlanBuild
         tree = Tree.new(dir: options.fetch(:dir, SpecPlanBuild::PLANS_DIR))
         unless tree.exist?
           error("No #{SpecPlanBuild::PLANS_DIR} directory at\n#{tree.dir}\n\n" \
-                  "Run this from the project root, or pass -D.")
+          "Run this from the project root, or pass -D.")
           exit 66
         end
         tree
@@ -71,16 +71,16 @@ module SpecPlanBuild
       desc "Create the next numbered plan folder"
 
       argument :words, type: :array, required: true,
-        desc:         "The topic, two to five words; becomes the folder slug"
+        desc: "The topic, two to five words; becomes the folder slug"
 
       option :after, aliases: ["-a"],
-        desc:            "Create a retroactive plan in the gap after this plan, e.g. 002"
+        desc: "Create a retroactive plan in the gap after this plan, e.g. 002"
       option :status, aliases: ["-s"],
-        desc:             "Open in a state other than the default"
+        desc: "Open in a state other than the default"
       option :prs, aliases: ["--pr"],
-        desc:          "Document work that already shipped: pull request numbers or URLs, comma separated. Requires --after"
+        desc: "Document work that already shipped: pull request numbers or URLs, comma separated. Requires --after"
       option :spec, type: :boolean, default: true,
-        desc:           "With --prs, write spec.md from what the pull requests did. --no-spec records them and stops, which is fast and offline"
+        desc: "With --prs, write spec.md from what the pull requests did. --no-spec records them and stops, which is fast and offline"
 
       # noinspection RubyMismatchedArgumentType
       example [
@@ -145,8 +145,8 @@ module SpecPlanBuild
 
         feature = Feature.parse(path)
         success("Created #{File.basename(path)}\n\n" \
-                  "#{feature.status.emoji} #{feature.status.label} — #{feature.status.note}\n" \
-                  "#{next_step(path, feature)}")
+        "#{feature.status.emoji} #{feature.status.label} — #{feature.status.note}\n" \
+        "#{next_step(path, feature)}")
       end
 
       # Hand the folder to the writer that already knows how to write a
@@ -199,9 +199,9 @@ module SpecPlanBuild
       desc "Write .plans/INDEX.md: every plan, its goal, its pull requests and its documents"
 
       option :output, aliases: ["-o"],
-        desc:            "Write somewhere other than <plans>/INDEX.md; - for STDOUT"
+        desc: "Write somewhere other than <plans>/INDEX.md; - for STDOUT"
       option :project, aliases: ["-p"],
-        desc:             "Heading for the page, default: the repository's directory name"
+        desc: "Heading for the page, default: the repository's directory name"
 
       example [
         "                     # write .plans/INDEX.md",
@@ -250,7 +250,7 @@ module SpecPlanBuild
         desc "Rename plan folders so the name matches the contents and the NNN.MM form"
 
         option :commit, type: :boolean, default: false,
-          desc:          "Actually rename the folders (default: dry run)"
+          desc: "Actually rename the folders (default: dry run)"
 
         example [
           "                # show what would be renamed",
@@ -291,11 +291,11 @@ module SpecPlanBuild
         desc "Add missing [NNN.MM] prefixes to pull request titles"
 
         option :commit, type: :boolean, default: false,
-          desc:          "Actually retitle the pull requests (default: dry run)"
+          desc: "Actually retitle the pull requests (default: dry run)"
         option :state, default: "all", values: %w[open closed merged all],
-          desc:            "Which pull requests to consider"
+          desc: "Which pull requests to consider"
         option :adopt, type: :boolean, default: true,
-          desc:           "Mint a retroactive plan folder for every pull request that resolves to none. --no-adopt flags them for a human instead"
+          desc: "Mint a retroactive plan folder for every pull request that resolves to none. --no-adopt flags them for a human instead"
 
         example [
           "                # show what would be retitled, and what would be adopted",
@@ -340,8 +340,10 @@ module SpecPlanBuild
           assumed = applicable.select(&:assumed?)
 
           applicable.each do |c|
-            note = if c.adopted? then paint("   (new plan)", :magenta)
-            elsif c.assumed? then paint("   (assumed)", :yellow)
+            note = if c.adopted?
+              paint("   (new plan)", :magenta)
+            elsif c.assumed?
+              paint("   (assumed)", :yellow)
             end
             say("##{c.number}  #{c.new_title}#{note}")
           end
@@ -359,10 +361,10 @@ module SpecPlanBuild
           return if assumed.empty?
 
           warn("#{assumed.size} title#{"s" unless assumed.size == 1} would get " \
-                 "[#{SpecPlanBuild::NO_PLAN_PREFIX}] because no plan resolved.\n\n" \
-                 "That is an assertion about intent, and it is yours to make: check each one\n" \
-                 "before committing. A pull request that writes a plan's spec belongs to that\n" \
-                 "plan however its branch was named.")
+          "[#{SpecPlanBuild::NO_PLAN_PREFIX}] because no plan resolved.\n\n" \
+          "That is an assertion about intent, and it is yours to make: check each one\n" \
+          "before committing. A pull request that writes a plan's spec belongs to that\n" \
+          "plan however its branch was named.")
         end
 
         # Creating folders is a bigger act than editing a title, so it is
@@ -394,7 +396,7 @@ module SpecPlanBuild
         def self.inherited(klass)
           super
           klass.argument :team, required: true,
-            desc:            "The Linear team key that prefixes its issues, e.g. TAX"
+            desc: "The Linear team key that prefixes its issues, e.g. TAX"
         end
 
         private
@@ -466,17 +468,17 @@ module SpecPlanBuild
         desc "Create Linear issues from the plans: one per folder, one child per work unit"
 
         option :project, aliases: ["-p", "--project-url", "--project-id"],
-          desc:             "The project to file everything under: its URL, its name, or its id"
+          desc: "The project to file everything under: its URL, its name, or its id"
         option :commit, type: :boolean, default: false,
-          desc:          "Actually create and update in Linear (default: dry run)"
+          desc: "Actually create and update in Linear (default: dry run)"
         option :format, default: "text", values: %w[text json],
-          desc:          "json emits the exact arguments the Linear MCP tools take"
+          desc: "json emits the exact arguments the Linear MCP tools take"
         option :since, aliases: ["-s"],
-          desc:           "Skip plans numbered below this, e.g. 010.00"
+          desc: "Skip plans numbered below this, e.g. 010.00"
         option :status,
           desc: "Only plans in these states: a comma-separated list of status keys"
         option :force, type: :boolean, default: false,
-          desc:         "Update everything, whether the plan has changed or not"
+          desc: "Update everything, whether the plan has changed or not"
 
         example [
           "TAX -p 'US Tax Law: Self Contained Ruby Gem'   # show what would be created",
@@ -642,17 +644,17 @@ module SpecPlanBuild
       desc "Run specialist agents over the plans until nothing changes"
 
       option :commit, type: :boolean, default: false,
-        desc:          "Actually invoke the agents (default: dry run, prints the plan of work)"
+        desc: "Actually invoke the agents (default: dry run, prints the plan of work)"
       option :rounds, default: "10", desc: "Hard ceiling on loop iterations"
       option :agent, desc: "Only run this one agent"
       option :root, desc: "Repository root the agents work in (default: the .plans parent)"
       option :isolation, default: "worktree", values: %w[worktree shared],
-        desc:                "worktree: a checkout and branch per plan, run in parallel. shared: one tree, serial"
+        desc: "worktree: a checkout and branch per plan, run in parallel. shared: one tree, serial"
       option :jobs, aliases: ["-j"],
-        desc:           "Agents to run at once (default: cores - 2, capped at 12)"
+        desc: "Agents to run at once (default: cores - 2, capped at 12)"
       option :push_pr, aliases: ["-p"],
-        desc:              "Push each finished branch and open a PR titled [NNN.MM](X). " \
-                             "Pass a letter to force it; omit to continue the plan's sequence. Requires --commit"
+        desc: "Push each finished branch and open a PR titled [NNN.MM](X). " \
+        "Pass a letter to force it; omit to continue the plan's sequence. Requires --commit"
 
       example [
         "                       # show which agent would take which plan",
@@ -675,7 +677,7 @@ module SpecPlanBuild
 
         if isolation == :worktree && !Worktree.new(root:).repository?
           error("#{root} is not a git repository, so plans cannot be isolated.\n\n" \
-                  "Run with --isolation shared to work in one tree, serially.")
+          "Run with --isolation shared to work in one tree, serially.")
           exit 66
         end
 

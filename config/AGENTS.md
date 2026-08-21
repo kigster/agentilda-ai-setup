@@ -238,11 +238,11 @@ Please reference the file [~/.agents/context/postgresql.md](/Users/kig/.agents/c
 **Before you create or edit any file, claim the directory or file you are about to write.**
 
 ```bash
-~/.claude/agent-lock.sh acquire hanami "scaffolding the API app"   # claim it
-~/.claude/agent-lock.sh check   frontend                           # who holds it?
-~/.claude/agent-lock.sh list                                       # everything held
-~/.claude/agent-lock.sh release hanami                             # when done
-~/.claude/agent-lock.sh release-all                                # end of session
+~/.agents/bin/agent-lock acquire hanami "scaffolding the API app"   # claim it
+~/.agents/bin/agent-lock check   frontend                           # who holds it?
+~/.agents/bin/agent-lock list                                       # everything held
+~/.agents/bin/agent-lock release hanami                             # when done
+~/.agents/bin/agent-lock release-all                                # end of session
 ```
 
 Rules:

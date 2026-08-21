@@ -33,7 +33,9 @@ gem "dry-monads"      # Monads for functional programming
 gem "dry-effects"     # Effects for functional programming
 
 group :development do
+  gem "colored2"
   gem "standard"
+  gem "irb"
 end
 
 group :test do
