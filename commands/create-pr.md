@@ -26,10 +26,11 @@ spec-plan-build status          # what plans exist, and their state
 Resolve the plan from the branch name first (`<user>/NNN.MM-slug`), then from the diff, and **only** when the diff touches exactly one plan folder.
 
 - **One plan resolved** → the title is `[NNN.MM](X) Folder Title Cased`, where `X` is the next unused letter for that plan. A plan's first pull request is `(A)`, its second `(B)`, and so on. The words after the letter are the folder slug title-cased — `002.00-⭐️-tenancy-households` gives `[002.00](A) Tenancy Households`.
-- **No plan resolves** and the work genuinely implements no specification — a dependency bump, CI configuration, a hotfix, developer tooling → the title is `[DEV.00] <description>`.
+- **No plan resolves** and the work genuinely implements no specification — a dependency bump, CI configuration, a hotfix, developer tooling → the title is `[dev] <description>`.
+- **No plan resolves and you cannot assert it implements none** → `[none] <description>`. That marker claims nothing; it records a question somebody still has to answer.
 - **Several plans, or an ambiguous one** → stop and ask. Do not pick. A wrong number does not announce itself: it files the work under a plan that did not do it and leaves the plan that did looking untouched.
 
-Never invent `[DEV.00]` to escape an unresolved lookup. Asserting "this belongs to no specification" is a claim about intent, and it is the author's to make.
+Never invent `[dev]` to escape an unresolved lookup. Asserting "this belongs to no specification" is a claim about intent, and it is the author's to make — and once made, nobody reopens it. `[none]` is the honest marker for a lookup that failed.
 
 ## 1. Assess
 
