@@ -70,7 +70,7 @@ module SpecPlanBuild
       # Words, not just a fraction. Half of a two-word folder name is one
       # word, which is the case that was already established as too thin —
       # "core" alone claiming `deterministic-core-and-as-of`.
-      MINIMUM_WORDS = 2
+      MINIMUM_WORDS = 3
 
       NOISE = %w[the and for with from into that this add adds added fix fixes
         update updates use uses spec plan pull request pr tax app web api].freeze

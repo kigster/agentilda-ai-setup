@@ -40,6 +40,7 @@ module SpecPlanBuild
     # indication anything was missed.
     PLACEMENTS = {
       new: Placement.new(type: "backlog", name: "Backlog", labels: []),
+      researched: Placement.new(type: "backlog", name: "Backlog", labels: %w[researched]),
       planned: Placement.new(type: "unstarted", name: "Todo", labels: []),
       building: Placement.new(type: "started", name: "In Progress", labels: []),
       ready_for_review: Placement.new(type: "started", name: "In Review", labels: []),

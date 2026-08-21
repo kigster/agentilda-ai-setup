@@ -34,7 +34,8 @@ module SpecPlanBuild
     # work back in the queue, it does not skip the reviewer.
     SPINE = {
       retroactive: :planned,
-      new: :planned,
+      new: :researched,
+      researched: :planned,
       planned: :building,
       building: :ready_for_review,
       ready_for_review: :in_review,
@@ -51,7 +52,8 @@ module SpecPlanBuild
     # absence of documents rather than the presence of any.
     PREFERENCE = %i[
       discarded rolled_back shit deferred blocked product_blocked
-      deployed approved rejected in_review ready_for_review building planned new
+      deployed approved rejected in_review ready_for_review building planned
+      researched new
       retroactive
     ].freeze
 
@@ -93,8 +95,18 @@ module SpecPlanBuild
         transitions from: %i[retroactive blocked product_blocked deferred], to: :new
       end
 
+      event :research, guard: :justified? do
+        transitions from: %i[new retroactive blocked product_blocked deferred], to: :researched
+      end
+
+      # `new` stays in this list. The spine routes a plan through research, and
+      # that is what the agent loop follows — but a specification somebody has
+      # already researched by hand should not have to pretend otherwise to get
+      # planned. What research buys is not enforced here; it is enforced by
+      # `yoda-writer` handling `researched` and nothing else.
       event :plan, guard: :justified? do
-        transitions from: %i[new retroactive shit blocked product_blocked deferred], to: :planned
+        transitions from: %i[researched new retroactive shit blocked product_blocked deferred],
+          to: :planned
       end
 
       event :build, guard: :justified? do
