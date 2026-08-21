@@ -5,17 +5,14 @@ module SpecPlanBuild
     # One unit of work inside a plan — the thing that becomes a Linear issue.
     #
     # @!attribute [r] key
-    #   @return [String] "PR-1", or {Units::WHOLE} for an undivided plan
+    #   @return [String] "PR-1" from a plan.md heading, or "#38" from a pull request
     # @!attribute [r] title
     #   @return [String] the heading's words, without the "PR-1 —" part
     # @!attribute [r] body
     #   @return [String] everything under the heading, as written
     # @!attribute [r] pull_requests
     #   @return [Array<SpecPlanBuild::PullRequest>] the ones this unit claims
-    Unit = Data.define(:key, :title, :body, :pull_requests) do
-      # @return [Boolean] whether this stands for the plan as a whole
-      def whole? = key == Units::WHOLE
-    end
+    Unit = Data.define(:key, :title, :body, :pull_requests)
 
     # Reads the work units out of a plan folder.
     #
@@ -42,9 +39,6 @@ module SpecPlanBuild
     # whole plan, which is the honest reading of a plan that never divided
     # itself.
     class Units
-      # The key given to the unit that stands for an undivided plan.
-      WHOLE = "PLAN"
-
       # `## 2. PR-1 — …`, `### PR 020.01 — …`, and the several other ways the
       # same heading gets typed. The hashes are escaped because an unescaped
       # `#{` in a regexp literal is interpolation.
@@ -61,6 +55,13 @@ module SpecPlanBuild
       # the moment the work moves.
       GLYPH_NOTE = /\s*\((?:[^\w\s(][^)]*)\)\s*\z/
 
+      # The same thing without the brackets: `… over the law plane ☢️ deferred`.
+      TRAILING_GLYPH = /\s*[\u{2190}-\u{2BFF}\u{1F000}-\u{1FAFF}][^\n]*\z/
+
+      # A plan number the author typed into the heading as well. The issue for
+      # the plan already carries it.
+      OWN_NUMBER = /\A\[\d{1,3}(?:\.\d{2})?\]\s*/
+
       # Pull request numbers named in the heading: "(✔ #38)".
       NUMBERED = /#(\d+)\b/
 
@@ -69,8 +70,34 @@ module SpecPlanBuild
         @subject = subject
       end
 
-      # @return [Array<SpecPlanBuild::Linear::Unit>] never empty
-      def all = @all ||= divided.empty? ? [whole] : attach(divided)
+      # The units of work inside a plan, which become its sub-issues.
+      #
+      # A plan that declares its units in `plan.md` gets those. A plan that
+      # does not — a retroactive one, or one written before the convention —
+      # gets one per pull request instead, because a pull request that shipped
+      # is a unit of work whether or not anybody wrote it down first.
+      #
+      # A plan with neither is legitimately empty: it has been specified and
+      # nothing has been divided or built yet. Its issue stands alone until
+      # somebody plans it.
+      #
+      # @return [Array<SpecPlanBuild::Linear::Unit>] possibly empty
+      def all = @all ||= divided.empty? ? from_pull_requests : attach(divided)
+
+      # A pull request title carries the plan number this tool put there, and
+      # often the unit it implements. Neither belongs in an issue title: the
+      # issue for the plan already says which plan, and the attachment already
+      # says which pull request.
+      #
+      # @param title [String]
+      # @return [String]
+      def self.clean_title(title)
+        title.to_s
+          .sub(/\A\[[^\]]*\]\s*/, "")
+          .sub(/\A(?:spec\s*)?\d{1,3}(?:\.\d{2})?\s*[—–:.-]?\s*/i, "")
+          .sub(/\APR[\s_-]?\d+(?:\.\d+)?\s*[—–:.-]?\s*/i, "")
+          .strip
+      end
 
       private
 
@@ -80,13 +107,22 @@ module SpecPlanBuild
       # @return [Array<SpecPlanBuild::Linear::Unit>] possibly empty
       def divided = @divided ||= merge(sections).map { |key, title, body| Unit.new(key:, title:, body:, pull_requests: []) }
 
-      # The plan as one unit, for a folder that never divided itself.
+      # One unit per pull request, for a plan that declared none itself.
       #
-      # @return [SpecPlanBuild::Linear::Unit]
-      def whole
-        Unit.new(key: WHOLE, title: subject.feature.title,
-          body: subject.goal.join("\n\n"), pull_requests: subject.pull_requests)
+      # Keyed by pull request number rather than by position, so the key means
+      # something on its own and cannot collide with the `PR-1` keys a
+      # `plan.md` would introduce later.
+      #
+      # @return [Array<SpecPlanBuild::Linear::Unit>]
+      def from_pull_requests
+        subject.pull_requests.map do |pr|
+          Unit.new(key: "##{pr.number}", title: clean_pr(pr.title), body: "", pull_requests: [pr])
+        end
       end
+
+      # @param title [String]
+      # @return [String]
+      def clean_pr(title) = self.class.clean_title(title)
 
       # @return [Array<Array(String, String, String)>] key, title, body
       def sections
@@ -227,7 +263,10 @@ module SpecPlanBuild
           .sub(/\A\([^)]*\)\s*/, "")     # "(010a) — Per-person taxes" — a nickname, not a title
           .sub(/\A[—–:.-]+\s*/, "")
           .sub(GLYPH_NOTE, "")
-          .gsub(/[*_`]/, "")
+          .sub(TRAILING_GLYPH, "")
+          .gsub(/[*`]/, "")                # before OWN_NUMBER: the number is often inside backticks
+          .sub(/\A_+/, "").sub(/_+\z/, "")  # emphasis, but never `signed_off`
+          .sub(OWN_NUMBER, "")
           .strip
       end
     end

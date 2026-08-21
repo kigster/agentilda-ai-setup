@@ -4,6 +4,7 @@ source "https://rubygems.org"
 # Various Gems
 gem "aasm"             # State Machine
 gem "concurrent-ruby" # Concurrency Primitives
+gem "fuzzy-string-match" # Jaro-Winkler, for matching a pull request title to a plan folder
 gem "parallel"        # Fan work out over threads or processes
 gem "pastel"          # ANSI Coloring
 gem "unicode-display_width" # How many terminal cells a string occupies

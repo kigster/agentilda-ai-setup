@@ -141,22 +141,35 @@ RSpec.describe SpecPlanBuild::Linear::Units, :tree do
   end
 
   describe "a plan that never divided itself" do
-    it "imports as one unit standing for the whole plan" do
+    def units_of(ordinal) = described_class.new(subject: SpecPlanBuild::Tree.new(dir: plans_root).find(ordinal)).all
+
+    # Its own issue still exists — the folder always gets one. What it has no
+    # business inventing is a child standing for the same thing.
+    it "has no units at all when nothing has been planned or built" do
       plans do |t|
         t.plan "012.00", :new, "small-thing", files: {"spec.md" => spec_body(title: "Small Thing")}
       end
-      found = described_class.new(subject: SpecPlanBuild::Tree.new(dir: plans_root).find("012.00")).all
 
-      expect(found.map(&:key)).to eq([described_class::WHOLE])
+      expect(units_of("012.00")).to be_empty
     end
 
-    it "titles that unit with the plan's words rather than a pull request number" do
+    # A pull request that shipped is a unit of work whether or not anybody
+    # wrote it down first. This is the retroactive case.
+    it "takes one unit per pull request when it declared none itself" do
       plans do |t|
-        t.plan "012.00", :new, "small-thing", files: {"spec.md" => spec_body(title: "Small Thing")}
+        t.plan "013.00", :approved, "shipped-anyway",
+          prs: [t.merged(4, "[013.00] Ship the thing"), t.merged(5, "Ship the other thing")]
       end
-      found = described_class.new(subject: SpecPlanBuild::Tree.new(dir: plans_root).find("012.00")).all
 
-      expect(found.first.title).to eq("Small Thing")
+      expect(units_of("013.00").map(&:key)).to eq(["#4", "#5"])
+    end
+
+    it "strips the plan number this tool put on the pull request title" do
+      plans do |t|
+        t.plan "013.00", :approved, "shipped-anyway", prs: [t.merged(4, "[013.00] Ship the thing")]
+      end
+
+      expect(units_of("013.00").first.title).to eq("Ship the thing")
     end
   end
 

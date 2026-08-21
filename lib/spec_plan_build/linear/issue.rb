@@ -36,6 +36,11 @@ module SpecPlanBuild
       # The file this reads and writes.
       FILENAME = "linear.md"
 
+      # The unit key given to the issue that stands for the whole folder. Its
+      # children carry their own unit keys; it carries this, so one table can
+      # hold a plan and its parts without a second shape to parse.
+      PARENT = "PLAN"
+
       # Fingerprint of a payload, short enough to read in a table.
       #
       # @param payload [Object] anything with a stable #inspect ordering
@@ -43,11 +48,11 @@ module SpecPlanBuild
       def self.digest(payload) = ::Digest::SHA256.hexdigest(JSON.generate(payload))[0, 8]
 
       # @param team [String] the team key, e.g. "TAX"
-      # @param project [Hash, nil] `{name:, url:, digest:}`
+      # @param project [Hash, nil] `{name:, url:}`
       # @param issues [Array<SpecPlanBuild::Linear::Issue>]
       # @return [String]
       def self.render(team:, project:, issues:)
-        rows = issues.map { |i|
+        rows = order(issues).map { |i|
           "| #{i.unit} | #{link(i.identifier, i.url)} | #{escape(i.title)} | #{i.state} | #{i.digest} |"
         }
 
@@ -66,13 +71,23 @@ module SpecPlanBuild
         MARKDOWN
       end
 
+      # The folder's own issue first, then its children. A table that opens
+      # with a child reads as a list of unrelated issues.
+      #
+      # @param issues [Array<SpecPlanBuild::Linear::Issue>]
+      # @return [Array<SpecPlanBuild::Linear::Issue>]
+      def self.order(issues)
+        parent, children = issues.partition { |i| i.unit == PARENT }
+        parent + children
+      end
+
       # @param team [String]
       # @param project [Hash, nil]
       # @return [String]
       def self.heading(team, project)
         return "Team **#{team}**." unless project
 
-        "Team **#{team}** · project #{link(project[:name], project[:url])} `#{project[:digest]}`"
+        "Team **#{team}** · project #{link(project[:name], project[:url])}"
       end
 
       # @param text [String]
@@ -97,8 +112,13 @@ module SpecPlanBuild
 
       # The project this plan was last filed under, if any.
       #
-      # @return [Hash, nil] `{name:, url:, digest:}`
+      # @return [Hash, nil] `{name:, url:}`
       def project = (@project ||= [parse_project])[0]
+
+      # The issue standing for the folder itself.
+      #
+      # @return [SpecPlanBuild::Linear::Issue, nil]
+      def parent = by_unit[PARENT]
 
       # @return [String] absolute path to `linear.md`
       def path = File.join(dir, FILENAME)
@@ -157,7 +177,7 @@ module SpecPlanBuild
         link = line.match(/project\s+\[([^\]]+)\]\((\S+?)\)/i)
         return nil unless link
 
-        {name: link[1].strip, url: link[2], digest: line[/`([0-9a-f]{4,})`/, 1].to_s}
+        {name: link[1].strip.gsub(/\\([|\\])/, '\1'), url: link[2]}
       end
     end
   end

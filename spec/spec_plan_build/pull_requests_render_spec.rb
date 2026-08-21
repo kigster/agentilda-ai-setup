@@ -53,4 +53,38 @@ RSpec.describe SpecPlanBuild::PullRequests do
       expect(described_class.render([pr(number: 12, body: "")])).to match(/No description was written/)
     end
   end
+  # Found by a fixture, confirmed against `render` + `parse`: every title this
+  # tool writes now opens with a plan number, so the row reads
+  # `[[013.00] Ship it](url)` — and a markdown link whose text starts with `[`
+  # does not parse. The title came back with the URL glued to it and the URL
+  # came back nil, losing every pull request link on the index page and every
+  # attachment on every Linear issue.
+  describe "a title that already carries its plan number" do
+    let(:round_trip) do
+      Dir.mktmpdir do |dir|
+        File.write(File.join(dir, "pull-requests.md"),
+          described_class.render([{number: 4, title:, url: "https://example.com/repo/pull/4",
+                                   state: "Merged 🟣", body: "why"}]))
+        SpecPlanBuild::PullRequests.new(dir:).all.first
+      end
+    end
+
+    let(:title) { "[013.00] Ship the thing" }
+
+    it "survives being written and read back" do
+      expect(round_trip.title).to eq("[013.00] Ship the thing")
+    end
+
+    it "keeps the url, which is the part whose loss is not cosmetic" do
+      expect(round_trip.url).to eq("https://example.com/repo/pull/4")
+    end
+
+    context "with a pipe in it as well, which ends a table cell" do
+      let(:title) { "[013.00] Guard against a || b" }
+
+      it "survives both escapes at once" do
+        expect(round_trip).to have_attributes(title:, url: "https://example.com/repo/pull/4")
+      end
+    end
+  end
 end

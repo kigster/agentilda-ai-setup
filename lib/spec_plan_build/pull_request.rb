@@ -27,6 +27,11 @@ module SpecPlanBuild
 
   # Extracts the pull request roll-up from a plan folder.
   class PullRequests
+    # A markdown link whose text may contain escaped brackets, because every
+    # title this tool writes now opens with `\[NNN.MM\]`. Matching `[^\]]+`
+    # stops at the escaped `]` and loses the URL with it.
+    LINK = /\[((?:\\.|[^\]\\])+)\]\((https?:[^)\s]+)\)/
+
     # Canonical wording for the states we recognise, most specific first.
     STATES = [
       [/\bclosed\b|\bunmerged\b|\babandoned\b/i, "Closed 🔴"],
@@ -87,12 +92,23 @@ module SpecPlanBuild
       MARKDOWN
     end
 
-    # A `|` inside a cell ends the cell, and a title containing one is not
-    # unusual — "fix: guard against a || b".
+    # Three characters have to survive a round trip through a table cell.
+    #
+    # A `|` ends the cell, and a title containing one is not unusual —
+    # "fix: guard against a || b".
+    #
+    # `[` and `]` are newer and cost more. Every title this tool writes now
+    # opens with a plan number, so the row reads `[[013.00] Ship it](url)` —
+    # and a markdown link whose text starts with `[` does not parse. The
+    # title came back with the URL glued to it and `url` came back nil, which
+    # is not a cosmetic loss: it is every pull request link on the page, and
+    # the attachment on every Linear issue.
     #
     # @param text [String]
     # @return [String]
-    def self.escape(text) = text.to_s.gsub("|", "\\|").gsub(/\s+/, " ").strip
+    def self.escape(text)
+      text.to_s.gsub(/([\[\]|])/) { "\\#{$1}" }.gsub(/\s+/, " ").strip
+    end
 
     # @param dir [String] absolute path to the plan folder
     def initialize(dir:)
@@ -144,12 +160,17 @@ module SpecPlanBuild
     # @return [SpecPlanBuild::PullRequest, nil]
     def row_to_pr(cells, idx)
       title_cell = cells[idx[:title] || 1].to_s
-      link_cell = cells.find { |c| c.match?(/\[[^\]]+\]\(https?:[^)]+\)/) } || title_cell
-      link = link_cell.match(/\[([^\]]+)\]\((https?:[^)\s]+)\)/)
+
+      # The title comes from the title column and the URL from wherever it is.
+      # Scanning every cell for the first link and taking both from it reads
+      # `| [#24](…) | Split verified into signed_off |` as an issue called
+      # "#24", because the number column is a link too and comes first.
+      titled = title_cell.match(LINK)
+      link = titled || cells.filter_map { |c| c.match(LINK) }.first
 
       url = link && link[2]
-      title = link ? link[1] : title_cell.gsub(/[*_`]/, "").strip
-      title = title.gsub(/\\([|\\])/, '\1')   # undo the escaping {.render} applies
+      title = titled ? titled[1] : unformat(title_cell)
+      title = title.gsub(/\\([\[\]|\\])/, '\1')   # undo the escaping {.render} applies
       number = cells[idx[:number] || 0].to_s[/\d+/] || url&.[](%r{/(?:pull|merge_requests)/(\d+)}, 1)
       return nil if title.empty? && url.nil?
 
@@ -167,6 +188,18 @@ module SpecPlanBuild
         PullRequest.new(number: num, title: "Pull request ##{num}", state: "Unknown",
           url: text[%r{https?://\S+?/(?:pull|merge_requests)/#{num}\b}])
       end
+    end
+
+    # Strip the markdown a title was wrapped in without eating the title.
+    #
+    # An underscore between letters is not emphasis, it is an identifier —
+    # `signed_off`, `as_of`, `pull_requests`. Removing every underscore turned
+    # "Split verified into signed_off" into "signedoff" on the way to Linear.
+    #
+    # @param cell [String]
+    # @return [String]
+    def unformat(cell)
+      cell.to_s.gsub(/[*`]/, "").sub(/\A_+/, "").sub(/_+\z/, "").strip
     end
 
     # @param cell [String]

@@ -14,7 +14,7 @@ RSpec.describe SpecPlanBuild::Linear::Issues, :tree do
       state: "Done", digest: "9f2c1a04")]
   end
 
-  let(:project) { {name: "002.00 Dev Foundation", url: "https://linear.app/p-1", digest: "aabbccdd"} }
+  let(:project) { {name: "US Tax Law: Self Contained Ruby Gem", url: "https://linear.app/p-1"} }
 
   before do
     plans { |t| t.plan "002.00", :approved, "dev-foundation", prs: [t.merged(2, "Test rig")] }

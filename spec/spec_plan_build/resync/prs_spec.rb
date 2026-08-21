@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Backs `/spec-plan-build resync prs` — puts an [NNN.MM] prefix on every pull
-# request title that lacks one, and [DEV.00] on the ones that implement no plan.
+# request title that lacks one, and [dev] on the ones that implement no plan.
 RSpec.describe SpecPlanBuild::Resync::Prs, :tree do
   subject(:resync) { described_class.new(tree: SpecPlanBuild::Tree.new(dir: plans_root), github:) }
 
@@ -110,8 +110,8 @@ RSpec.describe SpecPlanBuild::Resync::Prs, :tree do
     context "when nothing resolves — tech debt, CI, a dependency bump" do
       let(:pulls) { [pull(15, "Bump json from 2.21.1 to 2.21.2", branch: "dependabot/bundler/json-2.21.2")] }
 
-      it "proposes [DEV.00], which asserts 'no plan' rather than leaving it ambiguous" do
-        expect(changes.first.new_title).to eq("[DEV.00] Bump json from 2.21.1 to 2.21.2")
+      it "proposes [dev], which asserts 'no plan' rather than leaving it ambiguous" do
+        expect(changes.first.new_title).to eq("[dev] Bump json from 2.21.1 to 2.21.2")
       end
 
       it "marks it an assumption, because asserting 'no plan' is the author's call" do

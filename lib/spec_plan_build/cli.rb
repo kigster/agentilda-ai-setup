@@ -386,12 +386,87 @@ module SpecPlanBuild
 
     # `spec-plan-build linear …`
     module Linear
-      # `linear import` — the plans, as Linear projects and issues.
-      class Import < Base
-        desc "Create Linear projects and issues from the plans, one per work unit"
+      # Shared by both linear commands: the team is which workspace this is
+      # about, so it is an argument rather than a flag. There is no default —
+      # a tool that picks a team for you when you forget to say which is a
+      # tool that files a quarter of somebody's work in the wrong place.
+      class Team < Base
+        def self.inherited(klass)
+          super
+          klass.argument :team, required: true,
+            desc:            "The Linear team key that prefixes its issues, e.g. TAX"
+        end
 
-        option :prefix, aliases: ["-p", "--team"],
-          desc:            "The Linear team key that prefixes its issues, e.g. TAX"
+        private
+
+        # The key is checked before anything reaches for a token, so a typo in
+        # the team name reports the typo rather than an authentication
+        # problem the user does not have.
+        #
+        # @param team [String]
+        # @return [SpecPlanBuild::Linear::Survey]
+        def survey_for(team, tree)
+          key = SpecPlanBuild::Linear.key!(team)
+          api = SpecPlanBuild::Linear::API.new(token: SpecPlanBuild::Linear::API.token_from_env)
+          projects = UI.spinning("Listing #{key} projects") { api.projects(api.team(key)[:id]) }
+          [api, SpecPlanBuild::Linear::Survey.new(tree:, projects:)]
+        end
+      end
+
+      # `linear projects` — what the team already has.
+      class Projects < Team
+        desc "List the Linear projects a team owns, and which plans they already cover"
+
+        example [
+          "TAX        # every project the team owns, matched against .plans"
+        ]
+
+        # @param team [String]
+        # @param options [Hash]
+        # @return [void]
+        def call(team:, **options)
+          tree = tree_for(options)
+          _api, survey = survey_for(team, tree)
+
+          survey.projects.each { |project| puts row(project) }
+          return if quiet?(options)
+
+          survey.projects.each do |project|
+            say("#{paint(project["name"], :cyan)}\n    #{paint(project["url"].to_s, :bright_black)}")
+          end
+          report_descriptions(survey)
+        rescue SpecPlanBuild::Error => e
+          error(e.message)
+          exit 69
+        end
+
+        private
+
+        # @param project [Hash]
+        # @return [String]
+        def row(project)
+          [project["name"], project.dig("status", "name") || "-", project["url"]].join("\t")
+        end
+
+        # @param survey [SpecPlanBuild::Linear::Survey]
+        # @return [void]
+        def report_descriptions(survey)
+          return if survey.undescribed.empty?
+
+          warn("#{survey.undescribed.size} of these say nothing about themselves:\n\n" \
+               "#{survey.undescribed.map { |p| "  #{p["name"]}" }.join("\n")}\n\n" \
+               "A name is three or four words and half of them are the company's. If you " \
+               "want anything here to reason about which project a plan belongs to, that " \
+               "reasoning has to have a sentence to read.")
+        end
+      end
+
+      # `linear import` — the plans, as Linear issues under one of your projects.
+      class Import < Team
+        desc "Create Linear issues from the plans: one per folder, one child per work unit"
+
+        option :project, aliases: ["-p", "--project-url", "--project-id"],
+          desc:             "The project to file everything under: its URL, its name, or its id"
         option :commit, type: :boolean, default: false,
           desc:          "Actually create and update in Linear (default: dry run)"
         option :format, default: "text", values: %w[text json],
@@ -401,21 +476,24 @@ module SpecPlanBuild
         option :status,
           desc: "Only plans in these states: a comma-separated list of status keys"
         option :force, type: :boolean, default: false,
-          desc:         "Update every issue, whether the plan has changed or not"
+          desc:         "Update everything, whether the plan has changed or not"
 
         example [
-          "--prefix TAX                     # show what would be created",
-          "--prefix TAX --commit            # do it, using LINEAR_API_KEY",
-          "--prefix TAX --format json       # hand it to the MCP transport instead",
-          "--prefix TAX --since 010.00      # only the recent plans",
-          "--prefix TAX --status building,in_review"
+          "TAX -p 'US Tax Law: Self Contained Ruby Gem'   # show what would be created",
+          "TAX -p https://linear.app/acme/project/…       # a URL works too",
+          "TAX -p 'Ruby Gem' --commit                     # do it, using LINEAR_API_KEY",
+          "TAX -p 'Ruby Gem' --format json                # hand it to the MCP transport instead",
+          "TAX -p 'Ruby Gem' --since 010.00               # only the recent plans",
+          "TAX -p 'Ruby Gem' --status building,in_review"
         ]
 
+        # @param team [String]
         # @param options [Hash]
         # @return [void]
-        def call(**options)
+        def call(team:, **options)
           tree = tree_for(options)
-          import = build(tree, options)
+          require_project!(options)
+          import = build(tree, team, resolve_project(team, tree, options), options)
 
           return $stdout.puts(import.to_json) if options[:format] == "json"
 
@@ -424,7 +502,7 @@ module SpecPlanBuild
             return
           end
 
-          commit?(options) ? push(import, tree, options) : preview(import, options)
+          preview(import, options)
         rescue SpecPlanBuild::Error => e
           error(e.message)
           exit 69
@@ -432,12 +510,39 @@ module SpecPlanBuild
 
         private
 
-        # @param tree [SpecPlanBuild::Tree]
+        # Looking the project up costs a token, and the whole point of
+        # `--format json` is to work without one. A name needs no lookup — the
+        # MCP server resolves a project by name itself — so only a URL or an
+        # id, which do not carry a name, force the network.
+        #
+        # @return [Hash] `{"id", "name", "url"}`
+        def resolve_project(team, tree, options)
+          reference = options[:project].to_s
+          looks_up = reference.match?(%r{\Ahttps?://}) || reference.match?(/\A[0-9a-f-]{32,}\z/)
+          return {"id" => nil, "name" => reference, "url" => nil} if !looks_up && offline?
+
+          _api, survey = survey_for(team, tree)
+          survey.project(reference)
+        end
+
+        # @return [Boolean]
+        def offline? = SpecPlanBuild::Linear::API.token_from_env.nil?
+
         # @param options [Hash]
+        # @return [void]
+        def require_project!(options)
+          return if options[:project]
+
+          raise SpecPlanBuild::Error,
+            "which project? Pass -p with a project's URL, name or id.\n\n" \
+            "This never creates one: a team's project list is something you curated, and " \
+            "every plan is filed under one you named.\n\n" \
+            "  spec-plan-build linear projects <TEAM>   lists them"
+        end
+
         # @return [SpecPlanBuild::Linear::Import]
-        def build(tree, options)
-          SpecPlanBuild::Linear::Import.new(tree:,
-            team: SpecPlanBuild::Linear.key!(options[:prefix]),
+        def build(tree, team, project, options)
+          SpecPlanBuild::Linear::Import.new(tree:, team: SpecPlanBuild::Linear.key!(team), project:,
             since: options[:since], statuses: statuses(options),
             force: options.fetch(:force, false))
         end
@@ -462,35 +567,11 @@ module SpecPlanBuild
 
           import.pending.each { |action| say(line(action)) }
           report_unplaced(import)
-          report_unattached(import)
           dry_run_footer(import.pending.size, "Linear change#{"s" unless import.pending.size == 1}")
-          say_transport
-        end
-
-        # @param import [SpecPlanBuild::Linear::Import]
-        # @param tree [SpecPlanBuild::Tree]
-        # @param options [Hash]
-        # @return [void]
-        def push(import, tree, options)
-          api = SpecPlanBuild::Linear::API.new(token: SpecPlanBuild::Linear::API.token_from_env)
-          results = UI.spinning("Pushing #{import.pending.size} changes to Linear") {
-            SpecPlanBuild::Linear::Push.new(import:, api:, tree:).call
-          }
-
-          done, failed = results.select { |r| r.action.pending? }.partition(&:ok?)
-          done.each { |r| puts "#{r.action.op}\t#{r.identifier}\t#{r.action.title}" }
-          return if quiet?(options)
-
-          done.each { |r| say("#{paint(r.identifier.to_s, :green)}  #{r.action.title}") }
-          failed.each { |r| say("#{paint("FAILED", :red)}  #{r.action.title} — #{r.error}", bullet: "!") }
-
-          success("#{done.size} change#{"s" unless done.size == 1} pushed. " \
-                  "Each plan's #{SpecPlanBuild::Linear::Issues::FILENAME} now records what it owns.")
-          error("#{failed.size} change#{"s" unless failed.size == 1} did not land.") unless failed.empty?
         end
 
         # @param action [SpecPlanBuild::Linear::Action]
-        # @return [String] the machine-readable line
+        # @return [String]
         def row(action)
           [action.op, action.kind, action.ordinal, action.unit || "-",
             action.identifier || "-", action.title].join("\t")
@@ -500,8 +581,8 @@ module SpecPlanBuild
         # @return [String]
         def line(action)
           verb = paint(action.op.to_s.ljust(6), (action.op == :create) ? :green : :yellow)
-          noun = (action.kind == :project) ? paint("project", :magenta) : "issue  "
-          "#{verb} #{noun}  #{action.title}  #{paint("(#{action.reason})", :bright_black)}"
+          indent = action.child? ? "    " : ""
+          "#{verb} #{indent}#{action.title}  #{paint("(#{action.reason})", :bright_black)}"
         end
 
         # @param import [SpecPlanBuild::Linear::Import]
@@ -510,13 +591,11 @@ module SpecPlanBuild
           return if import.unplaced.empty?
 
           listed = import.unplaced.map { |status, ordinals|
-            "  #{status} — #{ordinals.join(", ")}\n" +
-              wrapped(SpecPlanBuild::Linear.reason_unplaced(status))
+            "  #{status} — #{ordinals.join(", ")}\n#{wrapped(SpecPlanBuild::Linear.reason_unplaced(status))}"
           }
           warn("Not imported, because nothing here knows where they belong:\n\n" \
                "#{listed.join("\n\n")}\n\n" \
-               "Decide where they go on your board and add it to Linear::PLACEMENTS. " \
-               "Filing them somewhere plausible would be worse than leaving them out.")
+               "Decide where they go on your board and add it to Linear::PLACEMENTS.")
         end
 
         # A box re-wraps a line that overruns it, and the wrapped remainder
@@ -532,31 +611,6 @@ module SpecPlanBuild
             lines.last << " " unless lines.last.empty?
             lines.last << word
           }.map { |line| "    #{line}" }.join("\n")
-        end
-
-        # @param import [SpecPlanBuild::Linear::Import]
-        # @return [void]
-        def report_unattached(import)
-          return if import.unattached.empty?
-
-          listed = import.unattached.map { |ordinal, prs|
-            "  #{ordinal}  #{prs.map(&:label).join("\n            ")}"
-          }
-          warn("These pull requests name no work unit their plan declares, so no issue " \
-               "claims them:\n\n#{listed.join("\n")}\n\n" \
-               "They are listed on the project instead. Either the plan is missing a unit, " \
-               "or the pull request title is missing its PR-n.")
-        end
-
-        # @return [void]
-        def say_transport
-          return if SpecPlanBuild::Linear::API.token_from_env
-
-          info("--commit needs #{SpecPlanBuild::Linear::API::TOKEN_VARIABLE} in the environment.\n\n" \
-               "Without it, drive the same plan through the Linear MCP server instead:\n\n" \
-               "  spec-plan-build linear import --prefix <KEY> --format json\n\n" \
-               "and hand the result to /plan-linear-import, which calls save_project and\n" \
-               "save_issue with those arguments verbatim.")
         end
       end
     end
@@ -764,6 +818,7 @@ module SpecPlanBuild
 
     register "linear" do |prefix|
       prefix.register "import", Linear::Import
+      prefix.register "projects", Linear::Projects
     end
   end
 end

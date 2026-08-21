@@ -72,6 +72,25 @@ module SpecPlanBuild
                    "depends on what broke"
     }.freeze
 
+    # Where one unit of work belongs, which is not always where its plan does.
+    #
+    # A plan in 🟡 Building has some units merged and some not started. Giving
+    # every one of its issues the plan's own state says they are all in
+    # progress, which is false about most of them and useless on a board. A
+    # unit's pull requests are the better evidence, so they are used when
+    # there are any.
+    #
+    # @param status [SpecPlanBuild::Status] the plan's state
+    # @param pulls [Array<SpecPlanBuild::PullRequest>] the unit's
+    # @return [SpecPlanBuild::Linear::Placement, nil]
+    def self.placement_for(status, pulls)
+      return placement(status) if pulls.empty?
+      return PLACEMENTS[:building].with(name: "In Review") if pulls.any?(&:open?)
+      return PLACEMENTS[:approved] if pulls.all?(&:merged?)
+
+      placement(status)
+    end
+
     # Where a plan in this state belongs on a Linear board.
     #
     # @param status [SpecPlanBuild::Status]

@@ -33,7 +33,7 @@ module SpecPlanBuild
         return if transport || (token && !token.empty?)
 
         raise Error, "no Linear token. Set #{TOKEN_VARIABLE}, or use the MCP transport:\n" \
-                     "  spec-plan-build linear import --prefix <KEY> --format json"
+                     "  spec-plan-build linear import <TEAM> -p <PROJECT> --format json"
       end
 
       # The team, its workflow states and its labels, in one round trip.
@@ -172,7 +172,11 @@ module SpecPlanBuild
 
       PROJECTS = <<~GRAPHQL
         query Projects($teamId: String!) {
-          team(id: $teamId) { projects(first: 250) { nodes { id name url } } }
+          team(id: $teamId) {
+            projects(first: 250) {
+              nodes { id name url description content status { name type } }
+            }
+          }
         }
       GRAPHQL
 

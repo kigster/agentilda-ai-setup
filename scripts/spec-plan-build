@@ -42,15 +42,25 @@ argv = ["status"] if argv.empty?
 # a typo, and must fail rather than quietly run something else.
 argv = ["status", *argv] if argv.first.start_with?("-") && !KNOWN.include?(argv.first)
 
-# `--push-pr` takes an OPTIONAL part letter: bare means "continue this plan's
-# sequence", `--push-pr C` means "use C". dry-cli has no optional-value option,
-# so the bare form is filled in here rather than made to look like a mistake.
-argv = argv.each_with_object([]) do |token, out|
-  out << token
-  next unless ["--push-pr", "-p"].include?(token)
+# `run --push-pr` takes an OPTIONAL part letter: bare means "continue this
+# plan's sequence", `--push-pr C` means "use C". dry-cli has no optional-value
+# option, so the bare form is filled in here rather than made to look like a
+# mistake.
+#
+# Scoped to `run`, and to the long spelling when it is not. This rewrote every
+# `-p` in every command for a while, which quietly turned
+# `linear import TAX -p "Some Project"` into `-p auto "Some Project"` — the
+# option took "auto" and the project name became a stray argument. A global
+# rewrite of a one-letter flag will collide with the next command that wants
+# it; this one collided within the week.
+if argv.first == "run"
+  argv = argv.each_with_object([]) do |token, out|
+    out << token
+    next unless ["--push-pr", "-p"].include?(token)
 
-  following = argv[argv.index(token) + 1]
-  out << "auto" unless following&.match?(/\A[A-Z]\z/)
+    following = argv[argv.index(token) + 1]
+    out << "auto" unless following&.match?(/\A[A-Z]\z/)
+  end
 end
 
 # dry-cli prints the command list for an unresolved command and exits 1, and

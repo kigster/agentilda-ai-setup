@@ -37,6 +37,6 @@ module SpecPlanBuild
   end
 end
 
-%w[mapping unit issue import api push].each do |part|
+%w[mapping fuzzy unit issue survey attribution import api push].each do |part|
   require File.join(__dir__, "linear", "#{part}.rb")
 end

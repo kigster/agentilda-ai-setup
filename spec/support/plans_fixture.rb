@@ -94,7 +94,9 @@ module PlansFixture
     # @param rows [Array<Hash>]
     # @return [String]
     def pull_requests_table(rows)
-      body = rows.map { |r| "| #{r[:number]} | [#{r[:title]}](#{r[:url]}) | #{r[:state]} |" }
+      body = rows.map { |r|
+        "| #{r[:number]} | [#{SpecPlanBuild::PullRequests.escape(r[:title])}](#{r[:url]}) | #{r[:state]} |"
+      }
       <<~MARKDOWN
         # Pull Requests
 

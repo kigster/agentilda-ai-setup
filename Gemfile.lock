@@ -1,6 +1,9 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    RubyInline (3.14.4)
+      ZenTest (~> 4.3)
+    ZenTest (4.12.2)
     aasm (6.0.0)
       concurrent-ruby (~> 1.0)
     ast (2.4.3)
@@ -59,6 +62,8 @@ GEM
       dry-initializer (~> 3.2)
       dry-schema (~> 1.14)
       zeitwerk (~> 2.6)
+    fuzzy-string-match (1.0.1)
+      RubyInline (>= 3.8.6)
     json (2.21.2)
     language_server-protocol (3.17.0.6)
     lint_roller (1.1.0)
@@ -167,6 +172,7 @@ DEPENDENCIES
   dry-schema
   dry-types
   dry-validation
+  fuzzy-string-match
   parallel
   pastel
   rspec
@@ -182,6 +188,8 @@ DEPENDENCIES
   unicode-display_width
 
 CHECKSUMS
+  RubyInline (3.14.4) sha256=75aec9bb7626a56a6c443922d1d299e1f062795f1d7b7195b0b863ca3776d9ab
+  ZenTest (4.12.2) sha256=814e7478a28f631df8f802aee40bd1faa2a53df1fb50e086eb8655f9ee5d60b9
   aasm (6.0.0) sha256=c96ce60ea9574eb194e33f29d801be430b8cade2f31c8a5d137a9870ee39d404
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
   bigdecimal (4.1.2) sha256=53d217666027eab4280346fba98e7d5b66baaae1b9c3c1c0ffe89d48188a3fbd
@@ -202,6 +210,7 @@ CHECKSUMS
   dry-schema (1.16.0) sha256=cd3aaeabc0f1af66ec82a29096d4c4fb92a0a58b9dae29a22b1bbceb78985727
   dry-types (1.9.1) sha256=baebeecdb9f8395d6c9d227b62011279440943e3ef2468fe8ccc1ba11467f178
   dry-validation (1.11.1) sha256=70900bb5a2d911c8aab566d3e360c6bff389b8bf92ea8e04885ce51c41ff8085
+  fuzzy-string-match (1.0.1) sha256=0740e515b3d1f7a40bd7f058a67a63682a9f4d98e4a95a9eb670aa562a047549
   json (2.21.2) sha256=1f1d3b7cf2b3ba1a69beca0bb6db13d5438b80bff3cd54cdaaa620b9b07c1c6a
   language_server-protocol (3.17.0.6) sha256=5ef2c0c138f8267e1bc631d3328347d354f96724b0af22f2c79516120443b7f0
   lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87

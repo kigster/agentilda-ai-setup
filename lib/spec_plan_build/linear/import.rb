@@ -6,8 +6,8 @@ module SpecPlanBuild
   module Linear
     # One thing that would happen in Linear.
     #
-    # `args` is deliberately shaped as the Linear MCP server's `save_project`
-    # and `save_issue` arguments, because that server addresses everything by
+    # `args` is deliberately shaped as the Linear MCP server's `save_issue`
+    # arguments, because that server addresses everything by
     # the names a human already knows — a team by its key, a project by its
     # name, a workflow state by its name, an issue by its identifier. Emitting
     # exactly that shape means the JSON this produces can drive either
@@ -15,13 +15,13 @@ module SpecPlanBuild
     # it to the MCP tools as-is. One contract, so the two cannot drift.
     #
     # @!attribute [r] kind
-    #   @return [Symbol] `:project` or `:issue`
+    #   @return [Symbol] `:issue` for a plan, `:subissue` for a unit of one
     # @!attribute [r] op
     #   @return [Symbol] `:create`, `:update` or `:skip`
     # @!attribute [r] ordinal
     #   @return [String] the plan this belongs to, e.g. "003.00"
     # @!attribute [r] unit
-    #   @return [String, nil] the {Unit#key}, nil for a project
+    #   @return [String, nil] the {Unit#key}, nil for a plan's own issue
     # @!attribute [r] identifier
     #   @return [String, nil] what Linear already calls it, when it exists
     # @!attribute [r] title
@@ -36,6 +36,9 @@ module SpecPlanBuild
       # @return [Boolean] whether this would change anything
       def pending? = op != :skip
 
+      # @return [Boolean] whether this issue hangs off another
+      def child? = kind == :subissue
+
       # @return [Hash] for `--format json`
       def to_h_json
         {kind:, op:, plan: ordinal, unit:, identifier:, title:, digest:, args:}.compact
@@ -45,19 +48,30 @@ module SpecPlanBuild
     # What a plan folder would become in Linear, and what has already become
     # of it. Reads the filesystem; touches nothing else.
     #
+    # One folder is one issue, and the units inside its `plan.md` are that
+    # issue's children. Projects are never created: a team's project list is
+    # something a human curated, and every plan is filed under one the caller
+    # named on the command line.
+    #
     # Keeping the whole decision offline is what makes `--commit` honest. The
     # dry run is not an approximation of what a push would do — it is the same
     # object the push consumes, so what gets printed and what gets sent cannot
-    # disagree.
+    # disagree. Everything that needs the network — the project, the repository
+    # pull request list — is handed in.
     class Import
       # @param tree [SpecPlanBuild::Tree]
       # @param team [String] the team key, e.g. "TAX"
+      # @param project [Hash] the Linear project, `{"id", "name", "url"}`
+      # @param adopted [Hash{String => Array<SpecPlanBuild::PullRequest>}]
+      #   pull requests {Attribution} placed, by folder name
       # @param since [String, nil] skip plans numbered below this
       # @param statuses [Array<Symbol>, nil] only these states
-      # @param force [Boolean] update every issue, matching digest or not
-      def initialize(tree:, team:, since: nil, statuses: nil, force: false)
+      # @param force [Boolean] update everything, matching digest or not
+      def initialize(tree:, team:, project:, adopted: {}, since: nil, statuses: nil, force: false)
         @tree = tree
         @team = team.to_s.strip.upcase
+        @project = project
+        @adopted = adopted
         @since = since && Ordinal.parse(since)
         @statuses = statuses
         @force = force
@@ -66,7 +80,14 @@ module SpecPlanBuild
       # @return [String] the team key
       attr_reader :team
 
-      # @return [Array<SpecPlanBuild::Linear::Action>] in plan order
+      # @return [Hash] the project everything is filed under
+      attr_reader :project
+
+      # @return [String]
+      def project_name = project["name"].to_s
+
+      # @return [Array<SpecPlanBuild::Linear::Action>] each plan's issue,
+      #   followed by that issue's children
       def actions = @actions ||= subjects.flat_map { |s| actions_for(s) }
 
       # @return [Array<SpecPlanBuild::Linear::Action>]
@@ -74,15 +95,10 @@ module SpecPlanBuild
 
       # @return [String] the whole import, for a pipe
       def to_json(*_args)
-        JSON.pretty_generate(team:, actions: actions.map(&:to_h_json))
+        JSON.pretty_generate(team:, project: project_name, actions: actions.map(&:to_h_json))
       end
 
       # Plans in a state nobody has decided how to file, and why not.
-      #
-      # They are reported rather than dropped quietly, and rather than filed
-      # somewhere plausible. An issue in the wrong column reads exactly like
-      # an issue in the right one, and nobody goes looking for a mistake that
-      # renders correctly.
       #
       # @return [Hash{SpecPlanBuild::Status => Array<String>}] state => ordinals
       def unplaced
@@ -90,24 +106,13 @@ module SpecPlanBuild
           .transform_values { |group| group.map { |s| s.feature.ordinal.to_s } }
       end
 
-      # Pull requests that name no unit the plan declares. Reported rather
-      # than guessed at: a pull request whose title says "PR-4" against a plan
-      # that stops at PR-3 is a discrepancy someone should look at, and
-      # silently filing it under PR-3 buries exactly that.
-      #
-      # @return [Hash{String => Array<SpecPlanBuild::PullRequest>}] by ordinal
-      def unattached
-        @unattached ||= subjects.each_with_object({}) do |subject, found|
-          claimed = units_for(subject).flat_map(&:pull_requests)
-          loose = subject.pull_requests - claimed
-          found[subject.feature.ordinal.to_s] = loose unless loose.empty?
-        end
-      end
-
       private
 
       # @return [SpecPlanBuild::Tree]
       attr_reader :tree
+
+      # @return [Hash]
+      attr_reader :adopted
 
       # @return [SpecPlanBuild::Ordinal, nil]
       attr_reader :since
@@ -129,9 +134,27 @@ module SpecPlanBuild
         }
       end
 
+      # The units a plan's issue will have children for: the ones its
+      # `plan.md` declares, plus any pull request {Attribution} placed here
+      # that none of them already claims.
+      #
       # @param subject [SpecPlanBuild::Subject]
       # @return [Array<SpecPlanBuild::Linear::Unit>]
-      def units_for(subject) = (@units ||= {})[subject.feature.path] ||= Units.new(subject:).all
+      def units_for(subject)
+        (@units ||= {})[subject.feature.path] ||= begin
+          declared = Units.new(subject:).all
+          claimed = declared.flat_map(&:pull_requests).map(&:number)
+          extra = adopted.fetch(subject.feature.dirname, []).reject { |pr| claimed.include?(pr.number) }
+          declared + extra.map { |pr| adopted_unit(pr) }
+        end
+      end
+
+      # @param pull [SpecPlanBuild::PullRequest]
+      # @return [SpecPlanBuild::Linear::Unit]
+      def adopted_unit(pull)
+        Unit.new(key: "##{pull.number}", title: Units.clean_title(pull.title),
+          body: "", pull_requests: [pull])
+      end
 
       # @param subject [SpecPlanBuild::Subject]
       # @return [SpecPlanBuild::Linear::Issues]
@@ -140,55 +163,59 @@ module SpecPlanBuild
       # @param subject [SpecPlanBuild::Subject]
       # @return [Array<SpecPlanBuild::Linear::Action>]
       def actions_for(subject)
-        [project_action(subject)] + units_for(subject).map { |unit| issue_action(subject, unit) }
+        [plan_action(subject)] + units_for(subject).map { |unit| unit_action(subject, unit) }
       end
 
+      # The issue that stands for the whole plan folder.
+      #
       # @param subject [SpecPlanBuild::Subject]
       # @return [SpecPlanBuild::Linear::Action]
-      def project_action(subject)
-        name = project_name(subject)
-        recorded = record_for(subject).project
-        args = {name:, description: project_description(subject), addTeams: [team]}
+      def plan_action(subject)
+        placement = SpecPlanBuild::Linear.placement(subject.status)
+        recorded = record_for(subject).by_unit[Issues::PARENT]
+        title = plan_title(subject)
+
+        args = {team:, project: project_name, title:, description: plan_description(subject),
+                state: placement.name, labels: placement.labels}
         digest = Issues.digest(args)
 
-        op, reason = decide(recorded && recorded[:name], recorded && recorded[:digest], digest, "project")
-        args = args.merge(id: recorded[:name]).except(:name, :addTeams) if op == :update && recorded
+        op, reason = decide(recorded&.identifier, recorded&.digest, digest)
+        args = args.merge(id: recorded.identifier).except(:team, :project) if op == :update && recorded
 
-        Action.new(kind: :project, op:, ordinal: subject.feature.ordinal.to_s, unit: nil,
-          identifier: recorded && recorded[:name], title: name, digest:, args:, reason:)
+        Action.new(kind: :issue, op:, ordinal: subject.feature.ordinal.to_s, unit: Issues::PARENT,
+          identifier: recorded&.identifier, title:, digest:, args:, reason:)
       end
 
       # @param subject [SpecPlanBuild::Subject]
       # @param unit [SpecPlanBuild::Linear::Unit]
       # @return [SpecPlanBuild::Linear::Action]
-      def issue_action(subject, unit)
-        placement = SpecPlanBuild::Linear.placement(subject.status)
+      def unit_action(subject, unit)
+        placement = SpecPlanBuild::Linear.placement_for(subject.status, unit.pull_requests)
         recorded = record_for(subject).by_unit[unit.key]
-        title = issue_title(subject, unit)
+        parent = record_for(subject).by_unit[Issues::PARENT]
 
-        args = {team:, project: project_name(subject), title:,
-                description: issue_description(subject, unit),
-                state: placement.name, labels: placement.labels}
-        args = args.merge(links: links_for(unit))
-        digest = Issues.digest(args)
+        args = {team:, project: project_name, title: unit.title,
+                description: unit_description(subject, unit),
+                state: placement.name, labels: placement.labels, links: links_for(unit)}
+        args = args.merge(parentId: parent.identifier) if parent
+        digest = Issues.digest(args.except(:parentId))
 
-        op, reason = decide(recorded&.identifier, recorded&.digest, digest, "issue")
+        op, reason = decide(recorded&.identifier, recorded&.digest, digest)
         args = args.merge(id: recorded.identifier).except(:team, :project) if op == :update && recorded
 
-        Action.new(kind: :issue, op:, ordinal: subject.feature.ordinal.to_s, unit: unit.key,
-          identifier: recorded&.identifier, title:, digest:, args:, reason:)
+        Action.new(kind: :subissue, op:, ordinal: subject.feature.ordinal.to_s, unit: unit.key,
+          identifier: recorded&.identifier, title: unit.title, digest:, args:, reason:)
       end
 
-      # The three-way decision, in one place so a project and an issue cannot
+      # The three-way decision, in one place so a plan and a unit cannot
       # answer it differently.
       #
       # @param existing [String, nil] what Linear already calls it
       # @param was [String, nil] the digest recorded at the last push
       # @param now [String] the digest of what we would push
-      # @param noun [String]
       # @return [Array(Symbol, String)] the operation and its reason
-      def decide(existing, was, now, noun)
-        return [:create, "no #{noun} recorded in #{Issues::FILENAME}"] if existing.nil?
+      def decide(existing, was, now)
+        return [:create, "not recorded in #{Issues::FILENAME}"] if existing.nil?
         return [:update, "--force"] if force
         return [:skip, "unchanged since the last import"] if was == now
 
@@ -197,7 +224,7 @@ module SpecPlanBuild
 
       # @param subject [SpecPlanBuild::Subject]
       # @return [String]
-      def project_name(subject) = "#{subject.feature.ordinal} #{heading(subject)}"
+      def plan_title(subject) = "[#{subject.feature.ordinal}] #{heading(subject)}"
 
       # The specification's own H1 when it has one, because an agent writing
       # `spec.md` gives it a real sentence — "Tenancy: users, households,
@@ -211,37 +238,13 @@ module SpecPlanBuild
         cleaned.empty? ? subject.feature.title : cleaned
       end
 
-      # What the issue is called.
-      #
-      # Deliberately *not* "PR-1 — …". An issue is a unit of work; a pull
-      # request is an artifact that implements one. `PR-1` is this tool's
-      # internal key for a section of `plan.md`, it means nothing to anyone
-      # reading Linear, and stating the relationship in the title states
-      # badly what the attachment states properly. The key stays in
-      # `linear.md`, where it is doing a job.
-      #
-      # An undivided plan's one issue is the plan, so it takes the plan's own
-      # words rather than the folder slug titleized back into "Yard
-      # Documentation Gate".
-      #
-      # @param subject [SpecPlanBuild::Subject]
-      # @param unit [SpecPlanBuild::Linear::Unit]
-      # @return [String]
-      def issue_title(subject, unit)
-        words = unit.whole? ? heading(subject) : unit.title
-        "[#{subject.feature.ordinal}] #{words}"
-      end
-
       # @param subject [SpecPlanBuild::Subject]
       # @return [String]
-      def project_description(subject)
-        loose = unattached[subject.feature.ordinal.to_s].to_a
-
+      def plan_description(subject)
         [
           subject.goal.join("\n\n"),
           "**State**: #{subject.status} — #{subject.status.note}",
           "**Folder**: `#{SpecPlanBuild::PLANS_DIR}/#{subject.feature.dirname}`",
-          loose.empty? ? nil : "**Pull requests naming no unit**\n\n#{listed(loose)}",
           provenance
         ].compact.reject(&:empty?).join("\n\n")
       end
@@ -249,22 +252,12 @@ module SpecPlanBuild
       # @param subject [SpecPlanBuild::Subject]
       # @param unit [SpecPlanBuild::Linear::Unit]
       # @return [String]
-      def issue_description(subject, unit)
+      def unit_description(subject, unit)
         [
           truncate(unit.body),
-          "**Plan**: `#{SpecPlanBuild::PLANS_DIR}/#{subject.feature.dirname}`" \
-            "#{" · unit `#{unit.key}`" unless unit.whole?}",
+          "**Plan**: `#{SpecPlanBuild::PLANS_DIR}/#{subject.feature.dirname}` · unit `#{unit.key}`",
           provenance
         ].compact.reject(&:empty?).join("\n\n")
-      end
-
-      # The one place a pull request is named in prose rather than attached:
-      # these belong to no issue, so there is nothing to attach them to.
-      #
-      # @param prs [Array<SpecPlanBuild::PullRequest>]
-      # @return [String]
-      def listed(prs)
-        prs.map { |pr| "- #{pr.url ? "[#{pr.label}](#{pr.url})" : pr.label} — #{pr.state}" }.join("\n")
       end
 
       # A pull request is attached to its issue, not listed in its body.
@@ -273,8 +266,7 @@ module SpecPlanBuild
       # it is — an artifact implementing the work, carrying its own state. A
       # markdown bullet is a claim about a relationship; an attachment is the
       # relationship. Links are keyed on the URL, so re-sending one updates
-      # rather than duplicates, which is what lets these go out on every
-      # operation instead of only on create.
+      # rather than duplicates.
       #
       # @param unit [SpecPlanBuild::Linear::Unit]
       # @return [Array<Hash>]

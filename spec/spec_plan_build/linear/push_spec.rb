@@ -8,9 +8,16 @@ RSpec.describe SpecPlanBuild::Linear::Push, :tree do
   subject(:push) { described_class.new(import:, api:, tree:) }
 
   let(:tree) { SpecPlanBuild::Tree.new(dir: plans_root) }
-  let(:import) { SpecPlanBuild::Linear::Import.new(tree: SpecPlanBuild::Tree.new(dir: plans_root), team: "TAX") }
+  let(:project) { {"id" => "p-1", "name" => "US Tax Law: Self Contained Ruby Gem", "url" => "https://linear.app/p-1"} }
   let(:api) { SpecPlanBuild::Linear::API.new(transport: fake) }
   let(:calls) { [] }
+  let(:issued) { [] }
+
+  let(:import) { fresh_import }
+
+  def fresh_import
+    SpecPlanBuild::Linear::Import.new(tree: SpecPlanBuild::Tree.new(dir: plans_root), team: "TAX", project:)
+  end
 
   let(:states) do
     [{"id" => "s-backlog", "name" => "Backlog", "type" => "backlog", "position" => 0},
@@ -24,7 +31,7 @@ RSpec.describe SpecPlanBuild::Linear::Push, :tree do
   # Answers whichever operation it is handed, and records what it was asked.
   let(:fake) do
     lambda { |document, variables|
-      calls << [document[/mutation (\w+)|query (\w+)/, 1] || document[/query (\w+)/, 1], variables]
+      calls << [document[/mutation (\w+)|query (\w+)/, 1], variables]
       {"data" => response_for(document, variables)}
     }
   end
@@ -43,18 +50,15 @@ RSpec.describe SpecPlanBuild::Linear::Push, :tree do
     when /teams\(filter/
       {"teams" => {"nodes" => [{"id" => "team-1", "name" => "Tax", "key" => "TAX",
                                 "states" => {"nodes" => states}, "labels" => {"nodes" => labels}}]}}
-    when /projects\(first/ then {"team" => {"projects" => {"nodes" => @projects.to_a}}}
-    when /projectCreate/
-      made = {"id" => "p-1", "name" => variables[:input][:name], "url" => "https://linear.app/p-1"}
-      (@projects ||= []) << made
-      {"projectCreate" => {"success" => true, "project" => made}}
-    when /projectUpdate/ then {"projectUpdate" => {"success" => true, "project" => @projects.first}}
     when /issueCreate/
-      {"issueCreate" => {"success" => true,
-                         "issue" => {"id" => "i-1", "identifier" => "TAX-41", "url" => "https://linear.app/TAX-41"}}}
+      issued << variables[:input]
+      number = 40 + issued.size
+      {"issueCreate" => {"success" => true, "issue" => {"id" => "i-#{number}",
+                                                        "identifier" => "TAX-#{number}",
+                                                        "url" => "https://linear.app/TAX-#{number}"}}}
     when /issueUpdate/
-      {"issueUpdate" => {"success" => true,
-                         "issue" => {"id" => "i-1", "identifier" => "TAX-41", "url" => "https://linear.app/TAX-41"}}}
+      {"issueUpdate" => {"success" => true, "issue" => {"id" => "i-40", "identifier" => variables[:id],
+                                                        "url" => "https://linear.app/#{variables[:id]}"}}}
     when /issueLabelCreate/
       {"issueLabelCreate" => {"success" => true, "issueLabel" => {"id" => "l-new", "name" => variables[:input][:name]}}}
     when /attachmentCreate/ then {"attachmentCreate" => {"success" => true, "attachment" => {"id" => "a-1"}}}
@@ -62,18 +66,24 @@ RSpec.describe SpecPlanBuild::Linear::Push, :tree do
   end
 
   describe "#call" do
-    it "creates the project before the issues that have to join it" do
+    it "never creates a project, whatever the plans look like" do
       push.call
-      order = calls.map(&:first).compact
 
-      expect(order.index("CreateProject")).to be < order.index("CreateIssue")
+      expect(calls.map(&:first)).not_to include("CreateProject", "UpdateProject")
     end
 
-    it "files the issue under the project it just made" do
+    it "files every issue under the project it was given" do
       push.call
-      _, variables = calls.find { |name, _| name == "CreateIssue" }
 
-      expect(variables[:input]).to include(teamId: "team-1", projectId: "p-1")
+      expect(issued.map { |i| i[:projectId] }.uniq).to eq(["p-1"])
+    end
+
+    # A child names its parent by the identifier Linear just handed back,
+    # which is why the folder's own issue is pushed first and alone.
+    it "creates the plan's own issue before the children that name it" do
+      push.call
+
+      expect(issued.map { |i| i[:parentId] }).to eq([nil, "TAX-41"])
     end
 
     it "attaches the pull request to the issue it created" do
@@ -89,18 +99,16 @@ RSpec.describe SpecPlanBuild::Linear::Push, :tree do
     # import that only knows the word "In Progress" would file every plan
     # wrong on it.
     it "falls back to the type when the team has no state by that name" do
-      plans { |t| t.plan "005.00", :building, "in-flight", files: {"spec.md" => spec_body, "plan.md" => "x"}, prs: [t.open(9, "WIP")] }
+      plans { |t| t.plan "005.00", :building, "in-flight", files: {"spec.md" => spec_body}, prs: [t.open(9, "WIP")] }
       push.call
-      created = calls.filter_map { |name, v| v[:input][:stateId] if name == "CreateIssue" }
 
-      expect(created).to include("s-doing")
+      expect(issued.map { |i| i[:stateId] }).to include("s-doing")
     end
 
     it "prefers the team's own name for a state when it has one" do
       push.call
-      _, variables = calls.find { |name, _| name == "CreateIssue" }
 
-      expect(variables[:input][:stateId]).to eq("s-done")
+      expect(issued.first[:stateId]).to eq("s-done")
     end
   end
 
@@ -111,7 +119,7 @@ RSpec.describe SpecPlanBuild::Linear::Push, :tree do
 
       aggregate_failures do
         expect(calls.map(&:first)).not_to include("CreateLabel")
-        expect(calls.filter_map { |n, v| v[:input][:labelIds] if n == "CreateIssue" }).to include(["l-blocked"])
+        expect(issued.map { |i| i[:labelIds] }).to include(["l-blocked"])
       end
     end
 
@@ -124,31 +132,27 @@ RSpec.describe SpecPlanBuild::Linear::Push, :tree do
   end
 
   describe "what it records" do
-    let(:written) { File.read(File.join(plans_root, "002.00-✅-dev-foundation", "linear.md")) }
+    let(:record) { SpecPlanBuild::Linear::Issues.new(dir: File.join(plans_root, "002.00-✅-dev-foundation")) }
 
     before { push.call }
 
-    it "writes a linear.md naming the issue Linear gave back" do
-      expect(written).to include("TAX-41", "https://linear.app/TAX-41")
+    it "names both the plan's issue and its child" do
+      expect(record.all.map { |i| [i.unit, i.identifier] }).to eq([["PLAN", "TAX-41"], ["PR-1", "TAX-42"]])
     end
 
-    it "records the project, so the next run does not make a second one" do
-      expect(SpecPlanBuild::Linear::Issues.new(dir: File.join(plans_root, "002.00-✅-dev-foundation")).project)
-        .to include(name: "002.00 Dev Foundation", url: "https://linear.app/p-1")
+    it "records the project, so a later run knows where this was filed" do
+      expect(record.project).to include(name: "US Tax Law: Self Contained Ruby Gem")
     end
 
     # The whole point of the fingerprint: an unchanged plan costs nothing.
     it "leaves a record a second import reads as nothing to do" do
-      second = SpecPlanBuild::Linear::Import.new(tree: SpecPlanBuild::Tree.new(dir: plans_root), team: "TAX")
-
-      expect(second.pending).to be_empty
+      expect(fresh_import.pending).to be_empty
     end
   end
 
   # The steady state. Everything above is the first run; this is every run
-  # after it, and the failure it guards against — a second project, a second
-  # issue, a duplicate of the lot — is the one that would be worst to find
-  # out about by looking at Linear.
+  # after it, and the failure it guards against — a duplicate of the lot — is
+  # the one that would be worst to discover by looking at Linear.
   describe "running a second time over a tree it has already imported" do
     before { push.call }
 
@@ -156,14 +160,7 @@ RSpec.describe SpecPlanBuild::Linear::Push, :tree do
       calls.clear
       described_class.new(import: fresh_import, api:, tree:).call
 
-      expect(calls.map(&:first)).not_to include("CreateProject", "CreateIssue")
-    end
-
-    it "keeps the record pointing at the same issue" do
-      described_class.new(import: fresh_import, api:, tree:).call
-      record = SpecPlanBuild::Linear::Issues.new(dir: File.join(plans_root, "002.00-✅-dev-foundation"))
-
-      expect(record.all.map(&:identifier)).to eq(["TAX-41"])
+      expect(calls.map(&:first)).not_to include("CreateIssue")
     end
 
     it "updates rather than duplicates once the plan changes underneath it" do
@@ -176,11 +173,6 @@ RSpec.describe SpecPlanBuild::Linear::Push, :tree do
         expect(calls.map(&:first)).to include("UpdateIssue")
         expect(calls.map(&:first)).not_to include("CreateIssue")
       end
-    end
-
-    # @return [SpecPlanBuild::Linear::Import] reading the tree as it now is
-    def fresh_import
-      SpecPlanBuild::Linear::Import.new(tree: SpecPlanBuild::Tree.new(dir: plans_root), team: "TAX")
     end
   end
 
@@ -195,36 +187,26 @@ RSpec.describe SpecPlanBuild::Linear::Push, :tree do
     end
 
     it "reports the failure against the action that caused it" do
-      failed = push.call.reject(&:ok?)
-
-      expect(failed.map(&:error)).to all(include("title is too long"))
+      expect(push.call.reject(&:ok?).map(&:error)).to include(a_string_including("title is too long"))
     end
 
-    # Twenty plans queued behind one bad title is not a reason to abandon them.
+    # A child cannot exist without its parent, so it is not attempted.
+    it "does not try to hang a child off a parent that was never created" do
+      errors = push.call.reject(&:ok?).map(&:error)
+
+      expect(errors).to include(a_string_including("the issue for its plan could not be created"))
+    end
+
     it "keeps going, so one bad plan does not strand the rest" do
       plans { |t| t.plan "008.00", :new, "next-one", files: {"spec.md" => spec_body} }
 
-      expect(push.call.map(&:action).map(&:ordinal).uniq).to include("002.00", "008.00")
+      expect(push.call.map { |r| r.action.ordinal }.uniq).to include("002.00", "008.00")
     end
 
-    # The project really was created even though its issues were not, and a
-    # run that forgot that would make a second project next time. So the
-    # record is written — claiming the project, and claiming no issue.
-    it "records the project it did make, and no issue it did not" do
+    it "writes no linear.md claiming an issue that was never made" do
       push.call
-      record = SpecPlanBuild::Linear::Issues.new(dir: File.join(plans_root, "002.00-✅-dev-foundation"))
 
-      aggregate_failures do
-        expect(record.project).to include(name: "002.00 Dev Foundation")
-        expect(record.all).to be_empty
-      end
-    end
-
-    it "leaves the failed issue to be retried by the next run" do
-      push.call
-      second = SpecPlanBuild::Linear::Import.new(tree: SpecPlanBuild::Tree.new(dir: plans_root), team: "TAX")
-
-      expect(second.pending.select { |a| a.kind == :issue }.map(&:op)).to include(:create)
+      expect(File.exist?(File.join(plans_root, "002.00-✅-dev-foundation", "linear.md"))).to be(false)
     end
   end
 end
