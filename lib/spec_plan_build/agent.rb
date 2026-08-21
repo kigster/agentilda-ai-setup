@@ -21,16 +21,11 @@ module SpecPlanBuild
   #   @return [String, nil]
   # @!attribute [r] allowed_tools
   #   @return [Array<String>]
-  # @!attribute [r] forbids
-  #   @return [Array<String>] capabilities the harness must refuse
-  # @!attribute [r] network
-  #   @return [Boolean] whether this agent may reach the internet
-  # @!attribute [r] prompt
-  #   @return [String] the markdown body
-  # @!attribute [r] path
-  #   @return [String]
+  # @!attribute [r] may
+  #   @return [Array<String>] commands lifted from {Executor::FORBIDDEN_COMMANDS}
+  #     for this agent alone. Nothing in {Executor::UNGRANTABLE} can be lifted.
   Agent = Data.define(:name, :description, :handles, :advances_to, :model,
-    :allowed_tools, :forbids, :network, :prompt, :path) do
+    :allowed_tools, :may, :network, :prompt, :path) do
     # @return [Boolean] whether this agent changes anything on disk
     def read_only? = advances_to.nil?
 
@@ -88,7 +83,7 @@ module SpecPlanBuild
         advances_to: meta["advances_to"]&.to_s&.then { |s| s.empty? ? nil : s.to_sym },
         model: meta["model"],
         allowed_tools: Array(meta["allowed_tools"]).map(&:to_s),
-        forbids: Array(meta["forbids"]).map(&:to_s),
+        may: Array(meta["may"]).map { |c| c.to_s.strip.squeeze(" ") },
         network: meta["network"] == true,
         prompt: match[2].strip,
         path: path

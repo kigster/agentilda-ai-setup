@@ -62,28 +62,39 @@ ______________________________________________________________________
 
 ## Route B — GitHub App
 
+**One App is enough for every repository you own.** It is *owned* by one account and *installed* on as many as you like, so the organisation and your personal account share an App ID, a private key and a bot identity. Only the installation ID differs, and it selects whose repositories a minted token can reach.
+
+| Thing                  | How many                                      |
+| :--------------------- | :-------------------------------------------- |
+| App                    | one                                           |
+| App ID and private key | one, shared                                   |
+| Bot identity           | `your-app[bot]`, the same reviewer everywhere |
+| Installation ID        | **one per account it is installed on**        |
+
+A second App buys a second *name* in the Reviewers panel. It is not how you reach a second organisation.
+
 1. **Organisation → Settings → Developer settings → GitHub Apps → New GitHub App**.
    - Homepage URL: the repository. Webhook: **off**.
    - Repository permissions: `Pull requests: Read and write`. Nothing else.
-   - Where can this be installed: **only this account**.
-1. Generate a private key; it downloads once. Store it with `sopsy`, not on disk.
-1. **Install** the App and choose the repositories it reviews.
-1. Note the **App ID** and the **installation ID** (the trailing number in the install settings URL).
-1. Mint an installation token when you need one — it lasts an hour:
-   ```bash
-   jwt=$(ruby -rjwt -rtime -e '
-     key = OpenSSL::PKey::RSA.new(File.read(ENV["APP_PRIVATE_KEY_PATH"]))
-     now = Time.now.to_i
-     puts JWT.encode({iat: now - 60, exp: now + 540, iss: ENV["APP_ID"]}, key, "RS256")')
+   - Where can this GitHub App be installed: **Any account**. Not "only this account", or it can never install onto your personal repositories.
+1. Generate a private key. It downloads once. Store it with `sopsy`, not on disk.
+1. **Install it twice** — once on the organisation, once on your personal account — choosing the repositories each time.
+1. Note the **App ID**, and one **installation ID** per installation: the trailing number in each install's settings URL.
+1. Mint an installation token when you need one. It lasts an hour.
 
-   token=$(gh api -X POST "app/installations/$INSTALLATION_ID/access_tokens" \
-     -H "Authorization: Bearer $jwt" -q .token)
+```bash
+jwt=$(ruby -rjwt -e '
+  key = OpenSSL::PKey::RSA.new(File.read(ENV["APP_PRIVATE_KEY_PATH"]))
+  now = Time.now.to_i
+  puts JWT.encode({iat: now - 60, exp: now + 540, iss: ENV["APP_ID"]}, key, "RS256")')
 
-   GH_TOKEN="$token" gh pr review "$PR" --approve --body "…"
-   ```
-   Reviews then appear as `your-app[bot]`.
+token=$(gh api -X POST "app/installations/$INSTALLATION_ID/access_tokens" \
+  -H "Authorization: Bearer $jwt" -q .token)
 
-In CI, skip all of that and use `actions/create-github-app-token`, which does the JWT exchange for you.
+GH_TOKEN="$token" gh pr review "$PR" --approve --body "…"
+```
+
+Reviews then appear as `your-app[bot]`. In CI, skip the exchange and use `actions/create-github-app-token`.
 
 ______________________________________________________________________
 
@@ -95,25 +106,28 @@ The useful property is that you cannot satisfy it yourself. Every merge then nee
 
 ______________________________________________________________________
 
-## Two things to change in this repository first
+## What the harness now enforces
 
-Both are live today, and both matter more once an agent holds a token that can approve.
+`FORBIDDEN_COMMANDS` is real. It was a regular expression that nothing referenced — a guard in the shape of a constant — which is how `gh pr review` came to be reachable by every agent and granted to none. It is now a list of commands withheld through `claude --disallowedTools Bash(<command>:*)`:
 
-**`gh pr review` is not in `FORBIDDEN_COMMANDS`.**
-
-```ruby
-FORBIDDEN_COMMANDS = /\bgit\s+(push|commit)\b|\bgh\s+(pr|release)\s+(create|edit|merge)\b/
+```
+git push · git commit · gh pr create · gh pr edit · gh pr merge
+gh pr review · gh pr comment · gh release create
 ```
 
-`create`, `edit` and `merge` are blocked; `review` and `comment` are not. Han Solo can already post to GitHub, and nothing intended that. Approving should be allowed for him *specifically*, while `gh pr merge` stays blocked for everyone — that is the "approve but never merge" line, and it is not drawn yet.
+An agent lifts one by naming it in its own file. Han Solo's:
 
-**`network: false` does not mean offline.**
-
-```ruby
-def denied_for(agent) = agent.network ? [] : DENIED_TOOLS   # WebFetch, WebSearch
+```yaml
+may: [gh pr review, gh pr comment]
 ```
 
-It denies two tools. Han Solo has `Bash`, and `gh` reaches the network perfectly well through it. The flag is a statement about `WebFetch` and `WebSearch`, not a boundary — worth renaming or enforcing before it is trusted as one.
+`UNGRANTABLE` — `git push` and `gh pr merge` — cannot be lifted by any `may:`, however the definition is written. That is the approve-but-never-merge line, and it is now a property of the harness rather than an instruction in a prompt. An approval is reversible, visible and attributable to whoever made it; a merge changes a branch everyone else builds on.
+
+The agent is also *told* what it has been granted. An agent that does not know it may approve simply never approves, and that looks exactly like an agent approving nothing worth approving.
+
+### Still true, and still worth knowing
+
+`network: false` denies `WebFetch` and `WebSearch`. It does not deny the network: an agent with `Bash` reaches GitHub through `gh` perfectly well. The command list above is what actually bounds that, so the flag is a statement about two tools and should be read as one.
 
 ______________________________________________________________________
 
