@@ -81,6 +81,16 @@ module SpecPlanBuild
     # States the agent loop leaves alone: work that is finished (✅ 😎), work
     # that was dropped (❌), and work waiting on a human (⭕️ 🅱️ ☢️).
     # Everything else is fair game for a specialist.
+    #
+    # ✅ Approved is here deliberately. `hansolo-reviewer` advancing a plan to
+    # it is the end of the loop, not a step in it: nothing merges, and no agent
+    # handles `approved`. Merging is the one act in this lifecycle that changes
+    # a branch everyone else builds on, and an autonomous loop that does it
+    # unattended has no way to be wrong quietly.
+    #
+    # Moving `approved` out of this list is therefore a decision about blast
+    # radius rather than about topology. If it ever moves, something has to own
+    # `approved -> deployed`, and today nothing does.
     SETTLED = %i[approved deployed discarded blocked product_blocked deferred].freeze
 
     # Rerouting a transition below makes the hand-drawn
