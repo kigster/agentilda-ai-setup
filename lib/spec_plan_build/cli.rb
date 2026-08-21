@@ -384,6 +384,237 @@ module SpecPlanBuild
       end
     end
 
+    # `spec-plan-build linear …`
+    module Linear
+      # Shared by both linear commands: the team is which workspace this is
+      # about, so it is an argument rather than a flag. There is no default —
+      # a tool that picks a team for you when you forget to say which is a
+      # tool that files a quarter of somebody's work in the wrong place.
+      class Team < Base
+        def self.inherited(klass)
+          super
+          klass.argument :team, required: true,
+            desc:            "The Linear team key that prefixes its issues, e.g. TAX"
+        end
+
+        private
+
+        # The key is checked before anything reaches for a token, so a typo in
+        # the team name reports the typo rather than an authentication
+        # problem the user does not have.
+        #
+        # @param team [String]
+        # @return [SpecPlanBuild::Linear::Survey]
+        def survey_for(team, tree)
+          key = SpecPlanBuild::Linear.key!(team)
+          api = SpecPlanBuild::Linear::API.new(token: SpecPlanBuild::Linear::API.token_from_env)
+          projects = UI.spinning("Listing #{key} projects") { api.projects(api.team(key)[:id]) }
+          [api, SpecPlanBuild::Linear::Survey.new(tree:, projects:)]
+        end
+      end
+
+      # `linear projects` — what the team already has.
+      class Projects < Team
+        desc "List the Linear projects a team owns, and which plans they already cover"
+
+        example [
+          "TAX        # every project the team owns, matched against .plans"
+        ]
+
+        # @param team [String]
+        # @param options [Hash]
+        # @return [void]
+        def call(team:, **options)
+          tree = tree_for(options)
+          _api, survey = survey_for(team, tree)
+
+          survey.projects.each { |project| puts row(project) }
+          return if quiet?(options)
+
+          survey.projects.each do |project|
+            say("#{paint(project["name"], :cyan)}\n    #{paint(project["url"].to_s, :bright_black)}")
+          end
+          report_descriptions(survey)
+        rescue SpecPlanBuild::Error => e
+          error(e.message)
+          exit 69
+        end
+
+        private
+
+        # @param project [Hash]
+        # @return [String]
+        def row(project)
+          [project["name"], project.dig("status", "name") || "-", project["url"]].join("\t")
+        end
+
+        # @param survey [SpecPlanBuild::Linear::Survey]
+        # @return [void]
+        def report_descriptions(survey)
+          return if survey.undescribed.empty?
+
+          warn("#{survey.undescribed.size} of these say nothing about themselves:\n\n" \
+               "#{survey.undescribed.map { |p| "  #{p["name"]}" }.join("\n")}\n\n" \
+               "A name is three or four words and half of them are the company's. If you " \
+               "want anything here to reason about which project a plan belongs to, that " \
+               "reasoning has to have a sentence to read.")
+        end
+      end
+
+      # `linear import` — the plans, as Linear issues under one of your projects.
+      class Import < Team
+        desc "Create Linear issues from the plans: one per folder, one child per work unit"
+
+        option :project, aliases: ["-p", "--project-url", "--project-id"],
+          desc:             "The project to file everything under: its URL, its name, or its id"
+        option :commit, type: :boolean, default: false,
+          desc:          "Actually create and update in Linear (default: dry run)"
+        option :format, default: "text", values: %w[text json],
+          desc:          "json emits the exact arguments the Linear MCP tools take"
+        option :since, aliases: ["-s"],
+          desc:           "Skip plans numbered below this, e.g. 010.00"
+        option :status,
+          desc: "Only plans in these states: a comma-separated list of status keys"
+        option :force, type: :boolean, default: false,
+          desc:         "Update everything, whether the plan has changed or not"
+
+        example [
+          "TAX -p 'US Tax Law: Self Contained Ruby Gem'   # show what would be created",
+          "TAX -p https://linear.app/acme/project/…       # a URL works too",
+          "TAX -p 'Ruby Gem' --commit                     # do it, using LINEAR_API_KEY",
+          "TAX -p 'Ruby Gem' --format json                # hand it to the MCP transport instead",
+          "TAX -p 'Ruby Gem' --since 010.00               # only the recent plans",
+          "TAX -p 'Ruby Gem' --status building,in_review"
+        ]
+
+        # @param team [String]
+        # @param options [Hash]
+        # @return [void]
+        def call(team:, **options)
+          tree = tree_for(options)
+          require_project!(options)
+          import = build(tree, team, resolve_project(team, tree, options), options)
+
+          return $stdout.puts(import.to_json) if options[:format] == "json"
+
+          if import.pending.empty?
+            success("Linear is already in step with #{tree.dir}.") unless quiet?(options)
+            return
+          end
+
+          preview(import, options)
+        rescue SpecPlanBuild::Error => e
+          error(e.message)
+          exit 69
+        end
+
+        private
+
+        # Looking the project up costs a token, and the whole point of
+        # `--format json` is to work without one. A name needs no lookup — the
+        # MCP server resolves a project by name itself — so only a URL or an
+        # id, which do not carry a name, force the network.
+        #
+        # @return [Hash] `{"id", "name", "url"}`
+        def resolve_project(team, tree, options)
+          reference = options[:project].to_s
+          looks_up = reference.match?(%r{\Ahttps?://}) || reference.match?(/\A[0-9a-f-]{32,}\z/)
+          return {"id" => nil, "name" => reference, "url" => nil} if !looks_up && offline?
+
+          _api, survey = survey_for(team, tree)
+          survey.project(reference)
+        end
+
+        # @return [Boolean]
+        def offline? = SpecPlanBuild::Linear::API.token_from_env.nil?
+
+        # @param options [Hash]
+        # @return [void]
+        def require_project!(options)
+          return if options[:project]
+
+          raise SpecPlanBuild::Error,
+            "which project? Pass -p with a project's URL, name or id.\n\n" \
+            "This never creates one: a team's project list is something you curated, and " \
+            "every plan is filed under one you named.\n\n" \
+            "  spec-plan-build linear projects <TEAM>   lists them"
+        end
+
+        # @return [SpecPlanBuild::Linear::Import]
+        def build(tree, team, project, options)
+          SpecPlanBuild::Linear::Import.new(tree:, team: SpecPlanBuild::Linear.key!(team), project:,
+            since: options[:since], statuses: statuses(options),
+            force: options.fetch(:force, false))
+        end
+
+        # @param options [Hash]
+        # @return [Array<Symbol>, nil]
+        def statuses(options)
+          return nil unless options[:status]
+
+          options[:status].to_s.split(",").map { |word|
+            SpecPlanBuild.status(word.strip)&.key ||
+              raise(SpecPlanBuild::Error, "no such state: #{word.strip}")
+          }
+        end
+
+        # @param import [SpecPlanBuild::Linear::Import]
+        # @param options [Hash]
+        # @return [void]
+        def preview(import, options)
+          import.pending.each { |action| puts row(action) }
+          return if quiet?(options)
+
+          import.pending.each { |action| say(line(action)) }
+          report_unplaced(import)
+          dry_run_footer(import.pending.size, "Linear change#{"s" unless import.pending.size == 1}")
+        end
+
+        # @param action [SpecPlanBuild::Linear::Action]
+        # @return [String]
+        def row(action)
+          [action.op, action.kind, action.ordinal, action.unit || "-",
+            action.identifier || "-", action.title].join("\t")
+        end
+
+        # @param action [SpecPlanBuild::Linear::Action]
+        # @return [String]
+        def line(action)
+          verb = paint(action.op.to_s.ljust(6), (action.op == :create) ? :green : :yellow)
+          indent = action.child? ? "    " : ""
+          "#{verb} #{indent}#{action.title}  #{paint("(#{action.reason})", :bright_black)}"
+        end
+
+        # @param import [SpecPlanBuild::Linear::Import]
+        # @return [void]
+        def report_unplaced(import)
+          return if import.unplaced.empty?
+
+          listed = import.unplaced.map { |status, ordinals|
+            "  #{status} — #{ordinals.join(", ")}\n#{wrapped(SpecPlanBuild::Linear.reason_unplaced(status))}"
+          }
+          warn("Not imported, because nothing here knows where they belong:\n\n" \
+               "#{listed.join("\n\n")}\n\n" \
+               "Decide where they go on your board and add it to Linear::PLACEMENTS.")
+        end
+
+        # A box re-wraps a line that overruns it, and the wrapped remainder
+        # comes back at column zero — which reads as a new entry rather than
+        # the continuation of one. Wrapping it here keeps the indent.
+        #
+        # @param text [String]
+        # @param width [Integer] narrower than the narrowest box
+        # @return [String]
+        def wrapped(text, width: 58)
+          text.split.each_with_object([+""]) { |word, lines|
+            lines << +"" if lines.last.length + word.length + 1 > width
+            lines.last << " " unless lines.last.empty?
+            lines.last << word
+          }.map { |line| "    #{line}" }.join("\n")
+        end
+      end
+    end
+
     # `spec-plan-build docs` — regenerate the conventions document.
     class Docs < Base
       desc "Generate the conventions document from the state machine itself"
@@ -583,6 +814,11 @@ module SpecPlanBuild
     register "resync" do |prefix|
       prefix.register "dirs", Resync::Dirs
       prefix.register "prs", Resync::Prs
+    end
+
+    register "linear" do |prefix|
+      prefix.register "import", Linear::Import
+      prefix.register "projects", Linear::Projects
     end
   end
 end

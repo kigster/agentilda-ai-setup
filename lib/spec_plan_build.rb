@@ -42,7 +42,18 @@ module SpecPlanBuild
 
   # Prefix for a pull request that deliberately implements no plan —
   # dependency bumps, CI work, hotfixes, developer tooling.
-  NO_PLAN_PREFIX = "DEV.00"
+  #
+  # Lower case, and not a number, so it cannot be mistaken for one. It used to
+  # be `DEV.00`, which read as a plan number and sorted among them.
+  NO_PLAN_PREFIX = "dev"
+
+  # What it used to be. Titles still wearing it are rewritten rather than
+  # skipped as already-prefixed.
+  STALE_NO_PLAN_PREFIX = "DEV.00"
+
+  # Prefix for a pull request that implements *something* nothing could name.
+  # Unlike `dev` this asserts nothing; it marks a question left open.
+  NONE_PREFIX = "none"
 
   # @return [Dry::Inflector] shared inflector
   def self.inflector = @inflector ||= Dry::Inflector.new
@@ -103,6 +114,7 @@ end
   ordinal
   status
   state_machine
+  dev_work
   markdown
   pull_request
   description
@@ -115,6 +127,7 @@ end
   resync
   reporter
   index
+  linear
   agent
   worktree
   publisher

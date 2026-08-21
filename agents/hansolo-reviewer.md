@@ -5,6 +5,7 @@ handles: [ready_for_review, in_review]
 advances_to: approved
 model: sonnet
 allowed_tools: [Read, Grep, Glob, Bash]
+may: [gh pr review, gh pr comment]
 writes: [rewrite.md, pull-requests.md]
 ---
 

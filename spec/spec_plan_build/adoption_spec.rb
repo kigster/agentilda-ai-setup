@@ -68,7 +68,7 @@ RSpec.describe SpecPlanBuild::Adoption, :tree do
     end
 
     it "names the folder from the pull request's title, prefix stripped" do
-      expect(adoption.plan([pull(95, "[DEV.00] Add the health checks")]).first.dirname)
+      expect(adoption.plan([pull(95, "[dev] Add the health checks")]).first.dirname)
         .to eq("024.01-🕰️-add-the-health-checks")
     end
 

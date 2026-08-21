@@ -142,10 +142,20 @@ RSpec.describe SpecPlanBuild::StateMachine do
 
   describe "#promote!" do
     it "walks the spine when given no destination, and renames the folder" do
-      subject = folder(:new, files: {"spec.md" => "x", "plan.md" => "y"})
+      subject = folder(:new, files: {"spec.md" => "# S\n\n## Research\n\nWhat was found."})
 
-      expect(described_class.new(subject).promote!.key).to eq(:planned)
-      expect(subject.renames).to eq([:planned])
+      expect(described_class.new(subject).promote!.key).to eq(:researched)
+      expect(subject.renames).to eq([:researched])
+    end
+
+    # The only fact on disk separating 🔎 Researched from ⚪️ New. Without it
+    # the two states are the same folder wearing different names, and the
+    # relay that keeps yoda-writer off unresearched specifications collapses.
+    it "refuses to call a specification researched when nobody has researched it" do
+      subject = folder(:new, files: {"spec.md" => "# S\n\n## Goal\n\nShip it."})
+
+      expect { described_class.new(subject).promote! }
+        .to raise_error(described_class::Refused, /no `## Research` chapter/)
     end
 
     it "moves to a named destination off the spine" do
@@ -192,7 +202,8 @@ RSpec.describe SpecPlanBuild::StateMachine do
   describe "#spine_next" do
     it "walks spec → plan → build → review → merge → ship" do
       expected = {
-        retroactive: :planned, new: :planned, planned: :building, building: :ready_for_review,
+        retroactive: :planned, new: :researched, researched: :planned,
+        planned: :building, building: :ready_for_review,
         ready_for_review: :in_review, in_review: :approved, approved: :deployed,
         rejected: :ready_for_review, rolled_back: :ready_for_review, shit: :planned,
         discarded: nil, blocked: nil, deployed: nil

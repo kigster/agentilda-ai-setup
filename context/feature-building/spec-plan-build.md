@@ -50,6 +50,7 @@ Two digits, always. One would sort into the middle of the two-digit range — `0
 | Symbol | Meaning                | Key                | Files required                           | Description                                                               |
 | :----: | :--------------------- | :----------------- | :--------------------------------------- | :------------------------------------------------------------------------ |
 |   ⚪️   | **New**                | `new`              | `spec.md`                                | a specification exists; it has not been planned yet                       |
+|   🔎   | **Researched**         | `researched`       | `spec.md`                                | the topic has been researched; `spec.md` carries a `## Research` chapter  |
 |   ⭐️   | **Planned**            | `planned`          | `spec.md`, `plan.md`                     | specified and planned; nobody has started building                        |
 |   🟡   | **Building**           | `building`         | `spec.md`, `plan.md`, `pull-requests.md` | work is under way; pull requests are raised as each unit lands            |
 |   🟢   | **Ready for Review**   | `ready_for_review` | `spec.md`, `plan.md`, `pull-requests.md` | every pull request is green on CI and waiting for a reviewer              |
@@ -75,23 +76,24 @@ So nothing re-derives one of them from a folder's contents — otherwise every �
 
 ## Transitions
 
-| From                  | May become     | `promote` goes to    |
-| :-------------------- | :------------- | :------------------- |
-| ⚪️ New                | ⭐️ ⭕️ 🅱️ ☢️ ❌ | ⭐️ Planned           |
-| ⭐️ Planned            | 🟡 ⭕️ 🅱️ ☢️ ❌ | 🟡 Building          |
-| 🟡 Building           | 🟢 ⭕️ 🅱️ ☢️ ❌ | 🟢 Ready for Review  |
-| 🟢 Ready for Review   | 👀 ❌          | 👀 In Review         |
-| 👀 In Review          | ✅ 🔴 💩 ❌    | ✅ Approved & Merged |
-| 🔴 Changes Requested  | 🟢 ❌          | 🟢 Ready for Review  |
-| ✅ Approved & Merged  | 🟡 😎 ❌       | 😎 Deployed          |
-| 😎 Deployed           | 😱 ❌          | —                    |
-| 😱 Rolled Back        | 🟡 🟢 ❌       | 🟢 Ready for Review  |
-| 💩 Scrapped by Review | ⭐️ 🟡 ❌       | ⭐️ Planned           |
-| ⭕️ Technical Block    | ⚪️ ⭐️ 🟡 ☢️ ❌ | —                    |
-| 🅱️ Product Block      | ⚪️ ⭐️ 🟡 ☢️ ❌ | —                    |
-| ☢️ Deferred           | ⚪️ ⭐️ 🟡 ❌    | —                    |
-| 🕰️ Retroactive        | ⚪️ ⭐️ 🟡 ✅ ❌ | ⭐️ Planned           |
-| ❌ Discarded          | _terminal_     | —                    |
+| From                  | May become        | `promote` goes to    |
+| :-------------------- | :---------------- | :------------------- |
+| ⚪️ New                | 🔎 ⭐️ ⭕️ 🅱️ ☢️ ❌ | 🔎 Researched        |
+| 🔎 Researched         | ⭐️ ❌             | ⭐️ Planned           |
+| ⭐️ Planned            | 🟡 ⭕️ 🅱️ ☢️ ❌    | 🟡 Building          |
+| 🟡 Building           | 🟢 ⭕️ 🅱️ ☢️ ❌    | 🟢 Ready for Review  |
+| 🟢 Ready for Review   | 👀 ❌             | 👀 In Review         |
+| 👀 In Review          | ✅ 🔴 💩 ❌       | ✅ Approved & Merged |
+| 🔴 Changes Requested  | 🟢 ❌             | 🟢 Ready for Review  |
+| ✅ Approved & Merged  | 🟡 😎 ❌          | 😎 Deployed          |
+| 😎 Deployed           | 😱 ❌             | —                    |
+| 😱 Rolled Back        | 🟡 🟢 ❌          | 🟢 Ready for Review  |
+| 💩 Scrapped by Review | ⭐️ 🟡 ❌          | ⭐️ Planned           |
+| ⭕️ Technical Block    | ⚪️ 🔎 ⭐️ 🟡 ☢️ ❌ | —                    |
+| 🅱️ Product Block      | ⚪️ 🔎 ⭐️ 🟡 ☢️ ❌ | —                    |
+| ☢️ Deferred           | ⚪️ 🔎 ⭐️ 🟡 ❌    | —                    |
+| 🕰️ Retroactive        | ⚪️ 🔎 ⭐️ 🟡 ✅ ❌ | ⭐️ Planned           |
+| ❌ Discarded          | _terminal_        | —                    |
 
 A bare promote walks the **spine** — spec → plan → build. Everything off it (blocking, deferring, rejecting) has to be named explicitly. That is the whole reason there is a machine here rather than a rename: a transition is refused when the destination's requirements are not already met, and that refusal is information — it means the phase has not actually happened yet.
 
@@ -115,6 +117,7 @@ the machine: reuse the existing PNG.
 stateDiagram-v2
     direction LR
     new : ⚪️ New
+    researched : 🔎 Researched
     planned : ⭐️ Planned
     building : 🟡 Building
     ready_for_review : 🟢 Ready for Review
@@ -134,6 +137,12 @@ stateDiagram-v2
     blocked --> new
     product_blocked --> new
     deferred --> new
+    new --> researched
+    retroactive --> researched
+    blocked --> researched
+    product_blocked --> researched
+    deferred --> researched
+    researched --> planned
     new --> planned
     retroactive --> planned
     shit --> planned
@@ -170,6 +179,7 @@ stateDiagram-v2
     blocked --> deferred
     product_blocked --> deferred
     new --> discarded
+    researched --> discarded
     planned --> discarded
     building --> discarded
     ready_for_review --> discarded
@@ -215,21 +225,21 @@ A pull request that implements a plan says so in its title:
 
 `spec-plan-build resync prs` fills in missing prefixes. It reads the branch name first and falls back to the diff only when that touches exactly one plan folder. **It refuses rather than guessing.** A wrong number does not announce itself: it files the work under a plan that did not do it, and leaves the plan that did looking untouched.
 
-### `[DEV.00]` when there is no plan
+### `[dev]` when there is no plan
 
 Not every pull request implements a feature. Dependency bumps, CI configuration, hotfixes and developer tooling implement no plan, and forcing a number onto them produces a number chosen to satisfy the rule. Those are titled:
 
 ```
-[DEV.00] Bump json from 2.21.1 to 2.21.2
+[dev] Bump json from 2.21.1 to 2.21.2
 ```
 
-`DEV.00` means **"this deliberately belongs to no specification"**, and it exists so that "no plan" is *asserted* rather than merely absent. A title with no prefix is ambiguous between "no plan applies" and "nobody looked".
+`dev` means **"this deliberately belongs to no specification"**, and it exists so that "no plan" is *asserted* rather than merely absent. A title with no prefix is ambiguous between "no plan applies" and "nobody looked".
 
 `resync prs` will propose it, but marks every such title as **assumed** and never applies one without you seeing it. Emitting it silently on a failed lookup would launder "I could not tell" into "there is definitely none", which is the same lie as guessing a number, told in the other direction.
 
 ### What does not deserve a retroactive plan
 
-Most unmatched pull requests. The test is whether **somebody would need to read it** — a capability with behaviour, an interface, or invariants that are not obvious from the code. "Fix a typo", "remove dead code" and "bump a dependency" are `[DEV.00]` and always were. Backfilling those produces an index that is longer without being more informative, which makes the real plans harder to find.
+Most unmatched pull requests. The test is whether **somebody would need to read it** — a capability with behaviour, an interface, or invariants that are not obvious from the code. "Fix a typo", "remove dead code" and "bump a dependency" are `[dev]` and always were. Backfilling those produces an index that is longer without being more informative, which makes the real plans harder to find.
 
 ## If a real issue tracker arrives, this scheme retires
 

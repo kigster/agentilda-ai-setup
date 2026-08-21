@@ -23,6 +23,8 @@ RSpec.describe SpecPlanBuild::Runner, :tree do
       let!(:built) do
         plans do |t|
           t.plan "000.00", :new, "needs-a-spec", files: {"spec.md" => spec_body}
+          t.plan "000.01", :researched, "needs-a-writer",
+            files: {"spec.md" => "#{spec_body}\n## Research\n\nWhat was found.\n"}
           t.plan "001.00", :planned, "needs-a-plan", files: {"spec.md" => spec_body, "plan.md" => "# P"}
           t.plan "002.00", :blocked, "needs-a-human", files: {"blocked.md" => "B1. Which?"}
           t.plan "003.00", :approved, "finished", prs: [t.merged(3, "done")]
@@ -32,21 +34,22 @@ RSpec.describe SpecPlanBuild::Runner, :tree do
       it "offers each plan to the agent that handles its state" do
         runner.call
 
-        expect(calls.uniq).to contain_exactly(["yoda-writer", "000.00"], ["palpatine-planner", "001.00"])
+        expect(calls.uniq).to contain_exactly(["leah-researcher", "000.00"],
+          ["yoda-writer", "000.01"], ["palpatine-planner", "001.00"])
       end
 
-      # leah-researcher declares no `advances_to`, which makes her read-only:
-      # she deepens a spec.md that stays ⚪️ throughout rather than moving a
-      # folder between states, and the loop only offers work to agents that
-      # have something to advance. She is called by hand, not by the runner.
-      #
-      # This is also what stops her taking ⚪️ New from yoda-writer — agents
+      # The relay's whole point. Both used to declare `handles: [new]`, agents
       # are offered work in definition order and the runner takes the first,
-      # so an advancing leah would win on alphabetical order alone.
-      it "does not offer work to a read-only agent, however many states it handles" do
+      # so yoda-writer won on alphabetical order alone — and wrote goals and
+      # conclusions over documents nobody had researched. They now hold
+      # adjacent states rather than the same one.
+      it "researches before it writes, rather than the two contending for ⚪️ New" do
         runner.call
 
-        expect(calls.map(&:first)).not_to include("leah-researcher")
+        aggregate_failures do
+          expect(calls).to include(["leah-researcher", "000.00"])
+          expect(calls.filter_map { |name, ordinal| ordinal if name == "yoda-writer" }).to all(eq("000.01"))
+        end
       end
 
       it "never offers a blocked plan to anyone — that is what blocked means" do

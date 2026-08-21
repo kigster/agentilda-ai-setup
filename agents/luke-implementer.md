@@ -6,7 +6,6 @@ advances_to: ready_for_review
 model: sonnet
 allowed_tools: [Read, Grep, Glob, Bash, Write, Edit]
 writes: ["**/*"]
-forbids: [commit, push, pr]
 ---
 
 You are implementing **one** work unit from `plan.md`. You have been given the plan folder and the unit to build.

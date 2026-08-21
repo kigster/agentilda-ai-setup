@@ -48,6 +48,13 @@ module SpecPlanBuild
   # @return [String]
   def self.pull_request_count(count) = "#{count} pull request#{"s" unless count == 1}"
 
+  # What proves a specification has been researched rather than merely
+  # written: the chapter `leah-researcher` contributes. It is a section of
+  # `spec.md` rather than a file of its own because research is not a separate
+  # document — it is the first half of the specification, and splitting it
+  # would leave `yoda-writer` reading two files to write one.
+  RESEARCH_CHAPTER = /^[ \t]{0,3}\#{2,3}[ \t]+Research\b/i
+
   # Variation selectors make ⚪️ and ⚪ different strings that mean the same
   # thing to a human. Compare with them removed.
   #
@@ -85,6 +92,14 @@ module SpecPlanBuild
       key: :new, emoji: "⚪️", label: "New", requires: %w[spec.md],
       note: "a specification exists; it has not been planned yet",
       invariant: nil
+    ),
+    Status.new(
+      key: :researched, emoji: "🔎", label: "Researched", requires: %w[spec.md],
+      note: "the topic has been researched; `spec.md` carries a `## Research` chapter",
+      invariant: lambda { |s|
+        body = s.read("spec.md").to_s
+        "Researched, but `spec.md` has no `## Research` chapter" unless body.match?(RESEARCH_CHAPTER)
+      }
     ),
     Status.new(
       key: :planned, emoji: "⭐️", label: "Planned", requires: %w[spec.md plan.md],

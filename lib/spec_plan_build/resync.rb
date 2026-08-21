@@ -133,9 +133,15 @@ module SpecPlanBuild
     # titles, and a wrong number files work under a plan that did not do it,
     # leaving the plan that did looking untouched.
     class Prs
+      # The marker this tool used to write, now replaced. A title wearing it is
+      # rewritten in place: the assertion it makes — "this belongs to no
+      # specification" — is still true and still somebody's deliberate call,
+      # so it is restamped rather than re-resolved.
+      STALE = /\A\[#{Regexp.escape(SpecPlanBuild::STALE_NO_PLAN_PREFIX)}\]\s*/
+
       # Titles that already carry a prefix — a plan number, the no-plan marker,
       # or the legacy `[XXX]`.
-      PREFIXED = /\A\[(?:\d{3}(?:\.\d{2})?|DEV\.00|XXX)\](?:\([A-Z]\))?\s/
+      PREFIXED = /\A\[(?:\d{3}(?:\.\d{2})?|#{SpecPlanBuild::NO_PLAN_PREFIX}|XXX)\](?:\([A-Z]\))?\s/
 
       # Finds a plan number in a branch name: `kig/018.01-verify`, `002-slug`.
       BRANCH_PATTERN = %r{(?:\A|[/\-_])(\d{3}(?:\.\d{2})?)(?:\z|[-_])}
@@ -194,15 +200,21 @@ module SpecPlanBuild
       # What would change, without changing anything.
       #
       # @return [Array<SpecPlanBuild::Resync::Prs::Change>]
-      def plan = resolve(candidates).then { |changes| adopt? ? with_adoptions(changes) : changes }
+      def plan
+        restamps + resolve(candidates).then { |changes| adopt? ? with_adoptions(changes) : changes }
+      end
+
+      # @return [Array<SpecPlanBuild::Resync::Prs::Change>]
+      def restamps = stale.map { |pull| restamped(pull) }
 
       # @param commit [Boolean] actually retitle, and mint the folders
       # @return [Array<SpecPlanBuild::Resync::Prs::Change>] what was proposed
       def call(commit: false)
         changes = resolve(candidates)
-        return adopt? ? with_adoptions(changes) : changes unless commit
+        return restamps + (adopt? ? with_adoptions(changes) : changes) unless commit
 
         changes = with_adoptions(changes, create: true) if adopt?
+        changes = restamps + changes
         applicable = changes.select(&:applicable?)
         UI.stepping(applicable, "Retitling") { |c| github.retitle(number: c.number, title: c.new_title) }
         changes
@@ -214,7 +226,21 @@ module SpecPlanBuild
       private
 
       # @return [Array<Hash>] pull requests with no prefix yet
-      def candidates = github.pulls.reject { |pr| pr[:title].to_s.match?(PREFIXED) }
+      def candidates
+        github.pulls.reject { |pr| pr[:title].to_s.match?(PREFIXED) || pr[:title].to_s.match?(STALE) }
+      end
+
+      # @return [Array<Hash>] pull requests still wearing the old marker
+      def stale = github.pulls.select { |pr| pr[:title].to_s.match?(STALE) }
+
+      # @param pull [Hash]
+      # @return [SpecPlanBuild::Resync::Prs::Change]
+      def restamped(pull)
+        Change.new(number: pull[:number], title: pull[:title], ordinal: nil, ambiguous: false,
+          new_title: pull[:title].sub(STALE, "[#{SpecPlanBuild::NO_PLAN_PREFIX}] "),
+          reason: "the no-plan marker is now [#{SpecPlanBuild::NO_PLAN_PREFIX}]",
+          assumed: false, adopted: false)
+      end
 
       # @param pulls [Array<Hash>]
       # @return [Array<SpecPlanBuild::Resync::Prs::Change>]

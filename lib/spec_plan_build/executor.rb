@@ -24,8 +24,28 @@ module SpecPlanBuild
     # agent that ran, found nothing, and reported success.
     DENIED_TOOLS = %w[WebFetch WebSearch].freeze
 
-    # Shell fragments that mean "this is leaving the machine".
-    FORBIDDEN_COMMANDS = /\bgit\s+(push|commit)\b|\bgh\s+(pr|release)\s+(create|edit|merge)\b/
+    # Commands that leave the machine, denied to every agent by default.
+    #
+    # These are passed to `claude` as `Bash(<command>:*)` tool specifiers, so
+    # they are withheld rather than merely discouraged. This list spent a while
+    # as a regular expression that nothing referenced — a guard in the shape of
+    # a constant, enforcing nothing — which is exactly how `gh pr review` came
+    # to be reachable by an agent nobody had granted it to.
+    FORBIDDEN_COMMANDS = [
+      "git push", "git commit",
+      "gh pr create", "gh pr edit", "gh pr merge",
+      "gh pr review", "gh pr comment",
+      "gh release create"
+    ].freeze
+
+    # The subset no agent's `may:` can lift, however its definition is written.
+    #
+    # Pushing and merging change a branch everybody else builds on, and an
+    # unattended loop doing either has no way to be wrong quietly. Reviewing
+    # does not: an approval is reversible, visible, and attributable to the
+    # identity that made it. That difference is the whole line between
+    # `hansolo-reviewer` approving and `hansolo-reviewer` merging.
+    UNGRANTABLE = ["git push", "gh pr merge"].freeze
 
     # @param root [String] the repository the agents work in
     # @param command [TTY::Command]
@@ -78,13 +98,25 @@ module SpecPlanBuild
       argv
     end
 
-    # What this particular agent may not touch. Everything, unless it has
-    # asked for the internet in its own definition — which is a decision
-    # recorded in a reviewable file rather than a flag someone passes.
+    # What this particular agent may not touch: the network tools unless it
+    # asked for them, plus every forbidden command it has not been granted.
+    # Both decisions are recorded in a reviewable file rather than passed as a
+    # flag by whoever happened to start the run.
     #
     # @param agent [SpecPlanBuild::Agent]
     # @return [Array<String>]
-    def denied_for(agent) = agent.network ? [] : DENIED_TOOLS
+    def denied_for(agent)
+      tools = agent.network ? [] : DENIED_TOOLS
+      tools + denied_commands(agent).map { |command| "Bash(#{command}:*)" }
+    end
+
+    # @param agent [SpecPlanBuild::Agent]
+    # @return [Array<String>] commands withheld from this agent
+    def denied_commands(agent) = FORBIDDEN_COMMANDS - granted_to(agent)
+
+    # @param agent [SpecPlanBuild::Agent]
+    # @return [Array<String>] what its `may:` actually buys it
+    def granted_to(agent) = agent.may - UNGRANTABLE
 
     private
 
@@ -109,13 +141,35 @@ module SpecPlanBuild
         ## Boundary — enforced, not requested
 
         You may read anything, and write source, tests and the plan's own
-        markdown. You may NOT commit, push, or create or edit a pull request.
+        markdown.
+
+        These are withheld from you, not merely discouraged — `claude` is
+        invoked with them disallowed:
+
+        #{denied_commands(agent).map { |c| "  #{c}" }.join("\n")}
+        #{granted(agent)}
         The harness checks afterwards that HEAD has not moved, and a round that
-        moved it is reported as a failure and rolled into the report.
+        moved it is reported as a failure and rolled into the report. A prompt
+        is a request; a check is a guarantee.
 
         Claim what you are about to write with ~/.claude/agent-lock.sh first,
         and release it when you are done.
       PROMPT
+    end
+
+    # Spelled out in the prompt as well as withheld at the tool layer, because
+    # an agent that does not know it has been granted something does not use
+    # it — and `hansolo-reviewer` silently never approving anything looks
+    # exactly like `hansolo-reviewer` approving nothing worth approving.
+    #
+    # @param agent [SpecPlanBuild::Agent]
+    # @return [String]
+    def granted(agent)
+      granted = granted_to(agent)
+      return "" if granted.empty?
+
+      "\nYou may run these, which most agents may not:\n\n" +
+        granted.map { |c| "  #{c}" }.join("\n") + "\n"
     end
 
     # @return [String, nil] current commit, or nil outside a repository

@@ -34,7 +34,8 @@ module SpecPlanBuild
     # work back in the queue, it does not skip the reviewer.
     SPINE = {
       retroactive: :planned,
-      new: :planned,
+      new: :researched,
+      researched: :planned,
       planned: :building,
       building: :ready_for_review,
       ready_for_review: :in_review,
@@ -51,7 +52,8 @@ module SpecPlanBuild
     # absence of documents rather than the presence of any.
     PREFERENCE = %i[
       discarded rolled_back shit deferred blocked product_blocked
-      deployed approved rejected in_review ready_for_review building planned new
+      deployed approved rejected in_review ready_for_review building planned
+      researched new
       retroactive
     ].freeze
 
@@ -79,6 +81,16 @@ module SpecPlanBuild
     # States the agent loop leaves alone: work that is finished (✅ 😎), work
     # that was dropped (❌), and work waiting on a human (⭕️ 🅱️ ☢️).
     # Everything else is fair game for a specialist.
+    #
+    # ✅ Approved is here deliberately. `hansolo-reviewer` advancing a plan to
+    # it is the end of the loop, not a step in it: nothing merges, and no agent
+    # handles `approved`. Merging is the one act in this lifecycle that changes
+    # a branch everyone else builds on, and an autonomous loop that does it
+    # unattended has no way to be wrong quietly.
+    #
+    # Moving `approved` out of this list is therefore a decision about blast
+    # radius rather than about topology. If it ever moves, something has to own
+    # `approved -> deployed`, and today nothing does.
     SETTLED = %i[approved deployed discarded blocked product_blocked deferred].freeze
 
     # Rerouting a transition below makes the hand-drawn
@@ -93,8 +105,18 @@ module SpecPlanBuild
         transitions from: %i[retroactive blocked product_blocked deferred], to: :new
       end
 
+      event :research, guard: :justified? do
+        transitions from: %i[new retroactive blocked product_blocked deferred], to: :researched
+      end
+
+      # `new` stays in this list. The spine routes a plan through research, and
+      # that is what the agent loop follows — but a specification somebody has
+      # already researched by hand should not have to pretend otherwise to get
+      # planned. What research buys is not enforced here; it is enforced by
+      # `yoda-writer` handling `researched` and nothing else.
       event :plan, guard: :justified? do
-        transitions from: %i[new retroactive shit blocked product_blocked deferred], to: :planned
+        transitions from: %i[researched new retroactive shit blocked product_blocked deferred],
+          to: :planned
       end
 
       event :build, guard: :justified? do

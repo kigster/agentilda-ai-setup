@@ -194,6 +194,15 @@ for path in "$AGENTS_ROOT"/*/; do
   link_one "${path%/}" "$dest" "~/.claude/$name"
 done
 
+# --------------------------------------------------------------- external ----
+
+say "Installing External Skills via download, for all agents AND Claude."
+
+set +e
+
+./external-skills-for-agents.sh
+./external-skills-for-claude.sh
+
 # --------------------------------------------------------------- summary ----
 
 say ""
@@ -207,4 +216,6 @@ if [[ $conflicts -gt 0 ]]; then
 fi
 
 say ""
+
+
 exit 0

@@ -58,7 +58,7 @@ Most unmatched pull requests. The test is whether **somebody would need to read
 it**: a capability with behaviour, an interface, or invariants that are not
 obvious from the code.
 
-"Fix a typo", "remove dead code" and "bump a dependency" are `[DEV.00]` and
+"Fix a typo", "remove dead code" and "bump a dependency" are `[dev]` and
 always were. Backfilling those produces an index that is longer without being
 more informative, which makes the real plans harder to find.
 
