@@ -179,8 +179,9 @@ module SpecPlanBuild
 
     # The answers waiting in `blocked.md`, by number. `## A1` settles `## B1`.
     #
-    # Waiting, not folded: `lando-broker` decides whether one is really an
-    # answer, and this only counts the headings.
+    # Waiting, not folded. An `## A<n>` heading is not the same as a settled
+    # question: one may say in its own body that it is a draft pending a
+    # conversation. `lando-broker` makes that call; this only counts headings.
     #
     # @return [Array<Integer>]
     def block_answers = SpecPlanBuild.block_numbers(read("blocked.md"), ANSWER_BLOCK)

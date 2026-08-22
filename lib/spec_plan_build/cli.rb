@@ -996,7 +996,7 @@ module SpecPlanBuild
         answered = subject.block_answers
         subject.read("blocked.md").to_s.lines.grep(SpecPlanBuild::OPEN_BLOCK)
           .map { |line| line.strip.sub(/\A\#+[ \t]*/, "") }
-          .map { |q| answered.include?(q[SpecPlanBuild::OPEN_BLOCK, 1].to_i) ? "#{q}  ← answered" : q }
+          .map { |q| answered.include?(q[SpecPlanBuild::OPEN_BLOCK, 1].to_i) ? "#{q}  ← answer waiting" : q }
       end
 
       # @param tree [SpecPlanBuild::Tree]
