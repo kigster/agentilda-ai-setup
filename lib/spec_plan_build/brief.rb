@@ -91,7 +91,7 @@ module SpecPlanBuild
       rescue TTY::Command::TimeoutExceeded
         return [false, "timed out after #{@timeout}s"]
       rescue TTY::Command::ExitError => e
-        return [false, "claude exited non-zero: #{e.message.lines.first.to_s.strip}"]
+        return [false, "claude #{Executor.failure_reason(e)}"]
       end
 
       [true, "drafted"]

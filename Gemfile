@@ -7,6 +7,7 @@ gem "concurrent-ruby" # Concurrency Primitives
 gem "fuzzy-string-match" # Jaro-Winkler, for matching a pull request title to a plan folder
 gem "parallel"        # Fan work out over threads or processes
 gem "pastel"          # ANSI Coloring
+gem "strings"         # Wrap text the way TTY::Box wraps it, so a box can be sized to its wrapped height
 gem "unicode-display_width" # How many terminal cells a string occupies
 
 gem "tty-spinner"     # Use for parallel execution, and reporting the status

@@ -53,6 +53,27 @@ module SpecPlanBuild
       # @return [Boolean]
       def commit?(options) = options.fetch(:commit, false)
 
+      # `claude` prefers a credential in the environment to a claude.ai login,
+      # so a project `.env` that direnv loads on `cd` can quietly redirect
+      # every agent a run spawns to a key meant for the application itself.
+      #
+      # Said once, before anything is invoked, because the failure it causes
+      # arrives three minutes later, once per agent, and reads like an agent
+      # problem rather than an environment one.
+      #
+      # @return [void]
+      def credentials_warning
+        names = Executor.foreign_credentials
+        return if names.empty?
+
+        one = names.size == 1
+        warn("#{names.join(" and ")} #{one ? "is" : "are"} set in this shell, so every agent authenticates " \
+             "with #{one ? "it" : "them"} rather than with your claude.ai login.\n" \
+             "A stale one fails every agent in the run with `401 API key is invalid`, " \
+             "three minutes at a time.\n" \
+             "If it came from a project .env, run `unset #{names.join(" ")}` first.")
+      end
+
       # The line every dry run ends with, so nobody mistakes a preview for the
       # thing having happened.
       #
@@ -751,6 +772,7 @@ module SpecPlanBuild
         quiet?(options)
         UI.log_path = options[:log] || File.join(Dir.tmpdir, "spec-plan-build-#{File.basename(root)}.log")
         info("Progress: #{UI.log_path}") unless quiet?(options)
+        credentials_warning if commit?(options) && !quiet?(options)
 
         runner = Runner.new(
           tree:, agents:, isolation:, jobs:, plans:,
@@ -909,6 +931,7 @@ module SpecPlanBuild
         agent = agent_for(options)
         subjects = targets(tree, plans)
         quiet?(options)
+        credentials_warning if commit?(options) && !quiet?(options)
 
         executor = Executor.new(root:, dry_run: !commit?(options))
         results = subjects.map { |subject| [subject, *executor.call(agent, subject, root:)] }
