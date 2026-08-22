@@ -166,6 +166,32 @@ module SpecPlanBuild
       found.empty? ? nil : found
     end
 
+    # The questions `blocked.md` still names, by number.
+    #
+    # Empty means one of two very different things, and a caller that treats
+    # them alike is how a folder with thirty kilobytes of open questions gets
+    # reported as "nothing left open": either there is no `blocked.md` at all,
+    # or there is one whose questions are not written as `## B<n>` and are
+    # therefore invisible to every part of this tool. Ask {#file?} which.
+    #
+    # @return [Array<Integer>]
+    def open_blocks = SpecPlanBuild.block_numbers(read("blocked.md"), OPEN_BLOCK)
+
+    # The answers waiting in `blocked.md`, by number. `## A1` settles `## B1`.
+    #
+    # Waiting, not folded: `lando-broker` decides whether one is really an
+    # answer, and this only counts the headings.
+    #
+    # @return [Array<Integer>]
+    def block_answers = SpecPlanBuild.block_numbers(read("blocked.md"), ANSWER_BLOCK)
+
+    # A `blocked.md` this tool cannot read: the file is there, and not one
+    # question in it is written as `## B<n>`. Nothing can drain it and nothing
+    # currently says so, which is the whole reason this exists.
+    #
+    # @return [Boolean]
+    def unreadable_block? = file?("blocked.md") && open_blocks.empty?
+
     # @return [String, nil] why the folder's name is not justified
     def violation = status.violation(self)
 
