@@ -324,9 +324,25 @@ module SpecPlanBuild
       # standard:disable Style/StderrPuts -- the cop's own rationale, "to allow
       # such output to be disabled", is the behaviour being removed here.
       def box(kind, message)
-        $stderr.puts TTY::Box.public_send(kind, message.to_s, enable_color: color?, width:)
+        text = message.to_s
+        $stderr.puts TTY::Box.public_send(kind, text, enable_color: color?, width:, height: box_height(text))
       end
       # standard:enable Style/StderrPuts
+
+      # TTY::Box sizes itself from the number of lines it is handed, not from
+      # the number those lines occupy once wrapped to the box's width. So any
+      # message containing a line longer than the box is drawn a row or two
+      # short, and what falls off is the bottom, which is where the instruction
+      # lives. The run that found this reported four of its ten failures and
+      # cut the fifth mid-sentence.
+      #
+      # Wrapped here with the same library TTY::Box wraps with, rather than by
+      # dividing by the width, because it wraps on words: a rough estimate is
+      # wrong in exactly the cases this exists for.
+      #
+      # @param text [String]
+      # @return [Integer] rows the box needs: its content, two borders, one pad
+      def box_height(text) = Strings.wrap(text.to_s, width - 4).lines.size + 3
 
       # A single unadorned line, for per-item progress that does not deserve
       # a box of its own.

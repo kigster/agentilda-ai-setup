@@ -54,6 +54,52 @@ RSpec.describe SpecPlanBuild::Executor, :tree do
   def denied(agent) = described_class.new(root:, command:).invocation(agent, subject_plan)
     .each_cons(2).find { |flag, _| flag == "--disallowedTools" }&.last.to_s.split(",")
 
+  # A run whose agents all failed printed ten copies of the same escaped prompt
+  # and never said why. The reason was in the parts of the error this now reads.
+  describe ".failure_reason" do
+    def exit_error(status:, stdout: "Nothing written", stderr: "Nothing written")
+      TTY::Command::ExitError.new("claude -p …", instance_double(TTY::Command::Result,
+        exit_status: status, out: stdout, err: stderr))
+    end
+
+    it "leads with what the agent said, not with the command that said it" do
+      error = exit_error(status: 1, stdout: "Failed to authenticate. API Error: 401 API key is invalid.")
+
+      expect(described_class.failure_reason(error))
+        .to eq("exited 1: Failed to authenticate. API Error: 401 API key is invalid.")
+    end
+
+    # `claude` reports its own failure on stdout and warns on stderr, and in the
+    # 401 case only stderr named the cause. Dropping either loses half the answer.
+    it "keeps both streams, because they carry different halves of the reason" do
+      error = exit_error(status: 1, stdout: "401 API key is invalid.",
+        stderr: "ANTHROPIC_API_KEY takes precedence over your claude.ai login")
+
+      expect(described_class.failure_reason(error))
+        .to eq("exited 1: 401 API key is invalid. | ANTHROPIC_API_KEY takes precedence over your claude.ai login")
+    end
+
+    it "says so plainly when the agent exited without explaining itself" do
+      expect(described_class.failure_reason(exit_error(status: 7))).to eq("exited 7 and said nothing")
+    end
+
+    it "keeps the reason to one report line" do
+      error = exit_error(status: 1, stdout: "x" * 500)
+
+      expect(described_class.failure_reason(error).length).to be <= described_class::REASON_LIMIT + 20
+    end
+  end
+
+  describe ".foreign_credentials" do
+    it "names the credentials an agent would authenticate with instead of the login" do
+      expect(described_class.foreign_credentials({"ANTHROPIC_API_KEY" => "sk-ant-x"})).to eq(["ANTHROPIC_API_KEY"])
+    end
+
+    it "ignores one that is set to nothing, which is how a shell unsets it in practice" do
+      expect(described_class.foreign_credentials({"ANTHROPIC_API_KEY" => "  "})).to be_empty
+    end
+  end
+
   describe "the network boundary" do
     it "denies the web to an agent that did not ask for it" do
       expect(denied(agent_with(network: false))).to include("WebFetch", "WebSearch")

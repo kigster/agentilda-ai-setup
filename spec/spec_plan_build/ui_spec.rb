@@ -289,6 +289,24 @@ RSpec.describe SpecPlanBuild::UI do
     end
   end
 
+  # A box that is one row short loses its last line, and the last line is where
+  # the instruction is. Ten agent failures were reported as four this way.
+  describe ".box" do
+    let(:long) { "a" * (described_class.width + 40) }
+
+    it "keeps the last line when an earlier one has to wrap" do
+      expect { described_class.box(:warn, "#{long}\nrun `unset ANTHROPIC_API_KEY` first") }
+        .to output(/unset ANTHROPIC_API_KEY/).to_stderr
+    end
+
+    it "grows the box by the rows the wrapping actually needs" do
+      one = described_class.box_height("short")
+      wrapped = described_class.box_height(long)
+
+      expect(wrapped).to be > one
+    end
+  end
+
   describe ".display_width" do
     it "measures cells rather than characters" do
       aggregate_failures do

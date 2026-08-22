@@ -47,6 +47,69 @@ module SpecPlanBuild
     # `hansolo-reviewer` approving and `hansolo-reviewer` merging.
     UNGRANTABLE = ["git push", "gh pr merge"].freeze
 
+    # The `stdout:` and `stderr:` sections of a {TTY::Command::ExitError}
+    # message. stdout runs until stderr starts; stderr runs to the end, because
+    # what an agent prints there is not guaranteed to be one line.
+    STDOUT_SECTION = /^[ \t]*stdout:[ \t]*(.*?)(?=\n[ \t]*stderr:|\z)/m
+    STDERR_SECTION = /^[ \t]*stderr:[ \t]*(.*)\z/m
+
+    # How much of what the agent said survives into a one-line report.
+    REASON_LIMIT = 300
+
+    # Environment variables the `claude` CLI reads as credentials, in
+    # preference to a claude.ai login.
+    #
+    # A project `.env` that sets one of these for the application's own use is
+    # inherited by every agent a run spawns. `claude` then authenticates with
+    # that key rather than the login, and a stale or unrelated one turns an
+    # entire run into `401 API key is invalid`, three minutes per agent. This
+    # is warned about rather than unset: driving the CLI with an API key on
+    # purpose is legitimate, and nothing here can tell the two apart.
+    CREDENTIAL_VARS = %w[ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN].freeze
+
+    # @param env [Hash]
+    # @return [Array<String>] credential variables currently set
+    def self.foreign_credentials(env = ENV)
+      CREDENTIAL_VARS.reject { |name| env[name].to_s.strip.empty? }
+    end
+
+    # What `claude` actually said, out of the four labelled sections
+    # {TTY::Command::ExitError} builds its message from.
+    #
+    # The first of those sections is the command line, which for an agent is a
+    # shell-escaped copy of its several-thousand-character prompt. Reporting it
+    # said that an invocation had failed, at length, and nothing at all about
+    # why: the run that found this printed the same escaped prompt ten times
+    # while the answer, `401 API key is invalid`, sat unread in `stdout:`.
+    #
+    # Both streams are kept, because they carry different halves. `claude`
+    # reports its own failures on stdout; the line naming the *cause* of that
+    # 401 (`ANTHROPIC_API_KEY … takes precedence over your claude.ai login`)
+    # was on stderr.
+    #
+    # @param error [TTY::Command::ExitError]
+    # @return [String]
+    def self.failure_reason(error)
+      status = error.message[/^[ \t]*exit status:[ \t]*(\S+)/, 1]
+      outcome = status ? "exited #{status}" : "failed"
+      said = [STDOUT_SECTION, STDERR_SECTION]
+        .filter_map { |section| tail(error.message[section, 1]) }
+        .join(" | ")
+
+      said.empty? ? "#{outcome} and said nothing" : "#{outcome}: #{said}"
+    end
+
+    # @param text [String, nil]
+    # @return [String, nil] the last few meaningful lines, on one line
+    def self.tail(text)
+      lines = text.to_s.split("\n").map(&:strip).reject { |line| line.empty? || line == "Nothing written" }
+      return nil if lines.empty?
+
+      joined = lines.last(3).join(" ")
+      (joined.length > REASON_LIMIT) ? "#{joined[0, REASON_LIMIT - 1]}…" : joined
+    end
+    private_class_method :tail
+
     # @param root [String] the repository the agents work in
     # @param command [TTY::Command]
     # @param timeout [Integer] seconds before one agent is abandoned
@@ -74,7 +137,7 @@ module SpecPlanBuild
       rescue TTY::Command::TimeoutExceeded
         return [false, "timed out after #{@timeout}s"]
       rescue TTY::Command::ExitError => e
-        return [false, "claude exited non-zero: #{e.message.lines.first.to_s.strip}"]
+        return [false, "claude #{self.class.failure_reason(e)}"]
       end
 
       violation = boundary_violation(before, root)

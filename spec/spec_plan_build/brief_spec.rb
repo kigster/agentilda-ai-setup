@@ -143,7 +143,24 @@ RSpec.describe SpecPlanBuild::Brief, :tree do
 
       aggregate_failures do
         expect(ok).to be(false)
-        expect(note).to match(/claude exited non-zero/)
+        expect(note).to match(/exited 1/)
+      end
+    end
+
+    # `create` shells out to `claude` the same way {Executor} does, so it had
+    # the same bug: the first line of the error is the escaped prompt, and
+    # reporting it said an invocation failed, at length, and never why.
+    it "reports what claude said, not the several-thousand-character prompt it said it about" do
+      allow(command).to receive(:run).and_raise(TTY::Command::ExitError.new("claude -p #{"x" * 3000}",
+        instance_double(TTY::Command::Result, exit_status: 1,
+          out: "API Error: 401 API key is invalid.", err: "")))
+
+      ok, note = brief.attempt!
+
+      aggregate_failures do
+        expect(ok).to be(false)
+        expect(note).to include("401 API key is invalid.")
+        expect(note).not_to include("xxx")
       end
     end
 
