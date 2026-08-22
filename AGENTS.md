@@ -132,6 +132,7 @@ Entry point `lib/spec_plan_build.rb` requires each component only if the file ex
 
 ## Project-specific conventions worth knowing before editing
 
+- **Every change ends green**: run `just lint` and `just test` before calling a code change done, and fix what they report rather than handing the failures back. `just ci` runs the pair the way CircleCI does. Nobody has to ask for this.
 - **Concurrency safety**: many agent sessions may run against this checkout at once. Before creating or editing a file, claim it with `bin/agent-lock acquire <id> "<reason>"` (narrowest scope that covers the writes); release with `bin/agent-lock release <id>` or `release-all` at session end. Prefer a git worktree over a lock for anything longer than a few minutes.
 - **Numbering is permanent**: a plan's `NNN.MM` is set once and joined on by branch names, PR titles and `pull-requests.md`; renumbering breaks those links silently.
 - **`resync` never guesses across ambiguity**: `resync prs` only edits a PR title when the diff touches exactly one plan; anything ambiguous is reported, never edited, even with `--commit`.
