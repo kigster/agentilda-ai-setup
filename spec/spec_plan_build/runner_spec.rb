@@ -144,5 +144,72 @@ RSpec.describe SpecPlanBuild::Runner, :tree do
         expect(runner).not_to be_settled
       end
     end
+
+    # `--plan` is what makes a batch-create skill safe: it hands off exactly
+    # the plans it just minted, not a whole-tree loop that a second and third
+    # batch would each start again on top of.
+    describe "--plan scoping" do
+      subject(:runner) { described_class.new(tree:, executor:, agents:, max_rounds: 5, plans: [ordinal("000.00")]) }
+
+      let!(:built) do
+        plans do |t|
+          t.plan "000.00", :new, "in-scope", files: {"spec.md" => spec_body}
+          t.plan "001.00", :new, "out-of-scope", files: {"spec.md" => spec_body}
+        end
+      end
+
+      def ordinal(text) = SpecPlanBuild::Ordinal.parse(text)
+
+      it "only offers work to the plans named" do
+        runner.call
+
+        expect(calls.map(&:last).uniq).to eq(["000.00"])
+      end
+
+      it "leaves an out-of-scope plan's state exactly as it found it" do
+        runner.call
+
+        expect(tree.reload.find(ordinal("001.00")).status.key).to eq(:new)
+      end
+
+      describe "#in_scope?" do
+        it "is true for a named plan" do
+          expect(runner.in_scope?(tree.find(ordinal("000.00")))).to be(true)
+        end
+
+        it "is false for one left out" do
+          expect(runner.in_scope?(tree.find(ordinal("001.00")))).to be(false)
+        end
+      end
+
+      describe "#settled? and #blocked, scoped" do
+        let!(:built) do
+          plans do |t|
+            t.plan "000.00", :approved, "in-scope", prs: [t.merged(1, "x")]
+            t.plan "001.00", :new, "out-of-scope", files: {"spec.md" => spec_body}
+          end
+        end
+
+        it "does not count an out-of-scope plan against #settled?" do
+          expect(described_class.new(tree:, executor:, agents:, plans: [ordinal("000.00")])).to be_settled
+        end
+
+        it "does not report an out-of-scope block" do
+          plans { |t| t.plan "002.00", :blocked, "out-of-scope-block", files: {"blocked.md" => "B1"} }
+
+          expect(described_class.new(tree:, executor:, agents:, plans: [ordinal("000.00")]).blocked).to be_empty
+        end
+      end
+
+      context "with no --plan given" do
+        subject(:runner) { described_class.new(tree:, executor:, agents:, max_rounds: 5) }
+
+        it "runs the whole tree, as before" do
+          runner.call
+
+          expect(calls.map(&:last).uniq).to contain_exactly("000.00", "001.00")
+        end
+      end
+    end
   end
 end

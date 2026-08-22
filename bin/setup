@@ -8,13 +8,16 @@
 #
 # What it does:
 #
-#   ~/AGENTS.md            -> .agents/AGENTS.md
-#   ~/.claude/CLAUDE.md    -> ../.agents/AGENTS.md
+#   ~/AGENTS.md            -> .agents/config/AGENTS.md
+#   ~/.claude/CLAUDE.md    -> ../.agents/config/AGENTS.md
 #   ~/.claude/<dir>        -> ../.agents/<dir>          for each shared folder
 #
 # It is a RECONCILER, not an installer: run it as often as you like. Anything
 # already correct is reported and left alone, so the safe response to "did I
-# ever link that?" is to run it again.
+# ever link that?" is to run it again. Pulling in external skills and plugins
+# is a separate, explicit step — `scripts/install-sources` — precisely
+# because that one does network I/O and writes into `skills/`/`plugins/`;
+# this script only ever links what is already there.
 #
 # Two rules it will not break:
 #
@@ -37,12 +40,16 @@
 
 set -euo pipefail
 
-AGENTS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../config" && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+AGENTS_MD="$REPO_ROOT/config/AGENTS.md"
 CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
 
 # Folders that belong to the Ruby project rather than to any agent, and have no
-# business in ~/.claude.
-SKIP_DIRS=(bin scripts lib spec coverage docs tmp vendor node_modules)
+# business in ~/.claude. `config` holds AGENTS.md, linked explicitly above, not
+# as a shared folder. `skills-mine` and `skills-temporary` are inputs to
+# `scripts/install-sources`, which folds them into `skills/` — that is what
+# gets linked out, not the sources themselves.
+SKIP_DIRS=(bin scripts lib spec coverage docs tmp vendor node_modules config skills-mine skills-temporary)
 
 # Folders that exist as real directories in ~/.claude and hold one link per
 # child rather than a single link for the whole folder.
@@ -73,7 +80,7 @@ warn() { printf '  %s!%s %s\n' "$c_yellow" "$c_reset" "$*" >&2; }
 bad()  { printf '  %s✗%s %s\n' "$c_red" "$c_reset" "$*" >&2; }
 
 usage() {
-  sed -n '3,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '3,39p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   exit 64
 }
 
@@ -153,21 +160,21 @@ in_list() {
 # ---------------------------------------------------------------------- run --
 
 say ""
-say "${c_bold}Linking ${AGENTS_ROOT} into ${CLAUDE_DIR}${c_reset}"
+say "${c_bold}Linking ${REPO_ROOT} into ${CLAUDE_DIR}${c_reset}"
 [[ $DRY_RUN -eq 1 ]] && say "${c_yellow}dry run — nothing will be written${c_reset}"
 say ""
 
-[[ -f "$AGENTS_ROOT/AGENTS.md" ]] || { bad "no AGENTS.md in $AGENTS_ROOT"; exit 66; }
+[[ -f "$AGENTS_MD" ]] || { bad "no AGENTS.md in $(dirname "$AGENTS_MD")"; exit 66; }
 mkdir -p "$CLAUDE_DIR"
 
 say "${c_bold}Instructions${c_reset}"
-link_one "$AGENTS_ROOT/AGENTS.md" "$HOME/AGENTS.md"          "~/AGENTS.md"
-link_one "$AGENTS_ROOT/AGENTS.md" "$CLAUDE_DIR/CLAUDE.md"    "~/.claude/CLAUDE.md"
+link_one "$AGENTS_MD" "$HOME/AGENTS.md"          "~/AGENTS.md"
+link_one "$AGENTS_MD" "$CLAUDE_DIR/CLAUDE.md"    "~/.claude/CLAUDE.md"
 
 say ""
 say "${c_bold}Shared folders${c_reset}"
 
-for path in "$AGENTS_ROOT"/*/; do
+for path in "$REPO_ROOT"/*/; do
   name="$(basename "$path")"
 
   if in_list "$name" "${SKIP_DIRS[@]}"; then
@@ -194,16 +201,6 @@ for path in "$AGENTS_ROOT"/*/; do
   link_one "${path%/}" "$dest" "~/.claude/$name"
 done
 
-# --------------------------------------------------------------- external ----
-
-say "Installing External Skills via download, for all agents AND Claude."
-
-set +e
-
-./bin/external-skills-for-agents.sh
-./bin/external-skills-for-claude.sh
-./
-
 # --------------------------------------------------------------- summary ----
 
 say ""
@@ -215,6 +212,9 @@ if [[ $conflicts -gt 0 ]]; then
   say "  ${c_yellow}Some targets were left alone. Nothing real is ever overwritten;${c_reset}"
   say "  ${c_yellow}move them aside yourself, or re-run with --force for wrong symlinks.${c_reset}"
 fi
+
+say ""
+say "  ${c_dim}New machine, or skills feeling stale? scripts/install-sources -f${c_reset}"
 
 say ""
 

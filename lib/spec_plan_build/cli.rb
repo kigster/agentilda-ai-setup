@@ -81,10 +81,15 @@ module SpecPlanBuild
         desc: "Document work that already shipped: pull request numbers or URLs, comma separated. Requires --after"
       option :spec, type: :boolean, default: true,
         desc: "With --prs, write spec.md from what the pull requests did. --no-spec records them and stops, which is fast and offline"
+      option :draft, type: :boolean, default: true,
+        desc: "For a new feature (no --prs), attempt spec.md's four headings from project context via `claude`. --no-draft leaves them bare"
+      option :open, type: :boolean, default: true,
+        desc: "Open the new spec.md in the system editor when done (macOS `open`). --no-open leaves it for you to open"
 
       # noinspection RubyMismatchedArgumentType
       example [
-        "tax rule dsl                        # 003.00-⚪️-tax-rule-dsl",
+        "tax rule dsl                        # 003.00-⚪️-tax-rule-dsl, spec.md scaffolded and drafted",
+        "tax rule dsl --no-draft --no-open   # scaffold only, nothing shelled out, nothing opened",
         "--after 002 schedule k1             # 002.01-🕰️-schedule-k1 (documented after the fact)",
         "--after 018 --prs 12,15 verify      # …and write spec.md from what those PRs did",
         "--after 018 --pr https://…/pull/12 verify",
@@ -134,19 +139,28 @@ module SpecPlanBuild
         exit 65
       end
 
+      # A plan with recorded pull requests already has its facts — hand it to
+      # the writer that reconstructs a specification from a diff. One without
+      # them does not exist yet, and reconstructing is not the job; {#brief} is.
+      #
       # @param path [String]
       # @param prs [Array<Hash>, nil]
       # @param options [Hash]
       # @return [void]
       def created(path, prs, options)
-        path = synthesize(path, options) if prs && !prs.empty? && options.fetch(:spec, true)
+        from_prs = prs && !prs.empty?
+        path = if from_prs
+                 synthesize(path, options) if options.fetch(:spec, true)
+               else
+                 brief(path, options)
+        end || path
         puts path
         return if quiet?(options)
 
         feature = Feature.parse(path)
         success("Created #{File.basename(path)}\n\n" \
         "#{feature.status.emoji} #{feature.status.label} — #{feature.status.note}\n" \
-        "#{next_step(path, feature)}")
+        "#{next_step(path, feature, from_prs:)}")
       end
 
       # Hand the folder to the writer that already knows how to write a
@@ -168,6 +182,41 @@ module SpecPlanBuild
         settle(path)
       end
 
+      # A folder with no pull requests to reconstruct from is a feature that
+      # does not exist yet. {Brief} writes the four headings a human still has
+      # to answer, makes a best-effort pass at them from what the project
+      # already has on disk, and — unless told not to — opens the result for
+      # a human to finish. The folder's state never moves: ⚪️ New only ever
+      # claimed that a specification exists, not that it is complete.
+      #
+      # @param path [String]
+      # @param options [Hash]
+      # @return [String] +path+, unchanged
+      def brief(path, options)
+        feature = Feature.parse(path)
+        return path if feature.status.key == :retroactive
+
+        root = options[:root] || File.dirname(path, 2)
+        brief = Brief.new(path:, title: feature.title, root:)
+        brief.write_scaffold!
+
+        if options.fetch(:draft, true)
+          ok, note = UI.spinning("Drafting spec.md from project context") { brief.attempt! }
+          warn_about_draft(note) unless ok
+        end
+
+        open_spec(brief.spec_path) if options.fetch(:open, true)
+        path
+      end
+
+      # @param spec_path [String]
+      # @return [void]
+      def open_spec(spec_path)
+        return unless RbConfig::CONFIG["host_os"].to_s.match?(/darwin/)
+
+        system("open", spec_path, out: File::NULL, err: File::NULL)
+      end
+
       # @param path [String]
       # @return [String] where the folder ended up
       def settle(path)
@@ -184,13 +233,22 @@ module SpecPlanBuild
               "The pull requests are recorded. Run `spec-plan-build run --commit` to retry.")
       end
 
+      # @param note [String]
+      # @return [void]
+      def warn_about_draft(note)
+        error("spec.md was scaffolded, but the drafting attempt did not finish:\n#{note}\n\n" \
+              "The four headings are there, empty. Fill them in by hand, or hand off to leah-researcher.")
+      end
+
       # @param path [String]
       # @param feature [SpecPlanBuild::Feature]
       # @return [String]
-      def next_step(path, feature)
-        return "Next: write #{File.join(File.basename(path), "spec.md")}" unless feature.status.key == :new && File.file?(File.join(path, "spec.md"))
+      def next_step(path, feature, from_prs:)
+        spec = File.join(File.basename(path), "spec.md")
+        return "Next: write #{spec}" unless feature.status.key == :new && File.file?(File.join(path, "spec.md"))
+        return "Next: read #{spec} — it was written from the pull requests, so check it against what actually shipped" if from_prs
 
-        "Next: read #{File.join(File.basename(path), "spec.md")} — it was written from the pull requests, so check it against what actually shipped"
+        "Next: fill in the four headings in #{spec}, then hand off to leah-researcher"
       end
     end
 
@@ -632,6 +690,7 @@ module SpecPlanBuild
 
         if (path = options[:output])
           File.write(path, document)
+          system("command -v mdformat >/dev/null 2>&1 && mdformat --wrap no #{path}")
           success("Wrote #{path}") unless quiet?(options)
         else
           $stdout.write(document)
@@ -647,6 +706,8 @@ module SpecPlanBuild
         desc: "Actually invoke the agents (default: dry run, prints the plan of work)"
       option :rounds, default: "10", desc: "Hard ceiling on loop iterations"
       option :agent, desc: "Only run this one agent"
+      option :plan, aliases: ["--plans"],
+        desc: "Only these plans, comma separated: NNN or NNN.MM, e.g. --plan 003,005.01. Default: the whole tree"
       option :root, desc: "Repository root the agents work in (default: the .plans parent)"
       option :isolation, default: "worktree", values: %w[worktree shared],
         desc: "worktree: a checkout and branch per plan, run in parallel. shared: one tree, serial"
@@ -661,7 +722,8 @@ module SpecPlanBuild
         "--commit               # run them, one worktree per plan, in parallel",
         "--commit -j 4          # …with four at a time",
         "--isolation shared     # one tree, serial — no git required",
-        "--commit --rounds 3    # …with a tighter ceiling"
+        "--commit --rounds 3    # …with a tighter ceiling",
+        "--commit --plan 005,006,007  # only the plans a batch step just created"
       ]
 
       # @param options [Hash]
@@ -671,6 +733,7 @@ module SpecPlanBuild
         root = options[:root] || File.dirname(tree.dir)
         agents = Agents.new
         agents = filtered(agents, options[:agent]) if options[:agent]
+        plans = options[:plan] ? scoped(tree, options[:plan]) : nil
 
         isolation = options.fetch(:isolation, "worktree").to_sym
         jobs = (options[:jobs] || UI.default_jobs).to_i
@@ -682,7 +745,7 @@ module SpecPlanBuild
         end
 
         runner = Runner.new(
-          tree:, agents:, isolation:, jobs:,
+          tree:, agents:, isolation:, jobs:, plans:,
           worktree: (Worktree.new(root:) if isolation == :worktree),
           max_rounds: options.fetch(:rounds, 10).to_i,
           executor: Executor.new(root:, dry_run: !commit?(options))
@@ -705,6 +768,28 @@ module SpecPlanBuild
           exit 65
         end
         agents
+      end
+
+      # `--plan` names the whole point of scoping: a skill that just minted
+      # N folders hands off exactly those, not the tree. A typo'd or already-
+      # settled number silently running the whole tree instead is the failure
+      # this exists to prevent, so an unknown one is refused rather than
+      # dropped.
+      #
+      # @param tree [SpecPlanBuild::Tree]
+      # @param text [String]
+      # @return [Array<SpecPlanBuild::Ordinal>]
+      def scoped(tree, text)
+        known = tree.subjects.map { |s| s.feature.ordinal }
+        text.split(",").map(&:strip).reject(&:empty?).map { |token|
+          ordinal = Ordinal.parse(token)
+          unless ordinal && known.include?(ordinal)
+            error("No plan #{token} in #{tree.dir}.\n\n" \
+                  "Known: #{known.join(", ")}")
+            exit 66
+          end
+          ordinal
+        }
       end
 
       # @param rounds [Array]
@@ -733,6 +818,8 @@ module SpecPlanBuild
         publisher = Publisher.new(root:, dry_run: !commit?(options))
 
         published = runner.tree.reload.subjects.filter_map do |subject|
+          next unless runner.in_scope?(subject)
+
           checkout = runner.worktree.checkout_for(subject.feature)
           next unless checkout.dirty?
 
@@ -806,10 +893,21 @@ module SpecPlanBuild
       def call(**) = puts("spec-plan-build #{SpecPlanBuild::VERSION}")
     end
 
+    # `spec-plan-build states` — the state machine, as a terminal diagram.
+    class States < Dry::CLI::Command
+      desc "Print a diagram of every state and the transitions between them"
+
+      example [""]
+
+      # @return [void]
+      def call(**) = $stdout.write(Diagram.new.render)
+    end
+
     register "create", Create, aliases: %w[new c]
     register "status", Status, aliases: %w[st]
     register "run", Run
     register "docs", Docs
+    register "states", States, aliases: %w[diagram]
     register "index", Index, aliases: %w[idx]
     register "version", Version, aliases: %w[--version -v]
 

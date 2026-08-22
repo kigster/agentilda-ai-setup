@@ -45,6 +45,21 @@ Two digits, always. One would sort into the middle of the two-digit range — `0
 
 **A retroactive `spec.md` must open with a dated line saying so**, naming the pull requests it describes. It documents what exists; it does not pretend to have decided anything in advance. Anchor by *when the work merged*, not by what it is about — compare merge dates against folder creation dates (`git log --diff-filter=A`). Anchoring by topic invites an argument nobody can settle, and the number is a slot, not a claim about subject matter.
 
+## Starting a feature that does not exist yet
+
+`spec-plan-build create <two to five words>` mints the folder at ⚪️ New and, for a genuinely new feature, scaffolds `spec.md` with a title and four headings, verbatim:
+
+- `## What we are trying to achieve`
+- `## Why it matters`
+- `## What already exists`
+- `## What research needs to settle`
+
+It then makes a best-effort attempt at each from what the project already has on disk — its own docs, `.plans/BACKLOG.md` when the project keeps one, anything already downloaded or already built that bears on the topic — and opens the result for a human to finish. `--no-draft` skips the attempt and leaves the headings bare; `--no-open` leaves the file for you to open.
+
+**Nothing else belongs in that first pass.** It writes no `## Goals`, no `## Non-Goals`, no conclusions — deciding those before `leah-researcher` and `yoda-writer` have looked is choosing the answer before the research runs. Above all, it writes no heading beginning with the word "Research": that heading is not decoration, it is the 🔎 Researched invariant, so writing one — even empty — flips the folder's state out from under whoever reads it next, and the research nobody did gets skipped rather than assigned.
+
+This is only for work that does not exist yet. `create --after <plan> --prs <n,...>` is the other path — the work already shipped, so `yoda-writer` reconstructs the specification from the pull requests instead of guessing at a feature that has no facts yet to guess from.
+
 ## The states
 
 | Symbol | Meaning                | Key                | Files required                           | Description                                                               |
@@ -97,21 +112,8 @@ So nothing re-derives one of them from a folder's contents — otherwise every �
 
 A bare promote walks the **spine** — spec → plan → build. Everything off it (blocking, deferring, rejecting) has to be named explicitly. That is the whole reason there is a machine here rather than a rename: a transition is refused when the destination's requirements are not already met, and that refusal is information — it means the phase has not actually happened yet.
 
-![Every state a plan folder may be in, and every transition between them](../../docs/img/plan-spec-build.png)
-
 <details>
 <summary>Mermaid source for the diagram above</summary>
-
-<!--
-REDRAWING THE PNG: only when this block changes.
-
-The image above is drawn by hand from this source and is the version
-worth reading. This block is generated from the state machine, so any
-movement in it — a state added, a transition rerouted, an emoji
-swapped — is the signal that docs/img/plan-spec-build.png
-is stale and has to be redrawn. If this block did not move, neither did
-the machine: reuse the existing PNG.
--->
 
 ```mermaid
 stateDiagram-v2

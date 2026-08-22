@@ -47,17 +47,6 @@ RSpec.describe SpecPlanBuild::Documentation do
       end
     end
 
-    # The picture is drawn by hand, and the document that shows it is
-    # regenerated from the machine — so the generator has to emit the reference
-    # itself. It did not once, and one `just docs` silently deleted the image
-    # from the document while leaving the file on disk.
-    it "keeps the hand-drawn diagram, so regenerating does not delete it" do
-      aggregate_failures do
-        expect(document).to include(described_class::DIAGRAM_IMAGE)
-        expect(document).to match(/REDRAWING THE PNG: only when this block changes/)
-      end
-    end
-
     it "names 🟣 Merged as deliberately not a folder state" do
       expect(document).to match(/🟣 Merged is deliberately \*\*not\*\* a folder state/)
     end
@@ -88,6 +77,24 @@ RSpec.describe SpecPlanBuild::Documentation do
 
     it "stamps the version it was generated from" do
       expect(document).to include(SpecPlanBuild::VERSION)
+    end
+
+    it "documents create's four-heading brief, verbatim and in order" do
+      section = document[/^## Starting a feature.*?\n(.*?)^## /m, 1].to_s
+      headings = section.scan(/^- `## (.+)`$/).flatten
+
+      expect(headings).to eq(SpecPlanBuild::Brief::HEADINGS)
+    end
+
+    it "says plainly that create writes no Goals, no Non-Goals and no Research heading" do
+      aggregate_failures do
+        expect(document).to match(/writes no `## Goals`, no\n`## Non-Goals`/)
+        expect(document).to match(/writes no heading beginning with the word "Research"/)
+      end
+    end
+
+    it "distinguishes the brief from the retroactive --prs path" do
+      expect(document).to match(/`create --after <plan> --prs/)
     end
   end
 

@@ -1,0 +1,377 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# install-sources — pull external skills and plugins into this repo.
+#
+#   scripts/install-sources              # clone what's missing, update the rest
+#   scripts/install-sources --dry-run    # say what it would do, touch nothing
+#   scripts/install-sources -f           # wipe .sources and re-clone everything fresh
+#   scripts/install-sources list         # what's configured, and what's installed
+#
+# Reads config/sources.yml. Each source is cloned into `.sources/<name>`
+# (gitignored — kept only so a plain `install-sources` can `git pull` instead
+# of re-cloning) and installed into `skills/` or `plugins/` — both also
+# gitignored, both fully regenerable from sources.yml plus `skills-mine/`,
+# which this script always symlinks in too.
+#
+# Deliberately dependency-free: this has to run on a machine that has not run
+# `bundle install` yet, because it is part of what makes that machine usable.
+#
+# © 2026 Konstantin Gredeskoul
+
+require "yaml"
+require "fileutils"
+require "json"
+require "open3"
+
+ROOT = File.expand_path("..", __dir__)
+SOURCES_FILE = File.join(ROOT, "config", "sources.yml")
+STAGING_DIR = File.join(ROOT, ".sources")
+SKILLS_DIR = File.join(ROOT, "skills")
+PLUGINS_DIR = File.join(ROOT, "plugins")
+SKILLS_MINE_DIR = File.join(ROOT, "skills-mine")
+MANIFEST_FILE = File.join(STAGING_DIR, "manifest.json")
+
+# ---------------------------------------------------------------- output --
+
+COLOR = $stderr.tty? && !ENV.key?("NO_COLOR")
+def paint(text, code) = COLOR ? "\e[#{code}m#{text}\e[0m" : text.to_s
+
+# standard:disable Style/StderrPuts -- Kernel#warn is a no-op under RUBYOPT=-W0,
+# which is common in CI and agent harnesses; writing $stderr directly is not.
+def out(msg) = $stderr.puts(msg)
+# standard:enable Style/StderrPuts
+def ok(msg) = out("  #{paint("✓", 32)} #{msg}")
+def note(msg) = out("  #{paint("·", 2)} #{msg}")
+def bad(msg) = out("  #{paint("✗", 31)} #{msg}")
+def warn_(msg) = out("  #{paint("!", 33)} #{msg}")
+def say(msg) = out(msg)
+
+# ----------------------------------------------------------------- source --
+
+# One entry from config/sources.yml.
+Source = Struct.new(:name, :type, :repo, :path) do
+  def self.from_yaml(hash)
+    new(name: hash.fetch("name"), type: hash.fetch("type"), repo: hash.fetch("repo"), path: hash["path"])
+  end
+
+  # @return [String] where this source is cloned to
+  def staging_dir = File.join(STAGING_DIR, name)
+
+  # @return [String] the directory inside the clone this source actually installs from
+  def content_dir = path ? File.join(staging_dir, path) : staging_dir
+end
+
+def load_sources
+  return [] unless File.file?(SOURCES_FILE)
+
+  (YAML.safe_load_file(SOURCES_FILE)["sources"] || []).map { |h| Source.from_yaml(h) }
+end
+
+def load_manifest
+  return {} unless File.file?(MANIFEST_FILE)
+
+  JSON.parse(File.read(MANIFEST_FILE))
+rescue JSON::ParserError
+  {}
+end
+
+def save_manifest(manifest)
+  FileUtils.mkdir_p(STAGING_DIR)
+  File.write(MANIFEST_FILE, JSON.pretty_generate(manifest))
+end
+
+# ------------------------------------------------------------------- git --
+
+# @param dir [String]
+# @return [Boolean]
+def repo?(dir) = File.directory?(File.join(dir, ".git"))
+
+# @param args [Array<String>] argv after `git`
+# @param name [String] source name, for the failure message
+# @param verb [String] "pull" or "clone", for the failure message
+# @return [Boolean]
+def run_git(*args, name:, verb:)
+  _out, err, status = Open3.capture3("git", *args)
+  bad("#{name}: git #{verb} failed — #{err.lines.first&.strip}") unless status.success?
+  status.success?
+end
+
+# @param source [Source]
+# @param dry_run [Boolean]
+# @return [Boolean] whether the clone is present and current
+def clone_or_update(source, dry_run:)
+  if repo?(source.staging_dir)
+    note("#{source.name}: updating #{source.staging_dir.sub("#{ROOT}/", "")}")
+    return true if dry_run
+
+    run_git("-C", source.staging_dir, "pull", "--ff-only", "--quiet", name: source.name, verb: "pull")
+  else
+    note("#{source.name}: cloning #{source.repo}")
+    return true if dry_run
+
+    FileUtils.mkdir_p(File.dirname(source.staging_dir))
+    run_git("clone", "--quiet", source.repo, source.staging_dir, name: source.name, verb: "clone")
+  end
+end
+
+# @param dir [String]
+# @return [String, nil] the commit currently checked out
+def sha_of(dir)
+  return nil unless repo?(dir)
+
+  head, status = Open3.capture2("git", "-C", dir, "rev-parse", "HEAD")
+  status.success? ? head.strip : nil
+end
+
+# --------------------------------------------------------------- install --
+
+# Refuse to let an install step land on something it does not own. A skill
+# folder is either a symlink this script made, or it is somebody else's —
+# `skills/` held over a hundred hand-placed entries before this script
+# existed, and silently replacing one is exactly the kind of "which agent
+# wrote over what" failure the rest of this repo goes out of its way to avoid.
+#
+# `--force` is the one override, and it is exactly the override the flag
+# promises: "re-installment of all key sources" means a real, un-tracked
+# directory sitting where a source wants to install *is* the staleness this
+# flag exists to clear, not a reason to stop.
+#
+# @param dest [String]
+# @param owner [String] manifest key that may claim this path
+# @param manifest [Hash]
+# @param force [Boolean]
+# @return [Boolean]
+def claimable?(dest, owner, manifest, force:)
+  return true unless File.exist?(dest)
+  return true if File.symlink?(dest) && manifest.dig("paths", dest) == owner
+
+  force
+end
+
+# @param source [String] absolute path to link to
+# @param dest [String] absolute path of the link
+# @param owner [String]
+# @param manifest [Hash]
+# @param dry_run [Boolean]
+# @param force [Boolean]
+# @return [Boolean]
+def link(source, dest, owner:, manifest:, dry_run:, force: false)
+  unless claimable?(dest, owner, manifest, force:)
+    warn_("#{File.basename(dest)} already exists and was not put there by install-sources — left alone (pass -f to reclaim it)")
+    return false
+  end
+
+  return true if dry_run
+
+  already_right = File.symlink?(dest) && File.readlink(dest) == source
+  FileUtils.rm_rf(dest) if (File.exist?(dest) || File.symlink?(dest)) && !already_right
+  FileUtils.mkdir_p(File.dirname(dest))
+  FileUtils.ln_s(source, dest) unless already_right
+  manifest["paths"] ||= {}
+  manifest["paths"][dest] = owner
+  true
+end
+
+# Skills authored directly in this repo. Always linked, never copied — an
+# edit to skills-mine/foo should not need a re-run to show up.
+#
+# @param manifest [Hash]
+# @param dry_run [Boolean]
+# @return [void]
+def install_mine(manifest, dry_run:, force:)
+  return unless File.directory?(SKILLS_MINE_DIR)
+
+  Dir.children(SKILLS_MINE_DIR).sort.each do |name|
+    next if name.start_with?(".")
+
+    src = File.join(SKILLS_MINE_DIR, name)
+    next unless File.directory?(src)
+
+    dest = File.join(SKILLS_DIR, name)
+    if link(src, dest, owner: "skills-mine", manifest:, dry_run:, force:)
+      ok("skills/#{name} -> skills-mine/#{name}")
+    end
+  end
+end
+
+# A skill is any directory with `SKILL.md` at its root — that is the actual
+# boundary, not a fixed depth. `mattpocock/skills` sorts its skills one level
+# deeper than that, under a category (`engineering/ask-matt`); a different
+# source might not. Recursing until `SKILL.md` turns up finds a skill exactly
+# where it is instead of encoding one source's layout as if it were universal.
+#
+# @param dir [String]
+# @param depth [Integer] recursion guard — five is generous for a category tree
+# @return [Array<String>] absolute paths of skill directories found
+def find_skill_dirs(dir, depth: 5)
+  return [] unless File.directory?(dir)
+  return [dir] if File.file?(File.join(dir, "SKILL.md"))
+  return [] if depth.zero?
+
+  Dir.children(dir).sort.reject { |n| n.start_with?(".") }.flat_map { |name|
+    child = File.join(dir, name)
+    File.directory?(child) ? find_skill_dirs(child, depth: depth - 1) : []
+  }
+end
+
+# @param source [Source]
+# @param manifest [Hash]
+# @param dry_run [Boolean]
+# @return [void]
+def install_skills_source(source, manifest, dry_run:, force:)
+  unless File.directory?(source.content_dir)
+    if dry_run
+      note("#{source.name}: not cloned yet — would install its skills after cloning")
+    else
+      bad("#{source.name}: #{source.content_dir.sub("#{ROOT}/", "")} does not exist — check `path` in sources.yml")
+    end
+    return
+  end
+
+  found = find_skill_dirs(source.content_dir)
+  note("#{source.name}: no SKILL.md found anywhere under #{source.path || "."}") if found.empty?
+
+  found.each do |skill_dir|
+    name = File.basename(skill_dir)
+    dest = File.join(SKILLS_DIR, name)
+    if link(skill_dir, dest, owner: source.name, manifest:, dry_run:, force:)
+      ok("skills/#{name} <- #{source.name}")
+    end
+  end
+end
+
+# A plugin is installed as one copy — not a symlink into `.sources`, which
+# `--force` wipes — and then its own `skills/` subdirectory, if it has one,
+# is fanned out the same way an external skills source is: a plugin's skills
+# are still just skills, reachable without knowing which plugin they came
+# from.
+#
+# @param source [Source]
+# @param manifest [Hash]
+# @param dry_run [Boolean]
+# @return [void]
+def install_plugin_source(source, manifest, dry_run:, force:)
+  unless File.directory?(source.content_dir)
+    if dry_run
+      note("#{source.name}: not cloned yet — would install as plugins/#{source.name} after cloning")
+    else
+      bad("#{source.name}: #{source.content_dir.sub("#{ROOT}/", "")} does not exist — check `path` in sources.yml")
+    end
+    return
+  end
+
+  dest = File.join(PLUGINS_DIR, source.name)
+  note("#{source.name}: installing plugin -> plugins/#{source.name}")
+  unless dry_run
+    FileUtils.rm_rf(dest)
+    FileUtils.mkdir_p(File.dirname(dest))
+    FileUtils.cp_r(source.content_dir, dest)
+  end
+  ok("plugins/#{source.name}")
+
+  plugin_skills = File.join(dest, "skills")
+  return unless dry_run ? File.directory?(File.join(source.content_dir, "skills")) : File.directory?(plugin_skills)
+
+  skills_root = dry_run ? File.join(source.content_dir, "skills") : plugin_skills
+  find_skill_dirs(skills_root).each do |skill_dir|
+    name = File.basename(skill_dir)
+    skill_dest = File.join(SKILLS_DIR, name)
+    if link(skill_dir, skill_dest, owner: source.name, manifest:, dry_run:, force:)
+      ok("skills/#{name} <- #{source.name} (plugin)")
+    end
+  end
+end
+
+# ---------------------------------------------------------------- verbs --
+
+def cmd_list
+  sources = load_sources
+  manifest = load_manifest
+
+  say(paint("Configured sources", 1))
+  if sources.empty?
+    note("none — add one to #{SOURCES_FILE.sub("#{ROOT}/", "")}")
+  else
+    sources.each do |s|
+      sha = sha_of(s.staging_dir)
+      state = sha ? sha[0, 8].to_s : "not cloned"
+      say("  #{s.name.ljust(14)} #{s.type.ljust(7)} #{s.repo}  [#{state}]")
+    end
+  end
+
+  say("")
+  say(paint("Installed, by owner", 1))
+  owners = (manifest["paths"] || {}).values.tally
+  if owners.empty?
+    note("nothing installed yet — run without arguments first")
+  else
+    owners.sort.each { |owner, count| say("  #{owner.ljust(14)} #{count}") }
+  end
+end
+
+def cmd_install(force:, dry_run:)
+  say(paint("Installing sources into #{ROOT}", 1))
+  say(paint("dry run — nothing will be written", 33)) if dry_run
+  say("")
+
+  if force
+    say(paint("--force: wiping .sources for a clean re-clone", 33))
+    FileUtils.rm_rf(STAGING_DIR) unless dry_run
+  end
+
+  manifest = force ? {} : load_manifest
+  FileUtils.mkdir_p(SKILLS_DIR) unless dry_run
+  FileUtils.mkdir_p(PLUGINS_DIR) unless dry_run
+
+  say(paint("skills-mine", 1))
+  install_mine(manifest, dry_run:, force:)
+
+  load_sources.each do |source|
+    say("")
+    say(paint(source.name, 1))
+    next unless clone_or_update(source, dry_run:)
+
+    case source.type
+    when "skills" then install_skills_source(source, manifest, dry_run:, force:)
+    when "plugin" then install_plugin_source(source, manifest, dry_run:, force:)
+    else bad("#{source.name}: unknown type #{source.type.inspect} — expected skills or plugin")
+    end
+  end
+
+  save_manifest(manifest) unless dry_run
+  say("")
+  say(paint("Done.", 1) + " `scripts/install-sources list` to see what's installed from where.")
+end
+
+# ------------------------------------------------------------------- cli --
+
+def usage
+  puts <<~USAGE
+    install-sources — pull external skills and plugins into this repo
+
+      scripts/install-sources              clone what's missing, update the rest
+      scripts/install-sources --dry-run    say what it would do, touch nothing
+      scripts/install-sources -f           wipe .sources and re-clone everything
+      scripts/install-sources list         what's configured, and what's installed
+  USAGE
+end
+
+args = ARGV.dup
+if args.delete("-h") || args.delete("--help")
+  usage
+  exit 0
+end
+
+force = !!(args.delete("-f") || args.delete("--force"))
+dry_run = !!(args.delete("-n") || args.delete("--dry-run"))
+verb = args.shift || "install"
+
+case verb
+when "install" then cmd_install(force:, dry_run:)
+when "list" then cmd_list
+else
+  out("install-sources: unknown command #{verb.inspect}\n")
+  usage
+  exit 64
+end

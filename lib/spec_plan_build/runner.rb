@@ -76,14 +76,17 @@ module SpecPlanBuild
     #   and branch; `:shared` runs every agent against one tree, which is only
     #   safe serially
     # @param jobs [Integer] how many agents run at once
+    # @param plans [Array<SpecPlanBuild::Ordinal>, nil] restrict the loop to
+    #   these plans; nil (the default) is the whole tree
     def initialize(tree:, executor:, agents: Agents.new, max_rounds: 10,
-      isolation: :shared, jobs: 1, worktree: nil)
+      isolation: :shared, jobs: 1, worktree: nil, plans: nil)
       @tree = tree
       @executor = executor
       @agents = agents
       @max_rounds = max_rounds
       @isolation = isolation
       @worktree = worktree
+      @plans = plans
       @rounds = []
 
       # Concurrency without isolation is the exact failure the worktree exists
@@ -94,6 +97,11 @@ module SpecPlanBuild
 
     # @return [Boolean]
     def isolated? = @isolation == :worktree
+
+    # @param subject [SpecPlanBuild::Subject]
+    # @return [Boolean] whether this run's scope covers this plan at all —
+    #   `--plan` restricts it; with no `--plan` every plan is in scope
+    def in_scope?(subject) = @plans.nil? || @plans.include?(subject.feature.ordinal)
 
     # @return [Integer] agents running at once
     attr_reader :jobs
@@ -128,11 +136,11 @@ module SpecPlanBuild
     # Plans nobody may act on, for the closing report.
     #
     # @return [Array<SpecPlanBuild::Subject>]
-    def blocked = tree.subjects.select { |s| %i[blocked product_blocked].include?(s.status.key) }
+    def blocked = in_scope.select { |s| %i[blocked product_blocked].include?(s.status.key) }
 
-    # @return [Boolean] every plan is either finished or deliberately parked
+    # @return [Boolean] every plan in scope is either finished or deliberately parked
     def settled?
-      tree.subjects.all? { |s| StateMachine::SETTLED.include?(s.status.key) }
+      in_scope.all? { |s| StateMachine::SETTLED.include?(s.status.key) }
     end
 
     private
@@ -169,6 +177,11 @@ module SpecPlanBuild
     # @return [String]
     def shared_root = File.dirname(tree.dir)
 
+    # @return [Array<SpecPlanBuild::Subject>] the tree, or just the plans
+    #   `--plan` named — computed fresh each call, since {#run_round} reloads
+    #   {#tree} before reading it
+    def in_scope = tree.subjects.select { |s| in_scope?(s) }
+
     # @param error [Exception]
     # @return [SpecPlanBuild::Runner::Attempt]
     def failed(error)
@@ -182,7 +195,7 @@ module SpecPlanBuild
     #
     # @return [Array<Array(SpecPlanBuild::Agent, SpecPlanBuild::Subject)>]
     def assignments
-      tree.subjects.filter_map do |subject|
+      in_scope.filter_map do |subject|
         next if StateMachine::SETTLED.include?(subject.status.key)
 
         agent = @agents.for_status(subject.status).first

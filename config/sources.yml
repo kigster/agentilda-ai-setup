@@ -1,0 +1,26 @@
+# External skill and plugin sources, pulled by `scripts/install-sources`.
+#
+# Add a repo here instead of installing it by hand: `scripts/install-sources`
+# clones it into `.sources/<name>` (gitignored, kept for `git pull` reuse and
+# for recording exactly which commit is installed) and installs its content
+# into `skills/` or `plugins/` — both also gitignored, both fully regenerable
+# from this file plus `skills-mine/`. `-f` wipes `.sources` and re-clones
+# everything fresh, which is the whole answer to "these skills went stale and
+# I can't even tell where they came from."
+#
+#   type: skills — every subdirectory under `path` (repo root if omitted)
+#                  becomes its own skills/<dir-name>
+#   type: plugin — `path` becomes plugins/<name>, one bundle. If that bundle
+#                  has its own skills/ subdirectory, each child is *also*
+#                  symlinked individually into skills/<dir-name> — a plugin's
+#                  skills are still just skills.
+sources:
+  - name: mattpocock
+    type: skills
+    repo: git@github.com:mattpocock/skills.git
+    path: skills
+
+  - name: pstack
+    type: plugin
+    repo: git@github.com:cursor/plugins.git
+    path: pstack

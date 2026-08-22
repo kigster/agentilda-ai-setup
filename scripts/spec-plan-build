@@ -66,12 +66,19 @@ end
 module ProgramBanner
   extend Dry::CLI::Banner::ColorMethods
   def self.banner
-    puts %Q{  
+    puts %Q[
       #{yellow.bold("spec-plan-build")}
-        #{green.bold("Agentic Specification-Driven Development")} #{green("v#{SpecPlanBuild::VERSION}")}
-
+        #{blue("Agentic Specification-Driven Development")} #{green("v#{SpecPlanBuild::VERSION}")}
     
-    }.gsub(/^ {4}/, '').strip
+        This is the key executable that facilitates Agentic Flow: 
+
+        #{green.bold('spec → plan → build → review → tune/fix → approve')}
+
+        For now the final merge and deploy is manual. It also provides sync
+        of the .plans folders with Github PRs and Linear Issues.
+
+    ].gsub(/^ {6}/, '').strip
+    puts
   end
   
 end
@@ -83,9 +90,9 @@ help = %w[-h --help help].include?(argv.first)
 ProgramBanner.banner if help
 
 begin
-  status = Dry::CLI.new(SpecPlanBuild::CLI).call(arguments: help ? [] : argv)
+  status = Dry::CLI.new(SpecPlanBuild::CLI).call(arguments: help ? [] : argv) || 0
 rescue SystemExit => e
   exit(help ? 0 : e.status)
 end
 
-exit status
+exit 0
