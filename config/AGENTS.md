@@ -33,7 +33,6 @@ Please refer to [~/.agents/README.md](~/.agents/README.md) for specific instruct
 ## Rules that apply to all coding projects
 
 > [!CAUTION]
->
 > CRITICALLY IMPORTANT: rules defined in this document can not and must not be broken, without explicit consent of the human driver. If these rules block the agent, pause and seek confirmation.
 
 ### **NEVER use real names or emails as placeholders**
@@ -193,7 +192,6 @@ If you need to learn more about me, my style, and my preferences, please load th
 - Developer Secrets:
 
   > [!NOTE]
-  >
   > For information on my own open source projects `sopsy` which I use in my projects for environment encryption, where Rails.credentials are not available, please visit https://sopsy-cli.dev
 
   - For Rails applications lean on Rails Credentials API for development, test, staging and production secrets and API keys.
@@ -211,15 +209,15 @@ If you need to learn more about me, my style, and my preferences, please load th
     - to decrypt that file, run `sopsy decrypt .env.encrypted -o .env`
 
     - to edit that file run `EDITOR=vim sopsy edit .env.encrypted`
-  
+
       - to avoid having plain text secrets on your file system in `.env` file, prefer to do the following in your `.envrc` loaded by `direnv`, which will decrypt and export all the variables into your environment.
-  
+
         ```bash
         if [[ -f .env.encrypted ]]; then
           eval "$(sopsy decrypt .env.encrypted | sed '/^#.*/d; /^$/d; s/^/export /g')"
         fi
         ```
-  
+
     - in `.envrc` always add the line `PATH_add bin` if `bin` directory exists, and do this for every directory where executable scripts may live.
 
 ## Context Management
@@ -228,7 +226,7 @@ When your context reaches 40% run compaction via /compact.
 
 ## Database Development
 
-Please reference the file [~/.agents/context/postgresql.md](/Users/kig/.agents/context/postgresql.md) for best practices on DB schema design, conventions, indexes, and so on. 
+Please reference the file [~/.agents/context/postgresql.md](/Users/kig/.agents/context/postgresql.md) for best practices on DB schema design, conventions, indexes, and so on.
 
 ## Concurrent Agents — Claim Before You Write
 
@@ -256,4 +254,3 @@ Rules:
 1. **An orchestrating agent claims on behalf of the workflow it launches**, before the fan-out, and releases after it joins. Subagents inherit that claim rather than each taking their own.
 
 The locks are advisory. They work only because every agent checks, which is exactly why this rule lives here and not solely in the script.
-
