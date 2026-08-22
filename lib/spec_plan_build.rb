@@ -123,6 +123,7 @@ end
   github
   tree
   creator
+  brief
   adoption
   resolver
   resync
@@ -135,6 +136,7 @@ end
   executor
   runner
   documentation
+  diagram
   cli
 ].each do |component|
   path = File.join(__dir__, "spec_plan_build", "#{component}.rb")

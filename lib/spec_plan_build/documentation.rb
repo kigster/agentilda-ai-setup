@@ -13,15 +13,12 @@ module SpecPlanBuild
   # That lives in the heredocs below, in one place, and is emitted alongside the
   # generated parts.
   class Documentation
-    # The hand-drawn state diagram, relative to the document's default home in
-    # `context/feature-building/`.
-    DIAGRAM_IMAGE = "../../docs/img/plan-spec-build.png"
-
     # @return [String] the whole document
     def render
       [
         header,
         numbering,
+        starting,
         status_table,
         transitions,
         diagram,
@@ -123,6 +120,41 @@ module SpecPlanBuild
     end
 
     # @return [String]
+    def starting
+      headings = SpecPlanBuild::Brief::HEADINGS.map { |h| "- `## #{h}`" }.join("\n")
+
+      <<~MARKDOWN
+        ## Starting a feature that does not exist yet
+
+        `spec-plan-build create <two to five words>` mints the folder at #{status(:new).emoji} #{status(:new).label}
+        and, for a genuinely new feature, scaffolds `spec.md` with a title and four
+        headings, verbatim:
+
+        #{headings}
+
+        It then makes a best-effort attempt at each from what the project already
+        has on disk — its own docs, `#{SpecPlanBuild::Brief::BACKLOG_FILE}` when the project keeps one,
+        anything already downloaded or already built that bears on the topic — and
+        opens the result for a human to finish. `--no-draft` skips the attempt and
+        leaves the headings bare; `--no-open` leaves the file for you to open.
+
+        **Nothing else belongs in that first pass.** It writes no `## Goals`, no
+        `## Non-Goals`, no conclusions — deciding those before `leah-researcher` and
+        `yoda-writer` have looked is choosing the answer before the research runs.
+        Above all, it writes no heading beginning with the word "Research": that
+        heading is not decoration, it is the #{status(:researched).emoji} #{status(:researched).label} invariant, so writing
+        one — even empty — flips the folder's state out from under whoever reads it
+        next, and the research nobody did gets skipped rather than assigned.
+
+        This is only for work that does not exist yet. `create --after <plan> --prs
+        <n,...>` is the other path — the work already shipped, so `yoda-writer`
+        reconstructs the specification from the pull requests instead of guessing at
+        a feature that has no facts yet to guess from.
+
+      MARKDOWN
+    end
+
+    # @return [String]
     def status_table
       rows = SpecPlanBuild::STATUSES.map do |s|
         required = s.requires.empty? ? "—" : s.requires.map { |f| "`#{f}`" }.join(", ")
@@ -204,21 +236,9 @@ module SpecPlanBuild
       }
 
       <<~MARKDOWN
-        ![Every state a plan folder may be in, and every transition between them](#{DIAGRAM_IMAGE})
 
         <details>
         <summary>Mermaid source for the diagram above</summary>
-
-        <!--
-        REDRAWING THE PNG: only when this block changes.
-
-        The image above is drawn by hand from this source and is the version
-        worth reading. This block is generated from the state machine, so any
-        movement in it — a state added, a transition rerouted, an emoji
-        swapped — is the signal that #{DIAGRAM_IMAGE.delete_prefix("../../")}
-        is stale and has to be redrawn. If this block did not move, neither did
-        the machine: reuse the existing PNG.
-        -->
 
         ```mermaid
         stateDiagram-v2
