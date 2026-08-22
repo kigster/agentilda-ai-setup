@@ -86,6 +86,96 @@ RSpec.describe SpecPlanBuild::Worktree do
     end
   end
 
+  # `git worktree add` brings tracked files and nothing else, so an agent handed
+  # a bare checkout cannot run the suite it was told to keep green. It then
+  # reports a broken checkout as a broken plan, which is the expensive failure:
+  # the diagnosis points at the code rather than at the tree.
+  describe "seeding the files git ignores" do
+    before do
+      File.write(File.join(repo, ".gitignore"), ".env\nconfig/credentials/*.key\n")
+      system("git", "-C", repo, "add", "-A", out: File::NULL, err: File::NULL)
+      system("git", "-C", repo, "commit", "-qm", "ignore rules", out: File::NULL, err: File::NULL)
+
+      File.write(File.join(repo, ".env"), "SECRET=from-main\n")
+      FileUtils.mkdir_p(File.join(repo, "config", "credentials"))
+      File.write(File.join(repo, "config", "credentials", "test.key"), "testkey\n")
+    end
+
+    it "gives a new checkout the .env git would not" do
+      checkout = worktrees.checkout_for(feature)
+
+      expect(File.read(File.join(checkout.path, ".env"))).to eq("SECRET=from-main\n")
+    end
+
+    it "gives it the credential key, which is what MissingKeyError is about" do
+      checkout = worktrees.checkout_for(feature)
+
+      expect(File.read(File.join(checkout.path, "config/credentials/test.key"))).to eq("testkey\n")
+    end
+
+    # Worktrees made before any of this existed are still out there, and the
+    # seeder only ever adds a missing file, so repairing them costs one
+    # subprocess and no risk.
+    it "repairs a checkout that was created before seeding existed" do
+      checkout = worktrees.checkout_for(feature)
+      FileUtils.rm_f(File.join(checkout.path, ".env"))
+
+      worktrees.checkout_for(feature)
+
+      expect(File.exist?(File.join(checkout.path, ".env"))).to be(true)
+    end
+
+    it "leaves an agent's own edit alone rather than restoring the original" do
+      checkout = worktrees.checkout_for(feature)
+      File.write(File.join(checkout.path, ".env"), "SECRET=edited-by-agent\n")
+
+      worktrees.checkout_for(feature)
+
+      expect(File.read(File.join(checkout.path, ".env"))).to eq("SECRET=edited-by-agent\n")
+    end
+
+    # A seeded .env is gitignored, so it must not read as agent output. If it
+    # did, `prune` would keep every checkout forever and the loop would grow a
+    # worktree per round with nothing in any of them.
+    it "does not make an untouched checkout look dirty to prune" do
+      checkout = worktrees.checkout_for(feature)
+
+      expect { worktrees.prune }.to change { File.directory?(checkout.path) }.from(true).to(false)
+    end
+  end
+
+  describe "#seed when the seeder is unavailable" do
+    before { stub_const("SpecPlanBuild::Worktree::SEEDER", "/nonexistent/setup-worktree") }
+
+    # A plan is not worth abandoning over a seeding step.
+    it "does not raise, so one missing script cannot stop the loop" do
+      expect { worktrees.checkout_for(feature) }.not_to raise_error
+    end
+
+    it "still produces the checkout" do
+      expect(File.directory?(worktrees.checkout_for(feature).path)).to be(true)
+    end
+
+    it "says it could not seed, rather than failing quietly" do
+      # spec_helper swaps $stderr for a StringIO suite-wide, so RSpec's
+      # `output(...).to_stderr` never sees anything. Swap it here instead.
+      captured = StringIO.new
+      original = $stderr
+      begin
+        $stderr = captured
+        worktrees.seed(repo)
+      ensure
+        $stderr = original
+      end
+
+      expect(captured.string).to match(/missing/)
+    end
+
+    it "answers false so a caller can tell seeding did not happen" do
+      expect(worktrees.seed(repo)).to be(false)
+    end
+  end
+
   describe "a worktree directory deleted by hand" do
     # git keeps the registration, marks it `prunable`, and then refuses to
     # create a new worktree at that path — reporting "already exists" about a
