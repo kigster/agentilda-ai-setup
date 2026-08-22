@@ -58,9 +58,6 @@ module SpecPlanBuild
     Task = Data.define(:agent, :subject, :root, :checkout) do
       # @return [String] for the spinner line
       def label = "#{subject.feature.ordinal}  #{agent.name}"
-
-      # @return [String] where this task's plans live
-      def plans_dir = checkout ? checkout.plans_dir : File.join(root, SpecPlanBuild::PLANS_DIR)
     end
 
     # Rounds with no movement before the loop concedes. One is not enough: an
@@ -78,8 +75,12 @@ module SpecPlanBuild
     # @param jobs [Integer] how many agents run at once
     # @param plans [Array<SpecPlanBuild::Ordinal>, nil] restrict the loop to
     #   these plans; nil (the default) is the whole tree
+    # @param publisher [SpecPlanBuild::Publisher, nil] pushes a finished
+    #   worktree and opens its pull request as soon as one lands, rather than
+    #   once at the very end of the whole loop. nil (the default) never
+    #   pushes anything — the caller's opt-out.
     def initialize(tree:, executor:, agents: Agents.new, max_rounds: 10,
-      isolation: :shared, jobs: 1, worktree: nil, plans: nil)
+      isolation: :shared, jobs: 1, worktree: nil, plans: nil, publisher: nil)
       @tree = tree
       @executor = executor
       @agents = agents
@@ -87,6 +88,7 @@ module SpecPlanBuild
       @isolation = isolation
       @worktree = worktree
       @plans = plans
+      @publisher = publisher
       @rounds = []
 
       # Concurrency without isolation is the exact failure the worktree exists
@@ -156,7 +158,18 @@ module SpecPlanBuild
         attempt(task)
       end
 
-      Round.new(number:, attempts: results.map { |r| r.is_a?(Attempt) ? r : failed(r) })
+      # One serial pass over the *main* tree, run once per round rather than
+      # once per task. `Executor#prompt_for` always names a plan folder by its
+      # main-tree path — that is where `spec.md`/`plan.md`/a rename actually
+      # land, under every isolation mode — and running `Resync::Dirs` from
+      # `jobs` threads at once on the one tree they all share would be exactly
+      # the hazard a worktree exists to prevent for code, just aimed at
+      # `.plans` instead. Doing it here, after `UI.concurrently` has already
+      # joined every thread, costs nothing: nobody is still writing.
+      Resync::Dirs.new(tree:).call(commit: true)
+
+      attempts = tasks.zip(results).map { |task, r| r.is_a?(Attempt) ? finish(task, r) : failed(r) }
+      Round.new(number:, attempts:)
     end
 
     # Give the task somewhere to work. Under isolation that is a fresh git
@@ -203,6 +216,13 @@ module SpecPlanBuild
       end
     end
 
+    # Runs the agent and records what it claimed. `to` is left equal to
+    # `from` here — deliberately unfinished — because whether the folder
+    # actually moved cannot be answered yet: several of these run at once,
+    # each in its own checkout, and the one tree that would prove it moved is
+    # not safe to resync until every thread has stopped writing. {#finish}
+    # settles it, once, after {#run_round}'s single serial resync.
+    #
     # @param task [SpecPlanBuild::Runner::Task]
     # @return [SpecPlanBuild::Runner::Attempt]
     def attempt(task)
@@ -212,22 +232,80 @@ module SpecPlanBuild
       ok, note = @executor.call(task.agent, task.subject, root: task.root)
       note = "#{note} (#{task.checkout.branch})" if task.checkout
 
-      Attempt.new(ordinal:, agent: task.agent.name, from:, ok: !!ok, note: note.to_s,
-        to: state_after(task))
+      Attempt.new(ordinal:, agent: task.agent.name, from:, ok: !!ok, note: note.to_s, to: from)
     end
 
-    # Re-read from disk rather than trusting what the agent claims. The folder
-    # name is the state, and only `resync dirs` is allowed to change it — so an
-    # agent that says "done" but wrote nothing shows up as not having moved.
+    # Reads what {#run_round}'s resync just settled, rather than trusting
+    # what the agent claims — an agent that says "done" but wrote nothing
+    # shows up as not having moved. Publishing is the one further thing this
+    # adds on top of that read.
+    #
+    # `resync` never moves a folder within a {StateMachine::FAMILIES} group on
+    # its own — a `plan.md` and some pull requests look identical whether
+    # nobody has looked yet or a reviewer just asked for changes, so guessing
+    # between them would be a coin flip dressed up as a correction. Whether a
+    # plan is ready to leave Building is `luke-implementer`'s call, not the
+    # harness's: it renames the plan folder itself once there is no work unit
+    # left in `plan.md` (see `agents/luke-implementer.md`), and the resync
+    # above leaves that rename standing — "the current name always wins"
+    # inside a family — even though nothing has opened a pull request yet.
+    # This is what reacts to it: publish, so the invariant that rename is
+    # jumping ahead of becomes true within the same round.
     #
     # @param task [SpecPlanBuild::Runner::Task]
-    # @return [Symbol]
-    def state_after(task)
-      workspace = Tree.new(dir: task.plans_dir)
-      return task.subject.status.key unless workspace.exist?
+    # @param attempt [SpecPlanBuild::Runner::Attempt]
+    # @return [SpecPlanBuild::Runner::Attempt]
+    def finish(task, attempt)
+      return attempt unless attempt.ok
 
-      Resync::Dirs.new(tree: workspace).call(commit: true)
-      workspace.reload.find(task.subject.feature.ordinal)&.status&.key || task.subject.status.key
+      current = tree.find(task.subject.feature.ordinal)
+      to = current&.status&.key || attempt.from
+      settled = Attempt.new(ordinal: attempt.ordinal, agent: attempt.agent, from: attempt.from,
+        ok: attempt.ok, to:, note: attempt.note)
+      return settled unless task.agent.advances_to == :ready_for_review && to == :ready_for_review
+
+      publication = publish(task, current)
+      note = if publication&.published?
+        "#{settled.note}; opened #{publication.url}"
+      elsif publication&.refusal
+        "#{settled.note}; publish refused: #{publication.refusal}"
+      else
+        settled.note
+      end
+
+      Attempt.new(ordinal: settled.ordinal, agent: settled.agent, from: settled.from, ok: settled.ok, to:, note:)
+    end
+
+    # Push the finished branch and open its pull request, then record it in
+    # the plan's own `pull-requests.md` — the file {Status::STATUS_BY_KEY}'s
+    # `ready_for_review` invariant actually reads.
+    #
+    # `--isolation shared` has no branch of its own to push, so this is a
+    # no-op there by construction rather than by a special case: {@publisher}
+    # is nil unless the caller asked for pushing, and a shared task never has
+    # a {Worktree::Checkout} to push in the first place.
+    #
+    # @param task [SpecPlanBuild::Runner::Task]
+    # @param subject [SpecPlanBuild::Subject] read fresh, under its new name
+    # @return [SpecPlanBuild::Publisher::Publication, nil]
+    def publish(task, subject)
+      return nil unless @publisher && task.checkout&.dirty?
+
+      publication = @publisher.publish(checkout: task.checkout, subject:)
+      record_pull_request(subject.feature.path, publication) if publication.published?
+      publication
+    end
+
+    # @param path [String] the plan folder, in the main tree
+    # @param publication [SpecPlanBuild::Publisher::Publication]
+    # @return [void]
+    def record_pull_request(path, publication)
+      number = publication.url.to_s[%r{/pull/(\d+)}, 1]
+      rows = PullRequests.new(dir: path).all.map { |pr|
+        {number: pr.number, title: pr.title, url: pr.url, state: pr.state, body: ""}
+      }
+      rows << {number:, title: publication.title, url: publication.url, state: "Open 🟡", body: ""}
+      File.write(File.join(path, PullRequests::FILENAME), PullRequests.render(rows))
     end
   end
 end

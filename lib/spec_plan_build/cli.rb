@@ -713,9 +713,10 @@ module SpecPlanBuild
         desc: "worktree: a checkout and branch per plan, run in parallel. shared: one tree, serial"
       option :jobs, aliases: ["-j"],
         desc: "Agents to run at once (default: cores - 2, capped at 12)"
-      option :push_pr, aliases: ["-p"],
-        desc: "Push each finished branch and open a PR titled [NNN.MM](X). " \
-        "Pass a letter to force it; omit to continue the plan's sequence. Requires --commit"
+      option :dont_push_anything, type: :boolean, default: false,
+        desc: "With --commit and --isolation worktree, a finished branch is pushed and its pull request " \
+        "opened as soon as it lands, titled [NNN.MM](X). Pass this to turn that off and leave it uncommitted."
+      option :log, desc: "Append progress to this file (default: a per-project file under the system temp dir)"
 
       example [
         "                       # show which agent would take which plan",
@@ -744,16 +745,23 @@ module SpecPlanBuild
           exit 66
         end
 
+        # Set before the loop starts, not after: `UI.animate?` (and therefore
+        # whether a round prints anything at all) is read the whole time the
+        # loop runs, not just when `report` prints its closing summary.
+        quiet?(options)
+        UI.log_path = options[:log] || File.join(Dir.tmpdir, "spec-plan-build-#{File.basename(root)}.log")
+        info("Progress: #{UI.log_path}") unless quiet?(options)
+
         runner = Runner.new(
           tree:, agents:, isolation:, jobs:, plans:,
           worktree: (Worktree.new(root:) if isolation == :worktree),
           max_rounds: options.fetch(:rounds, 10).to_i,
-          executor: Executor.new(root:, dry_run: !commit?(options))
+          executor: Executor.new(root:, dry_run: !commit?(options)),
+          publisher: publisher_for(root, isolation, options)
         )
 
         rounds = runner.call
         report(runner, rounds, options)
-        publish(runner, root, options) if options.key?(:push_pr)
         exit(failures(rounds).empty? ? 0 : 1)
       end
 
@@ -796,50 +804,23 @@ module SpecPlanBuild
       # @return [Array]
       def failures(rounds) = rounds.flat_map(&:attempts).reject(&:ok)
 
-      # Push finished branches and open their pull requests.
+      # The one thing this harness does that leaves the machine — pushing a
+      # branch and opening its pull request — so it takes one more thing to
+      # turn on than everything else here: `--commit` alone is not enough,
+      # isolation has to actually give each plan a branch of its own too.
       #
-      # This is the only thing the harness does that leaves the machine, so it
-      # is refused unless isolation gave each plan its own branch, and unless
-      # --commit says the caller means it.
+      # `nil` is how {Runner} is told to leave a finished worktree alone; it
+      # is what `--dont-push-anything` asks for, and what a shared tree gets
+      # by construction, since there is no separate branch there to push.
       #
-      # @param runner [SpecPlanBuild::Runner]
       # @param root [String]
+      # @param isolation [Symbol]
       # @param options [Hash]
-      # @return [void]
-      def publish(runner, root, options)
-        unless runner.isolated?
-          error("--push-pr needs one branch per plan.\n\nRe-run without --isolation shared.")
-          exit 64
-        end
+      # @return [SpecPlanBuild::Publisher, nil]
+      def publisher_for(root, isolation, options)
+        return nil if isolation != :worktree || options[:dont_push_anything]
 
-        # "auto" is what the entry script fills in for a bare --push-pr.
-        letter = options[:push_pr].to_s.strip
-        letter = nil if letter.empty? || letter.casecmp?("auto")
-        publisher = Publisher.new(root:, dry_run: !commit?(options))
-
-        published = runner.tree.reload.subjects.filter_map do |subject|
-          next unless runner.in_scope?(subject)
-
-          checkout = runner.worktree.checkout_for(subject.feature)
-          next unless checkout.dirty?
-
-          publisher.publish(checkout:, subject:, letter:)
-        end
-
-        published.each { |p| puts "#{p.ordinal}\t#{p.branch}\t#{p.title}\t#{p.url || p.refusal || "would open"}" }
-        return if quiet?(options) || published.empty?
-
-        opened, refused = published.partition(&:published?)
-        lines = published.map { |p| "  #{p.title}#{"\n    #{p.url}" if p.url}#{" — #{p.refusal}" if p.refusal}" }
-
-        if !commit?(options)
-          warn("Would push #{published.size} branch#{"es" unless published.size == 1} and open pull requests:\n" +
-               lines.join("\n") + "\n\nRe-run with --commit.")
-        elsif refused.empty?
-          success("Opened #{opened.size} pull request#{"s" unless opened.size == 1}:\n" + lines.join("\n"))
-        else
-          warn("#{opened.size} opened, #{refused.size} refused:\n" + lines.join("\n"))
-        end
+        Publisher.new(root:, dry_run: !commit?(options))
       end
 
       # @param runner [SpecPlanBuild::Runner]
@@ -881,7 +862,160 @@ module SpecPlanBuild
         return if blocked.empty?
 
         warn("#{blocked.size} plan#{"s" unless blocked.size == 1} need a human decision:\n" +
-             blocked.map { |b| "  #{b.feature.ordinal} #{b.status.emoji} #{b.feature.title} — see blocked.md" }.join("\n"))
+             blocked.map { |b| "  #{b.feature.ordinal} #{b.status.emoji} #{b.feature.title} — see blocked.md" }.join("\n") +
+             "\n\nWrite the answers into blocked.md, then: spec-plan-build unblock " \
+             "#{blocked.map { |b| b.feature.ordinal }.join(",")} --commit")
+      end
+    end
+
+    # `spec-plan-build unblock NNN…` — hand a stopped plan to the agent that
+    # drains its `blocked.md`.
+    #
+    # Deliberately not part of `run`. ⭕️ and 🅱️ are {StateMachine::SETTLED}, so
+    # the loop never offers a blocked plan to anybody, and that is the property
+    # that makes the state mean anything: the plan waits for a human, and no
+    # agent quietly decides otherwise. Answers arriving is not a fact the tool
+    # can observe, so a human typing this command *is* the signal, and there is
+    # nothing else that could produce it.
+    class Unblock < Base
+      # The agent that knows the shape of `blocked.md`.
+      DEFAULT_AGENT = "lando-broker"
+
+      # The two states with a `blocked.md` to drain.
+      BLOCKED = %i[blocked product_blocked].freeze
+
+      desc "Fold answered blocks into a plan's documents and retire blocked.md"
+
+      argument :plans, type: :array, required: true,
+        desc: "Which plans to drain: NNN or NNN.MM, e.g. 003 005.01"
+
+      option :commit, type: :boolean, default: false,
+        desc: "Actually invoke the agent (default: dry run, prints the questions still open)"
+      option :agent, default: DEFAULT_AGENT, desc: "Hand the folder to a different agent"
+      option :root, desc: "Repository root the agent works in (default: the .plans parent)"
+
+      example [
+        "003                # what 003 is still waiting on",
+        "003 --commit       # fold in whatever has been answered",
+        "003,005 --commit   # both"
+      ]
+
+      # @param plans [Array<String>]
+      # @param options [Hash]
+      # @return [void]
+      def call(plans:, **options)
+        tree = tree_for(options)
+        root = options[:root] || File.dirname(tree.dir)
+        agent = agent_for(options)
+        subjects = targets(tree, plans)
+        quiet?(options)
+
+        executor = Executor.new(root:, dry_run: !commit?(options))
+        results = subjects.map { |subject| [subject, *executor.call(agent, subject, root:)] }
+
+        # The same pass the loop makes after every round, for the same reason:
+        # a drained folder is only *named* differently once something reads the
+        # file the agent just deleted.
+        SpecPlanBuild::Resync::Dirs.new(tree:).call(commit: true) if commit?(options)
+
+        report(tree, results, options)
+        exit((results.all? { |(_, ok, _)| ok }) ? 0 : 1)
+      end
+
+      private
+
+      # @param options [Hash]
+      # @return [SpecPlanBuild::Agent]
+      def agent_for(options)
+        name = options.fetch(:agent, DEFAULT_AGENT)
+        agents = Agents.new
+        agents.find(name) or begin
+          error("No agent called #{name}.\n\nKnown: #{agents.all.map(&:name).join(", ")}")
+          exit 65
+        end
+      end
+
+      # A plan that is not blocked is refused, not skipped. Whoever typed this
+      # believes an answer has arrived; running against a folder that was never
+      # stopped and saying nothing is how you come back later to a plan nobody
+      # touched and no record of why.
+      #
+      # @param tree [SpecPlanBuild::Tree]
+      # @param plans [Array<String>]
+      # @return [Array<SpecPlanBuild::Subject>]
+      def targets(tree, plans)
+        tokens = plans.flat_map { |token| token.split(",") }.map(&:strip).reject(&:empty?)
+
+        tokens.map do |token|
+          subject = tree.find(token) or begin
+            error("No plan #{token} in #{tree.dir}.\n\nKnown: #{tree.ordinals.join(", ")}")
+            exit 66
+          end
+          next subject if BLOCKED.include?(subject.status.key)
+
+          error("#{subject.feature.ordinal} is #{subject.status}, not blocked.\n\n" \
+                "Only ⭕️ and 🅱️ folders have a blocked.md to drain.")
+          exit 65
+        end
+      end
+
+      # What `blocked.md` still names, written as the file writes it. This is
+      # the whole of the dry run, and the whole of what a human is on the hook
+      # for afterwards.
+      #
+      # @param subject [SpecPlanBuild::Subject]
+      # @return [Array<String>]
+      def open_questions(subject)
+        subject.read("blocked.md").to_s.lines.grep(SpecPlanBuild::OPEN_BLOCK)
+          .map { |line| line.strip.sub(/\A\#+[ \t]*/, "") }
+      end
+
+      # @param tree [SpecPlanBuild::Tree]
+      # @param results [Array<Array>] subject, ok, note
+      # @param options [Hash]
+      # @return [void]
+      def report(tree, results, options)
+        tree.reload
+
+        rows = results.map { |subject, ok, note|
+          current = tree.find(subject.feature.ordinal) || subject
+          [current, ok, note, open_questions(current)]
+        }
+
+        rows.each do |current, ok, note, questions|
+          puts "#{current.feature.ordinal}\t#{ok ? current.status.key : "failed"}\t#{questions.size} open\t#{note}"
+          next if quiet?(options)
+
+          say("#{paint(current.feature.ordinal.to_s, :bright_black)} #{current.status.emoji} #{current.feature.title}")
+          if questions.empty?
+            say("  #{paint("nothing left open", :green)}", bullet: " ")
+          else
+            questions.each { |question| say("  #{paint(question, :yellow)}", bullet: " ") }
+          end
+        end
+
+        footer(rows, options) unless quiet?(options)
+      end
+
+      # @param rows [Array<Array>] current subject, ok, note, open questions
+      # @param options [Hash]
+      # @return [void]
+      def footer(rows, options)
+        failed = rows.reject { |(_, ok, _, _)| ok }
+
+        unless commit?(options)
+          warn("Dry run: no agent was invoked.\nRe-run with --commit to fold in whatever has been answered.")
+          return
+        end
+
+        unless failed.empty?
+          error(failed.map { |(current, _, note, _)| "#{current.feature.ordinal}: #{note}" }.join("\n"))
+          return
+        end
+
+        cleared = rows.count { |(current, _, _, _)| !current.file?("blocked.md") }
+        waiting = rows.size - cleared
+        success("#{cleared} unblocked · #{waiting} still waiting on a human.")
       end
     end
 
@@ -906,6 +1040,7 @@ module SpecPlanBuild
     register "create", Create, aliases: %w[new c]
     register "status", Status, aliases: %w[st]
     register "run", Run
+    register "unblock", Unblock
     register "docs", Docs
     register "states", States, aliases: %w[diagram]
     register "index", Index, aliases: %w[idx]

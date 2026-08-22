@@ -13,7 +13,7 @@ RSpec.describe SpecPlanBuild::Resync::Dirs, :tree do
       let!(:tree) do
         plans do |t|
           t.plan "001.00", :new, "initial-spec", files: {"spec.md" => spec_body}
-          t.plan "002.00", :planned, "dev-foundation", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}
+          t.plan "002.00", :building, "dev-foundation", files: {"spec.md" => spec_body, "plan.md" => "# Plan"}
           t.plan "003.00", :approved, "ledger", prs: [t.merged(3, "Ship it")]
         end
       end
@@ -31,11 +31,11 @@ RSpec.describe SpecPlanBuild::Resync::Dirs, :tree do
       end
 
       it "proposes the state the contents justify" do
-        expect(changes.map { |c| [c.from, c.to] }).to eq([[:new, :planned]])
+        expect(changes.map { |c| [c.from, c.to] }).to eq([[:new, :building]])
       end
 
       it "keeps the number and the slug, changing only the emoji" do
-        expect(File.basename(changes.first.target)).to eq("001.00-⭐️-initial-spec")
+        expect(File.basename(changes.first.target)).to eq("001.00-🟡-initial-spec")
       end
     end
 
@@ -90,7 +90,7 @@ RSpec.describe SpecPlanBuild::Resync::Dirs, :tree do
       end
 
       it "repairs the number and the emoji in one move" do
-        expect(File.basename(changes.first.target)).to eq("007.00-⭐️-tenancy")
+        expect(File.basename(changes.first.target)).to eq("007.00-🟡-tenancy")
       end
 
       it "reports the state change rather than the padding" do
@@ -147,6 +147,29 @@ RSpec.describe SpecPlanBuild::Resync::Dirs, :tree do
       expect(changes).to be_empty
     end
 
+    # The other half of that rule. The name wins *between* the two blocked
+    # states, but neither survives a `blocked.md` with no question left in it.
+    # This is how a block drains: `lando-broker` deletes each question as its
+    # answer is folded into `spec.md` or `plan.md`, and the pass that empties
+    # the file is the pass that moves the folder.
+    context "when every question in blocked.md has been answered and folded away" do
+      let!(:tree) do
+        plans do |t|
+          t.plan "005.00", :blocked, "engine-choice",
+            files: {"spec.md" => spec_body, "plan.md" => "# Plan",
+                    "blocked.md" => "## Answers\n\n- **B1** \u2014 2026-08-21, CTO: Postgres.\n"}
+        end
+      end
+
+      it "lets the folder out of Blocked" do
+        expect(changes.map { |c| [c.from, c.to] }).to eq([[:blocked, :building]])
+      end
+
+      it "says the file stopped justifying the name, not that the file vanished" do
+        expect(changes.first.reason).to match(/names no open question/)
+      end
+    end
+
     it "leaves folders it cannot classify alone rather than guessing" do
       plans { |t| t.plan "007.00", :new, "empty-shell" }
 
@@ -176,17 +199,17 @@ RSpec.describe SpecPlanBuild::Resync::Dirs, :tree do
     it "renames the folder when committed" do
       resync.call(commit: true)
 
-      expect(names).to eq(["001.00-⭐️-initial-spec"])
+      expect(names).to eq(["001.00-🟡-initial-spec"])
     end
 
     it "preserves the folder's contents across the rename" do
       resync.call(commit: true)
 
-      expect(File.exist?(File.join(plans_root, "001.00-⭐️-initial-spec", "plan.md"))).to be(true)
+      expect(File.exist?(File.join(plans_root, "001.00-🟡-initial-spec", "plan.md"))).to be(true)
     end
 
     it "reports what it did" do
-      expect(resync.call(commit: true).map(&:to)).to eq([:planned])
+      expect(resync.call(commit: true).map(&:to)).to eq([:building])
     end
 
     it "is idempotent — a second run finds nothing left to do" do

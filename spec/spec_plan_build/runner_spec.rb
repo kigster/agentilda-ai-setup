@@ -31,11 +31,15 @@ RSpec.describe SpecPlanBuild::Runner, :tree do
         end
       end
 
+      # 001.00 already has spec.md and plan.md when the round starts, so
+      # `palpatine-planner` takes it once — and Building no longer waits on a
+      # pull request to exist, so the very next round finds it already there
+      # and hands it straight to `luke-implementer`.
       it "offers each plan to the agent that handles its state" do
         runner.call
 
         expect(calls.uniq).to contain_exactly(["leah-researcher", "000.00"],
-          ["yoda-writer", "000.01"], ["palpatine-planner", "001.00"])
+          ["yoda-writer", "000.01"], ["palpatine-planner", "001.00"], ["luke-implementer", "001.00"])
       end
 
       # The relay's whole point. Both used to declare `handles: [new]`, agents
@@ -208,6 +212,101 @@ RSpec.describe SpecPlanBuild::Runner, :tree do
           runner.call
 
           expect(calls.map(&:last).uniq).to contain_exactly("000.00", "001.00")
+        end
+      end
+    end
+
+    # `luke-implementer` decides when a plan is ready for review — a plan with
+    # several work units is legitimately dirty long before the last one lands
+    # — so it renames its own plan folder rather than leaving that guess to a
+    # dirty checkout. This is the harness reacting to that rename, not causing
+    # it. See `agents/luke-implementer.md`.
+    describe "publishing once the agent renames its own folder to ready for review" do
+      let(:ordinal) { SpecPlanBuild::Ordinal.parse("004.00") }
+      let(:checkout) do
+        instance_double(SpecPlanBuild::Worktree::Checkout,
+          branch: "kig/004.00-needs-a-reviewer", path: "/does-not-exist",
+          plans_dir: "/does-not-exist/.plans", dirty?: true)
+      end
+      let(:worktree) { instance_double(SpecPlanBuild::Worktree, checkout_for: checkout) }
+      let(:publication) do
+        SpecPlanBuild::Publisher::Publication.new(
+          ordinal:, branch: checkout.branch, title: "[004.00](A) Needs a Reviewer",
+          url: "https://github.com/example/repo/pull/9", refusal: nil
+        )
+      end
+      let(:publisher) { instance_double(SpecPlanBuild::Publisher, publish: publication) }
+
+      # Stands in for `luke-implementer` finishing its last work unit: the
+      # rename is the agent's own act, done before the harness ever asks
+      # whether the checkout is dirty.
+      let(:executor) do
+        ->(_agent, subject, **) {
+          subject.rename_to(SpecPlanBuild::STATUS_BY_KEY.fetch(:ready_for_review))
+          [true, "completed"]
+        }
+      end
+
+      let!(:built) do
+        plans do |t|
+          t.plan "004.00", :building, "needs-a-reviewer", files: {"spec.md" => spec_body, "plan.md" => "# P"}
+        end
+      end
+
+      subject(:runner) do
+        described_class.new(tree:, executor:, agents:, max_rounds: 1, isolation: :worktree, worktree:, publisher:)
+      end
+
+      it "publishes and leaves the folder renamed, past the family resync would not touch on its own" do
+        runner.call
+
+        expect(tree.reload.find(ordinal).status.key).to eq(:ready_for_review)
+      end
+
+      it "records the opened pull request in the plan's own pull-requests.md" do
+        runner.call
+
+        prs = SpecPlanBuild::PullRequests.new(dir: tree.reload.find(ordinal).feature.path).all
+        expect(prs.map(&:url)).to contain_exactly("https://github.com/example/repo/pull/9")
+      end
+
+      it "passes the freshly renamed subject the publisher needs to push and title the pull request" do
+        runner.call
+
+        expect(publisher).to have_received(:publish)
+          .with(checkout:, subject: an_instance_of(SpecPlanBuild::Subject))
+      end
+
+      it "still honours the rename without a publisher, but opens no pull request — --dont-push-anything" do
+        without_publisher = described_class.new(
+          tree:, executor:, agents:, max_rounds: 1, isolation: :worktree, worktree:, publisher: nil
+        )
+        without_publisher.call
+
+        found = tree.reload.find(ordinal)
+        aggregate_failures do
+          expect(found.status.key).to eq(:ready_for_review)
+          expect(SpecPlanBuild::PullRequests.new(dir: found.feature.path).all).to be_empty
+        end
+      end
+
+      it "never opens a pull request for a clean checkout — nothing left to push" do
+        allow(checkout).to receive(:dirty?).and_return(false)
+        runner.call
+
+        expect(publisher).not_to have_received(:publish)
+      end
+
+      it "does not publish while the agent leaves the folder as Building — more units remain" do
+        keeps_building = ->(_agent, _subject, **) { [true, "one of several units"] }
+        mid_plan = described_class.new(
+          tree:, executor: keeps_building, agents:, max_rounds: 1, isolation: :worktree, worktree:, publisher:
+        )
+        mid_plan.call
+
+        aggregate_failures do
+          expect(tree.reload.find(ordinal).status.key).to eq(:building)
+          expect(publisher).not_to have_received(:publish)
         end
       end
     end

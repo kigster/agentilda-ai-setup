@@ -14,13 +14,41 @@
 #                  has its own skills/ subdirectory, each child is *also*
 #                  symlinked individually into skills/<dir-name> — a plugin's
 #                  skills are still just skills.
+#
+# Narrowing a source that carries more than you want:
+#
+#   include_skills: /re/   install only the skills whose name matches
+#   exclude_skills: /re/   install every skill except those whose name matches
+#
+# One or the other, never both on the same source; a source that both allows
+# and denies is a question with no defensible answer, so the run stops. Both
+# are matched against the name the skill installs as — the `skills/<name>` you
+# go looking for — and not against its path inside the source, because a
+# category tree is that repo's filing decision rather than yours. The slashes
+# are optional and only there so the value reads as a regular expression;
+# `/re/i` and the `m`/`x` flags work too. Anchor with `\A`/`\z` when you mean
+# a whole name, since a bare `tdd` matches `tdd-helper` as well.
+#
+# Tightening a filter also takes skills back: the next run unlinks whatever it
+# installed last time and no longer installs, so `skills/` converges on what
+# this file says rather than accumulating.
+#
+# For a `type: plugin`, the filter governs the fan-out into `skills/`, not the
+# copy under `plugins/`. That bundle stays whole because it is one unit with
+# its own manifest, and half a plugin is not a smaller plugin.
 sources:
   - name: mattpocock
     type: skills
     repo: git@github.com:mattpocock/skills.git
     path: skills
+    exclude_skills: /\A(wizard|grilling)\z/
 
   - name: pstack
     type: plugin
     repo: git@github.com:cursor/plugins.git
     path: pstack
+    include_skills: /\A(architect|unslop|why|how|technical-writing)\z/
+
+  - name: superpowers
+    type: plugin
+    repo: git@github.com:obra/superpowers.git

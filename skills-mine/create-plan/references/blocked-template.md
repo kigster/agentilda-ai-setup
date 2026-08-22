@@ -23,6 +23,10 @@ ______________________________________________________________________
 Number them. They get referenced in conversation, in pull requests and in the
 answer, and "the second one" is not a reference.
 
+Keep the `B<n>` at the start of its line, as a heading or on its own. That is
+what `spec-plan-build` counts to decide whether this plan is still stopped, and
+a question it cannot see cannot stop anything.
+
 ### B1. [The question, as a question]
 
 **What we need decided:** one sentence, phrased so that an answer is possible.
@@ -54,8 +58,20 @@ answering B1 turns into re-litigating the whole spec.
 
 ## Answers
 
-Record them here as they arrive, dated and attributed, then promote the folder
-out of Blocked with `spec-plan-build resync dirs`.
+An inbox, not a record. Write each answer here as it arrives, dated and
+attributed, then run `spec-plan-build unblock NNN --commit`. That hands the
+folder to `lando-broker`, which moves the decision into the document the
+question was stopping (`spec.md` for what and why, `plan.md` for how and in
+what order) and deletes the question from this file along with the answer.
 
 - **B1** — YYYY-MM-DD, [who]: [what was decided, and any constraint that came
   with it]
+
+An entry that names no decider, carries no date, or restates the options
+instead of choosing one is not an answer. It stays here, and so does its
+question.
+
+Answer in pieces if that is how the answers arrive. Whatever is still open
+above keeps the plan blocked, which is true. When the last question is folded
+away this file goes with it, and the folder leaves Blocked on the next
+`resync dirs` because there is nothing left in it to justify the name.

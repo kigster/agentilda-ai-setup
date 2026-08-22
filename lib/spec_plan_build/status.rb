@@ -77,6 +77,36 @@ module SpecPlanBuild
     }
   end
 
+  # A question that is still somebody's to answer: `B1`, `### B2. Which store?`,
+  # `**B3**`. The numbering is what `blocked.md` gets referenced by in
+  # conversation and in pull requests, so it is also the only part of the file
+  # a program can count.
+  #
+  # An answer is written as a list item under `## Answers`, and deliberately
+  # does not match this: `- **B1** — 2026-08-21, CTO: …`. Answers are an inbox,
+  # not a record. `lando-broker` folds each one into the document it unblocks
+  # and deletes the question with it, so a `blocked.md` holding nothing but
+  # history must not go on stopping the folder.
+  OPEN_BLOCK = /^[ \t]{0,3}\#{0,4}[ \t]*\**B\d+\b/
+
+  # ⭕️ Technical Block and 🅱️ Product Block are the same thing on disk: a
+  # `blocked.md` still naming at least one question nobody has answered. Which
+  # human is owed the answer lives in the folder name and nowhere else, so the
+  # two share one invariant rather than two that could drift apart.
+  #
+  # This is what lets a block drain in pieces. Answers land in `blocked.md`
+  # one at a time, `lando-broker` moves each into `spec.md` or `plan.md` and
+  # deletes it here, and the folder leaves ⭕️ on the pass that empties the
+  # file, by content rather than by anyone remembering to delete it.
+  #
+  # @param label [String]
+  # @return [Proc]
+  def self.open_block(label)
+    lambda { |subject|
+      "#{label}, but `blocked.md` names no open question" unless subject.read("blocked.md").to_s.match?(OPEN_BLOCK)
+    }
+  end
+
   # Every state a plan folder may be in, in lifecycle order. That order drives
   # the legend, the generated documentation and the `--to` help text.
   #
@@ -106,10 +136,18 @@ module SpecPlanBuild
       note: "specified and planned; nobody has started building",
       invariant: nil
     ),
+    # `pull-requests.md` is deliberately absent from `requires` here, though
+    # it names the file this state is about. That file is written by opening
+    # a pull request, and the only agent that opens one — `luke-implementer`
+    # — `handles:` this very state: requiring the file to *enter* Building
+    # would mean nothing could ever justify entering it, and `palpatine-
+    # planner` finishing `plan.md` would loop forever between itself and a
+    # state it can never actually reach. Ready for Review is where the file
+    # becomes a real requirement, once something has had the chance to write it.
     Status.new(
-      key: :building, emoji: "🟡", label: "Building", requires: %w[spec.md plan.md pull-requests.md],
+      key: :building, emoji: "🟡", label: "Building", requires: %w[spec.md plan.md],
       note: "work is under way; pull requests are raised as each unit lands",
-      invariant: ->(s) { "Building, but no pull requests are recorded" if s.pull_requests.empty? }
+      invariant: nil
     ),
     Status.new(
       key: :ready_for_review, emoji: "🟢", label: "Ready for Review", requires: %w[spec.md plan.md pull-requests.md],
@@ -153,13 +191,13 @@ module SpecPlanBuild
     ),
     Status.new(
       key: :blocked, emoji: "⭕️", label: "Technical Block", requires: %w[blocked.md],
-      note: "cannot proceed; an engineer or the CTO must decide something first",
-      invariant: nil
+      note: "cannot proceed; `blocked.md` names what an engineer or the CTO must decide",
+      invariant: open_block("Technical Block")
     ),
     Status.new(
       key: :product_blocked, emoji: "🅱️", label: "Product Block", requires: %w[blocked.md],
-      note: "cannot proceed; a product manager must decide something first",
-      invariant: nil
+      note: "cannot proceed; `blocked.md` names what a product manager must decide",
+      invariant: open_block("Product Block")
     ),
     Status.new(
       key: :deferred, emoji: "☢️", label: "Deferred", requires: %w[delayed.md],

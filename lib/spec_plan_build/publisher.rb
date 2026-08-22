@@ -3,9 +3,9 @@
 module SpecPlanBuild
   # Turns a finished worktree into a pushed branch and a pull request.
   #
-  # This is the one place the harness reaches off the machine, so it is opt-in
-  # (`--push-pr`), requires `--commit`, and refuses anything it is not certain
-  # about. Everything it does is reported before it does it.
+  # This is the one place the harness reaches off the machine, so it requires
+  # `--commit`, is skipped with `--dont-push-anything`, and refuses anything
+  # it is not certain about. Everything it does is reported before it does it.
   #
   # Titles follow the convention the whole system joins on:
   #

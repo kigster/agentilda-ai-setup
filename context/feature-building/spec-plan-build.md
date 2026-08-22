@@ -62,24 +62,24 @@ This is only for work that does not exist yet. `create --after <plan> --prs <n,.
 
 ## The states
 
-| Symbol | Meaning                | Key                | Files required                           | Description                                                               |
-| :----: | :--------------------- | :----------------- | :--------------------------------------- | :------------------------------------------------------------------------ |
-|   ⚪️   | **New**                | `new`              | `spec.md`                                | a specification exists; it has not been planned yet                       |
-|   🔎   | **Researched**         | `researched`       | `spec.md`                                | the topic has been researched; `spec.md` carries a `## Research` chapter  |
-|   ⭐️   | **Planned**            | `planned`          | `spec.md`, `plan.md`                     | specified and planned; nobody has started building                        |
-|   🟡   | **Building**           | `building`         | `spec.md`, `plan.md`, `pull-requests.md` | work is under way; pull requests are raised as each unit lands            |
-|   🟢   | **Ready for Review**   | `ready_for_review` | `spec.md`, `plan.md`, `pull-requests.md` | every pull request is green on CI and waiting for a reviewer              |
-|   👀   | **In Review**          | `in_review`        | `spec.md`, `plan.md`, `pull-requests.md` | a reviewer has picked it up and has not ruled yet                         |
-|   🔴   | **Changes Requested**  | `rejected`         | `spec.md`, `plan.md`, `pull-requests.md` | the review asked for fixes; resubmit once they are made                   |
-|   ✅   | **Approved & Merged**  | `approved`         | `pull-requests.md`                       | reviewed, approved, and every pull request merged                         |
-|   😎   | **Deployed**           | `deployed`         | `deployed.md`                            | live in production; `deployed.md` names the release, date and SHA         |
-|   😱   | **Rolled Back**        | `rolled_back`      | `rollback.md`                            | it shipped and was pulled; `rollback.md` names what broke                 |
-|   💩   | **Scrapped by Review** | `shit`             | `rewrite.md`                             | the review scrapped the work; the plan survives, the pull requests do not |
-|   ⭕️   | **Technical Block**    | `blocked`          | `blocked.md`                             | cannot proceed; an engineer or the CTO must decide something first        |
-|   🅱️   | **Product Block**      | `product_blocked`  | `blocked.md`                             | cannot proceed; a product manager must decide something first             |
-|   ☢️   | **Deferred**           | `deferred`         | `delayed.md`                             | could proceed and chose not to yet; `delayed.md` must name the trigger    |
-|   🕰️   | **Retroactive**        | `retroactive`      | —                                        | the feature is live, but has neither a specification nor a plan           |
-|   ❌   | **Discarded**          | `discarded`        | `discarded.md`                           | dropped for good; `discarded.md` says why. A terminal state               |
+| Symbol | Meaning                | Key                | Files required                           | Description                                                                |
+| :----: | :--------------------- | :----------------- | :--------------------------------------- | :------------------------------------------------------------------------- |
+|   ⚪️   | **New**                | `new`              | `spec.md`                                | a specification exists; it has not been planned yet                        |
+|   🔎   | **Researched**         | `researched`       | `spec.md`                                | the topic has been researched; `spec.md` carries a `## Research` chapter   |
+|   ⭐️   | **Planned**            | `planned`          | `spec.md`, `plan.md`                     | specified and planned; nobody has started building                         |
+|   🟡   | **Building**           | `building`         | `spec.md`, `plan.md`                     | work is under way; pull requests are raised as each unit lands             |
+|   🟢   | **Ready for Review**   | `ready_for_review` | `spec.md`, `plan.md`, `pull-requests.md` | every pull request is green on CI and waiting for a reviewer               |
+|   👀   | **In Review**          | `in_review`        | `spec.md`, `plan.md`, `pull-requests.md` | a reviewer has picked it up and has not ruled yet                          |
+|   🔴   | **Changes Requested**  | `rejected`         | `spec.md`, `plan.md`, `pull-requests.md` | the review asked for fixes; resubmit once they are made                    |
+|   ✅   | **Approved & Merged**  | `approved`         | `pull-requests.md`                       | reviewed, approved, and every pull request merged                          |
+|   😎   | **Deployed**           | `deployed`         | `deployed.md`                            | live in production; `deployed.md` names the release, date and SHA          |
+|   😱   | **Rolled Back**        | `rolled_back`      | `rollback.md`                            | it shipped and was pulled; `rollback.md` names what broke                  |
+|   💩   | **Scrapped by Review** | `shit`             | `rewrite.md`                             | the review scrapped the work; the plan survives, the pull requests do not  |
+|   ⭕️   | **Technical Block**    | `blocked`          | `blocked.md`                             | cannot proceed; `blocked.md` names what an engineer or the CTO must decide |
+|   🅱️   | **Product Block**      | `product_blocked`  | `blocked.md`                             | cannot proceed; `blocked.md` names what a product manager must decide      |
+|   ☢️   | **Deferred**           | `deferred`         | `delayed.md`                             | could proceed and chose not to yet; `delayed.md` must name the trigger     |
+|   🕰️   | **Retroactive**        | `retroactive`      | —                                        | the feature is live, but has neither a specification nor a plan            |
+|   ❌   | **Discarded**          | `discarded`        | `discarded.md`                           | dropped for good; `discarded.md` says why. A terminal state                |
 
 "Files required" is a **minimum**, not an exact match: a ⚪️ folder that has grown a `plan.md` still satisfies ⚪️, and is ⭐️ anyway. That is why `resync dirs` moves a folder to the furthest state its contents justify rather than only fixing outright lies.
 
@@ -88,6 +88,21 @@ Some states share their requirements on purpose, and are told apart only by the 
 So nothing re-derives one of them from a folder's contents — otherwise every ⭕️ would silently become 🅱️ the first time anything resynced. A folder falling back into that group from outside lands on its weakest member, 🟡 Building, because that is all its contents can prove.
 
 🟣 Merged is deliberately **not** a folder state. It describes a pull request, and a folder that claimed it would be claiming a pull request's condition as its own.
+
+## When a plan is stopped, and how it starts again
+
+⭕️ Technical Block and 🅱️ Product Block mean an agent hit a question that was not its to answer and wrote `blocked.md` instead of guessing past it. Both belong to the settled group `spec-plan-build run` leaves alone (✅ 😎 ❌ ⭕️ 🅱️ ☢️), so the loop never offers a stopped plan to anybody. A loop that could move one would make the state mean nothing.
+
+Questions are numbered `B1`, `B2`, and that numbering is how the file gets referenced in conversation and in pull requests. **`blocked.md` holds open questions and nothing else.** That is what the ⭕️/🅱️ invariant reads, so a file naming no question justifies neither state and `resync dirs` renames the folder out of it.
+
+Which is how a block drains, in pieces:
+
+1. A human writes each answer under `## Answers` as it arrives, dated and attributed to whoever decided.
+1. `spec-plan-build unblock NNN --commit` hands the folder to `lando-broker`. Nothing else reaches it: answers arriving is not a fact the tool can observe, so a human running the command *is* the signal.
+1. `lando-broker` folds each answered question into the document that question was stopping — `spec.md` when the answer changes what we are building or why, `plan.md` when it changes how or in what order — and deletes the question and its answer from `blocked.md`.
+1. When the last question goes, the file goes with it, and the folder leaves ⭕️ on the resync that follows.
+
+An entry that names no decider, carries no date, or restates the options instead of choosing one is not an answer, and is left exactly where it is. So is any question nobody has answered yet: two answers out of five is a successful run, and the plan stays stopped on the other three, which is true. `lando-broker` never answers a question itself, and never retires one for being stale — dropping a question is a human's call, and it makes the plan ☢️ Deferred or ❌ Discarded, not quietly shorter.
 
 ## Transitions
 
@@ -201,17 +216,17 @@ stateDiagram-v2
 
 ## Files allowed in a plan folder
 
-| File               | Required by                                                                                |
-| :----------------- | :----------------------------------------------------------------------------------------- |
-| `spec.md`          | the specification; written first                                                           |
-| `plan.md`          | the execution plan; written from the spec                                                  |
-| `pull-requests.md` | 🟡 Building, 🟢 Ready for Review, 👀 In Review, 🔴 Changes Requested, ✅ Approved & Merged |
-| `deployed.md`      | 😎 Deployed                                                                                |
-| `rollback.md`      | 😱 Rolled Back                                                                             |
-| `rewrite.md`       | 💩 Scrapped by Review                                                                      |
-| `blocked.md`       | ⭕️ Technical Block, 🅱️ Product Block                                                       |
-| `delayed.md`       | ☢️ Deferred                                                                                |
-| `discarded.md`     | ❌ Discarded                                                                               |
+| File               | Required by                                                                   |
+| :----------------- | :---------------------------------------------------------------------------- |
+| `spec.md`          | the specification; written first                                              |
+| `plan.md`          | the execution plan; written from the spec                                     |
+| `pull-requests.md` | 🟢 Ready for Review, 👀 In Review, 🔴 Changes Requested, ✅ Approved & Merged |
+| `deployed.md`      | 😎 Deployed                                                                   |
+| `rollback.md`      | 😱 Rolled Back                                                                |
+| `rewrite.md`       | 💩 Scrapped by Review                                                         |
+| `blocked.md`       | ⭕️ Technical Block, 🅱️ Product Block                                          |
+| `delayed.md`       | ☢️ Deferred                                                                   |
+| `discarded.md`     | ❌ Discarded                                                                  |
 
 Nothing else belongs there. A folder holding notes, diagrams or scratch files is a folder nobody can audit at a glance.
 
