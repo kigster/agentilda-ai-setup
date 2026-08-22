@@ -1,6 +1,6 @@
 # `~/.agents`
 
-[![CircleCI](https://dl.circleci.com/status-badge/img/gh/kigster/dot-agents/tree/main.svg?style=svg&circle-token=CCIPRJ_DrNBun6pLLc988EVbduHJm_9ec6ada64b6bd9406d19ca4e1aa56a249c20087d)](https://dl.circleci.com/status-badge/redirect/gh/kigster/dot-agents/tree/main) 
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/kigster/dot-agents/tree/main.svg?style=svg&circle-token=CCIPRJ_DrNBun6pLLc988EVbduHJm_9ec6ada64b6bd9406d19ca4e1aa56a249c20087d)](https://dl.circleci.com/status-badge/redirect/gh/kigster/dot-agents/tree/main)
 
 # Konstantin Gredeskoul's AI setup
 
@@ -18,20 +18,20 @@ ______________________________________________________________________
 
 ## What is in here
 
-| Path                   | What it is                                                                                       |
-| :--------------------- | :------------------------------------------------------------------------------------------------ |
-| `config/AGENTS.md`     | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md`          |
-| `context/`             | Durable reference an agent loads on demand — languages, databases, conventions                    |
-| `agents/`              | Specialist definitions for the multi-agent harness                                                |
-| `commands/`            | Slash commands that wrap `spec-plan-build` with the right guardrails baked in                     |
-| `skills/`              | Claude skills — **generated**, one directory per skill, symlinked into `~/.claude/skills/`        |
-| `skills-mine/`         | Skills authored in this repo (committed); folded into `skills/` by `install-sources`              |
-| `plugins/`             | External plugin bundles (e.g. `pstack`) — also generated, not committed                           |
-| `config/sources.yml`   | The declarative list `scripts/install-sources` pulls `skills/` and `plugins/` from                |
-| `bin/`                 | **Bash** executables — `setup` is a pure symlink reconciler                                       |
-| `scripts/`             | **Ruby** executables — `spec-plan-build` and `install-sources`                                    |
-| `lib/spec_plan_build/` | The library behind `spec-plan-build`                                                              |
-| `spec/`                | RSpec suite                                                                                        |
+| Path                   | What it is                                                                                 |
+| :--------------------- | :----------------------------------------------------------------------------------------- |
+| `config/AGENTS.md`     | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md`   |
+| `context/`             | Durable reference an agent loads on demand — languages, databases, conventions             |
+| `agents/`              | Specialist definitions for the multi-agent harness                                         |
+| `commands/`            | Slash commands that wrap `spec-plan-build` with the right guardrails baked in              |
+| `skills/`              | Claude skills — **generated**, one directory per skill, symlinked into `~/.claude/skills/` |
+| `skills-mine/`         | Skills authored in this repo (committed); folded into `skills/` by `install-sources`       |
+| `plugins/`             | External plugin bundles (e.g. `pstack`) — also generated, not committed                    |
+| `config/sources.yml`   | The declarative list `scripts/install-sources` pulls `skills/` and `plugins/` from         |
+| `bin/`                 | **Bash** executables — `setup` is a pure symlink reconciler                                |
+| `scripts/`             | **Ruby** executables — `spec-plan-build` and `install-sources`                             |
+| `lib/spec_plan_build/` | The library behind `spec-plan-build`                                                       |
+| `spec/`                | RSpec suite                                                                                |
 
 `bin` holds shell and `scripts` holds Ruby deliberately: `standardrb` then has a directory it must lint and one it can ignore entirely, and neither has to be configured around the other. `.envrc` puts both on `PATH`.
 
@@ -169,18 +169,18 @@ ______________________________________________________________________
 Specialists are defined in `agents/*.md`. The frontmatter routes them (`handles:`/`advances_to:` are exactly what `spec-plan-build run` reads to decide who takes a plan); the body is the prompt.
 
 | Agent               | Handles | Advances to | Does                                                                |
-| :------------------ | :------ | :---------- | :------------------------------------------------------------------- |
-| `leah-researcher`   | ⚪️      | 🔎          | fans out parallel research, writes spec.md's `## Research` chapter   |
-| `yoda-writer`       | 🔎, 🕰️  | ⭐️          | writes Goal/Non-Goals/Conclusion, or blocks with numbered questions  |
-| `palpatine-planner` | ⭐️      | 🟡          | decomposes the spec into `plan.md`'s concurrent work units           |
-| `luke-implementer`  | 🟡, 🔴  | 🟢          | builds one work unit, source and tests, no commits                   |
-| `hansolo-reviewer`  | 🟢, 👀  | ✅          | adversarial review; requests changes or approves — never merges      |
+| :------------------ | :------ | :---------- | :------------------------------------------------------------------ |
+| `leah-researcher`   | ⚪️      | 🔎          | fans out parallel research, writes spec.md's `## Research` chapter  |
+| `yoda-writer`       | 🔎, 🕰️  | ⭐️          | writes Goal/Non-Goals/Conclusion, or blocks with numbered questions |
+| `palpatine-planner` | ⭐️      | 🟡          | decomposes the spec into `plan.md`'s concurrent work units          |
+| `luke-implementer`  | 🟡, 🔴  | 🟢          | builds one work unit, source and tests, no commits                  |
+| `hansolo-reviewer`  | 🟢, 👀  | ✅          | adversarial review; requests changes or approves — never merges     |
 
 ```bash
-spec-plan-build run                  # dry run: who would take what
-spec-plan-build run --commit         # one git worktree per plan, in parallel
-spec-plan-build run --commit -j 4    # …four at a time
-spec-plan-build run --isolation shared   # one tree, serial; no git needed
+spec-plan-build run                              # dry run: who would take what
+spec-plan-build run --commit                     # one git worktree per plan, in parallel
+spec-plan-build run --commit -j 4                # …four at a time
+spec-plan-build run --isolation shared           # one tree, serial; no git needed
 spec-plan-build run --commit --plan 003,005.01   # only these plans — see below
 spec-plan-build states                           # the whole machine, as a diagram
 ```

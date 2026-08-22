@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+**This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.**
 
 ## What this repository is
 
@@ -11,23 +11,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-bundle install        # install gems
-just doctor            # what `bin/setup` would link, touching nothing
-just setup              # actually symlink into ~/.claude (bin/setup)
-just relink               # repoint symlinks that aim somewhere else (bin/setup --force)
+bundle install                           # install gems
+just doctor                              # what `bin/setup` would link, touching nothing
+just setup                               # actually symlink into ~/.claude (bin/setup)
+just relink                              # repoint symlinks that aim somewhere else (bin/setup --force)
 
-just lint                # standardrb — reports only, never rewrites
-just format                # standardrb --fix, then mdformat on every *.md
+just lint                	               # standardrb — reports only, never rewrites
+just format                              # standardrb --fix, then mdformat on every *.md
 
-just test                    # rspec
+just test                                # rspec
 just test spec/spec_plan_build/ordinal_spec.rb                        # single file
 just test spec/spec_plan_build/ordinal_spec.rb -e "some example name" # single example
-just test-coverage           # rspec with SimpleCov; open coverage/index.html
+just test-coverage                       # rspec with SimpleCov; open coverage/index.html
 
-just ci                # lint + test-coverage (what CircleCI runs)
-just lefthook            # run all pre-commit hooks against the whole tree
+just ci                                  # lint + test-coverage (what CircleCI runs)
+just lefthook                            # run all pre-commit hooks against the whole tree
 
-just docs                  # regenerate context/feature-building/spec-plan-build.md from the state machine
+just docs                                # regenerate context/feature-building/spec-plan-build.md 
+                                         # from the AASM-based state machine
 ```
 
 `standard`, not `rubocop`, is the linter (see Gemfile comment: "standard is rubocop with the arguing removed"). `standardrb` ignores `skills/`, `plugins/`, `coverage/`, `tmp/` (see `.standard.yml`); `lib/` has its own `.standard.yml`.
@@ -45,7 +46,7 @@ spec-plan-build resync dirs [--commit]                              # folder emo
 spec-plan-build resync prs [--commit]                               # [NNN.MM] prefixes on PR titles
 spec-plan-build linear import --prefix TAX [--commit | --format json]
 spec-plan-build run [--commit] [-j N] [--isolation worktree|shared] [--plan NNN,...]  # drive the agents
-spec-plan-build docs -o context/feature-building/spec-plan-build.md # regenerate conventions from the state machine
+spec-plan-build docs -o context/feature-building/spec-plan-build.md # regen state machine from AASM
 ```
 
 And the sibling installer that populates `skills/`/`plugins/` for this repo itself (`scripts/install-sources`, plain Ruby, no bundler needed):
@@ -62,13 +63,13 @@ Everything that writes to disk or GitHub is a **dry run until `--commit`** — f
 
 A feature moves through five specialists, one state at a time, never further than its own documents currently justify. This is the same machine `spec-plan-build states` draws and `documentation.rb` generates prose from — if you change who handles what, those two commands are the staleness check.
 
-| # | State | Who acts | What happens |
-| :- | :--- | :--- | :--- |
-| 1 | ⚪️ New | `spec-plan-build create` | Mints the plan folder; for a genuinely new feature (not `--after`/`--prs`) scaffolds `spec.md`'s four fixed headings — *What we are trying to achieve*, *Why it matters*, *What already exists*, *What research needs to settle* — attempts a best-effort first pass via `claude -p`, and opens it. A human finishes the brief. |
-| 2 | 🔎 Researched | `leah-researcher` | Fans work out across parallel sub-agents, appends spec.md's `## Research` chapter. That heading *is* the transition — nobody else may write it, not even empty. |
-| 3 | ⭐️ Planned | `yoda-writer`, then `palpatine-planner` | `yoda-writer` turns the brief + research into Goal/Non-Goals/In-Out-of-scope/Conclusion, or writes `blocked.md` when a question is a human's to answer. `palpatine-planner` then decomposes the finished spec into `plan.md`'s non-overlapping work units. |
-| 4 | 🟡 Building → 🟢 Ready for Review | `luke-implementer` | Builds one work unit at a time — source and tests, no commits — opening a `[NNN.MM] …` pull request as each lands. |
-| 5 | 👀 In Review → 🔴 / ✅ | `hansolo-reviewer` | Reads the diff against the plan; requests changes (back to 🟢 once fixed) or approves. Never merges — that line is enforced in code (`Executor::UNGRANTABLE`), not just in the prompt. |
+| #   | State                             | Who acts                                | What happens                                                                                                                                                                                                                                                                                                                    |
+| :-- | :-------------------------------- | :-------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | ⚪️ New                            | `spec-plan-build create`                | Mints the plan folder; for a genuinely new feature (not `--after`/`--prs`) scaffolds `spec.md`'s four fixed headings — *What we are trying to achieve*, *Why it matters*, *What already exists*, *What research needs to settle* — attempts a best-effort first pass via `claude -p`, and opens it. A human finishes the brief. |
+| 2   | 🔎 Researched                     | `leah-researcher`                       | Fans work out across parallel sub-agents, appends spec.md's `## Research` chapter. That heading *is* the transition — nobody else may write it, not even empty.                                                                                                                                                                 |
+| 3   | ⭐️ Planned                        | `yoda-writer`, then `palpatine-planner` | `yoda-writer` turns the brief + research into Goal/Non-Goals/In-Out-of-scope/Conclusion, or writes `blocked.md` when a question is a human's to answer. `palpatine-planner` then decomposes the finished spec into `plan.md`'s non-overlapping work units.                                                                      |
+| 4   | 🟡 Building → 🟢 Ready for Review | `luke-implementer`                      | Builds one work unit at a time — source and tests, no commits — opening a `[NNN.MM] …` pull request as each lands.                                                                                                                                                                                                              |
+| 5   | 👀 In Review → 🔴 / ✅            | `hansolo-reviewer`                      | Reads the diff against the plan; requests changes (back to 🟢 once fixed) or approves. Never merges — that line is enforced in code (`Executor::UNGRANTABLE`), not just in the prompt.                                                                                                                                          |
 
 Off to the side, at any point: ⭕️/🅱️ **Blocked** (an engineering or product decision only a human can make — never assigned to an agent) and ☢️ **Deferred** or ❌ **Discarded**.
 
@@ -102,20 +103,20 @@ Entry point `lib/spec_plan_build.rb` requires each component only if the file ex
 
 ### Repo layout
 
-| Path | What it is |
-|---|---|
-| `config/AGENTS.md` | The instructions every agent reads; symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md` by `bin/setup` |
-| `config/sources.yml` | Declarative list `scripts/install-sources` clones `skills/`/`plugins/` content from |
-| `context/` | Durable reference loaded on demand — per-language conventions, PostgreSQL, the spec-plan-build lifecycle doc, `skills-used.md` |
-| `agents/` | The five specialist definitions from the workflow table above |
-| `skills/` | Claude skills — **generated** by `install-sources`, not committed; one directory per skill, symlinked into `~/.claude/skills/` |
-| `skills-mine/` | Skills authored in this repo — **committed**; folded into `skills/` by `install-sources` |
-| `plugins/` | External plugin bundles (e.g. `pstack`) — also generated, not committed |
-| `commands/` | Slash commands wrapping `spec-plan-build` (table above) |
-| `bin/` | Bash executables — `setup` is a pure symlink reconciler, nothing more |
-| `scripts/` | Ruby executables — `spec-plan-build` and `install-sources` |
-| `lib/spec_plan_build/` | The library described above |
-| `spec/` | RSpec suite, mirroring `lib/spec_plan_build/` |
+| Path                   | What it is                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `config/AGENTS.md`     | The instructions every agent reads; symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md` by `bin/setup`                        |
+| `config/sources.yml`   | Declarative list `scripts/install-sources` clones `skills/`/`plugins/` content from                                            |
+| `context/`             | Durable reference loaded on demand — per-language conventions, PostgreSQL, the spec-plan-build lifecycle doc, `skills-used.md` |
+| `agents/`              | The five specialist definitions from the workflow table above                                                                  |
+| `skills/`              | Claude skills — **generated** by `install-sources`, not committed; one directory per skill, symlinked into `~/.claude/skills/` |
+| `skills-mine/`         | Skills authored in this repo — **committed**; folded into `skills/` by `install-sources`                                       |
+| `plugins/`             | External plugin bundles (e.g. `pstack`) — also generated, not committed                                                        |
+| `commands/`            | Slash commands wrapping `spec-plan-build` (table above)                                                                        |
+| `bin/`                 | Bash executables — `setup` is a pure symlink reconciler, nothing more                                                          |
+| `scripts/`             | Ruby executables — `spec-plan-build` and `install-sources`                                                                     |
+| `lib/spec_plan_build/` | The library described above                                                                                                    |
+| `spec/`                | RSpec suite, mirroring `lib/spec_plan_build/`                                                                                  |
 
 ### Vendor neutrality
 
