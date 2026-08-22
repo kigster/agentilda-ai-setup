@@ -18,6 +18,7 @@ module Dry
         end
 
         extend Forwardable
+
         def_delegators :pastel, :yellow, :green, :red, :blue, :magenta, :cyan, :white, :black, :gray, :bright_white, :bright_black, :bright_red, :bright_green, :bright_blue, :bright_magenta, :bright_cyan, :bright_gray
       end
 
