@@ -89,6 +89,16 @@ kig/fix-dsl-alignment-bug
 
 Now the branch name of the worktree is `kig/fix-dsl-alignment-bug`
 
+A fresh worktree holds every **tracked** file and nothing else, so anything git ignores is missing and the checkout cannot run. In a Rails project the suite dies on `MissingKeyError` because `config/credentials/*.key` is gitignored, and anything reading `.env` silently gets defaults instead. Seed the worktree before doing anything else in it:
+
+```bash
+$ cd ~/.agents.worktrees/fix-dsl-alignment-bug
+$ ~/.agents/bin/setup-worktree              # copy .env* and credential keys from the main checkout
+$ ~/.agents/bin/setup-worktree --dry-run    # look first
+```
+
+It copies only files git ignores, so it can add what a checkout was missing and can never shadow tracked content with a stale local copy. It refuses to overwrite an existing file without `--force`, and production credential keys are opt-in via `--production`.
+
 ## **Tools**
 
 Use `rg` not `grep`, `fd` not `find`, `tree` if needed, `gawk` not `awk`, `gsed` not `sed`, `gfold` not `fold`, `gcat` not `cat`. Use `bat file` or `cat file | bat --language language` (where "language" you must deduce from the file, see `bat --languages`) to print code files to STDOUT with syntax highlighting.
