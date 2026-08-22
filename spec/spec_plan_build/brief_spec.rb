@@ -148,8 +148,8 @@ RSpec.describe SpecPlanBuild::Brief, :tree do
     end
 
     # `create` shells out to `claude` the same way {Executor} does, so it had
-    # the same bug: the first line of the error is the escaped prompt, and
-    # reporting it said an invocation failed, at length, and never why.
+    # the same bug. The first line of the error is the escaped prompt.
+    # Reporting it said an invocation failed, at length, and never why.
     it "reports what claude said, not the several-thousand-character prompt it said it about" do
       allow(command).to receive(:run).and_raise(TTY::Command::ExitError.new("claude -p #{"x" * 3000}",
         instance_double(TTY::Command::Result, exit_status: 1,
