@@ -903,9 +903,6 @@ module SpecPlanBuild
       # The agent that knows the shape of `blocked.md`.
       DEFAULT_AGENT = "lando-broker"
 
-      # The two states with a `blocked.md` to drain.
-      BLOCKED = %i[blocked product_blocked].freeze
-
       desc "Fold answered blocks into a plan's documents and retire blocked.md"
 
       argument :plans, type: :array, required: true,
@@ -958,10 +955,17 @@ module SpecPlanBuild
         end
       end
 
-      # A plan that is not blocked is refused, not skipped. Whoever typed this
-      # believes an answer has arrived; running against a folder that was never
-      # stopped and saying nothing is how you come back later to a plan nobody
-      # touched and no record of why.
+      # A folder with no `blocked.md` is refused, not skipped. Whoever typed
+      # this believes an answer has arrived; running against a folder that was
+      # never stopped and saying nothing is how you come back later to a plan
+      # nobody touched and no record of why.
+      #
+      # The gate is the file, not the folder's emoji. ⭕️ is *derived* from
+      # `blocked.md`, so gating the drain on it made the tool circular: a
+      # `blocked.md` whose questions are not written as `## B<n>` never earns
+      # the emoji, so `unblock` refused it, so the file could never drain and
+      # the folder could never leave 🟡. The file is the thing being drained,
+      # so the file is the thing that decides.
       #
       # @param tree [SpecPlanBuild::Tree]
       # @param plans [Array<String>]
@@ -974,10 +978,10 @@ module SpecPlanBuild
             error("No plan #{token} in #{tree.dir}.\n\nKnown: #{tree.ordinals.join(", ")}")
             exit 66
           end
-          next subject if BLOCKED.include?(subject.status.key)
+          next subject if subject.file?("blocked.md")
 
-          error("#{subject.feature.ordinal} is #{subject.status}, not blocked.\n\n" \
-                "Only ⭕️ and 🅱️ folders have a blocked.md to drain.")
+          error("#{subject.feature.ordinal} is #{subject.status} and has no blocked.md.\n\n" \
+                "There is nothing to drain.")
           exit 65
         end
       end
@@ -989,8 +993,10 @@ module SpecPlanBuild
       # @param subject [SpecPlanBuild::Subject]
       # @return [Array<String>]
       def open_questions(subject)
+        answered = subject.block_answers
         subject.read("blocked.md").to_s.lines.grep(SpecPlanBuild::OPEN_BLOCK)
           .map { |line| line.strip.sub(/\A\#+[ \t]*/, "") }
+          .map { |q| answered.include?(q[SpecPlanBuild::OPEN_BLOCK, 1].to_i) ? "#{q}  ← answered" : q }
       end
 
       # @param tree [SpecPlanBuild::Tree]
@@ -1010,7 +1016,12 @@ module SpecPlanBuild
           next if quiet?(options)
 
           say("#{paint(current.feature.ordinal.to_s, :bright_black)} #{current.status.emoji} #{current.feature.title}")
-          if questions.empty?
+          if current.unreadable_block?
+            say("  #{paint("blocked.md names no `## B<n>` question, so nothing here can be drained", :red)}",
+              bullet: " ")
+            say("  #{paint("Number each open question `## B1`, `## B2`, and each answer `## A1`, `## A2`.", :yellow)}",
+              bullet: " ")
+          elsif questions.empty?
             say("  #{paint("nothing left open", :green)}", bullet: " ")
           else
             questions.each { |question| say("  #{paint(question, :yellow)}", bullet: " ") }

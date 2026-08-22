@@ -77,17 +77,33 @@ module SpecPlanBuild
     }
   end
 
-  # A question that is still somebody's to answer: `B1`, `### B2. Which store?`,
-  # `**B3**`. The numbering is what `blocked.md` gets referenced by in
+  # A question that is still somebody's to answer, written as its own heading:
+  # `## B1`, `## B2`. The number is what `blocked.md` gets referenced by in
   # conversation and in pull requests, so it is also the only part of the file
   # a program can count.
   #
-  # An answer is written as a list item under `## Answers`, and deliberately
-  # does not match this: `- **B1** — 2026-08-21, CTO: …`. Answers are an inbox,
-  # not a record. `lando-broker` folds each one into the document it unblocks
-  # and deletes the question with it, so a `blocked.md` holding nothing but
-  # history must not go on stopping the folder.
-  OPEN_BLOCK = /^[ \t]{0,3}\#{0,4}[ \t]*\**B\d+\b/
+  # Whoever writes `blocked.md` MUST use this notation. A question written any
+  # other way is invisible to every part of this tool: the folder never becomes
+  # ⭕️, and `unblock` reports a file with nothing in it to drain. {ANSWER_BLOCK}
+  # is the other half of the pair.
+  OPEN_BLOCK = /^[ \t]{0,3}\#{0,4}[ \t]*\**B(\d+)\b/
+
+  # The answer to the question of the same number: `## A1` settles `## B1`.
+  #
+  # Answers are an inbox, not a record. `lando-broker` folds each one into the
+  # document its question was stopping and deletes both, so a `blocked.md`
+  # holding nothing but history must not go on stopping the folder. An `A`
+  # never matches {OPEN_BLOCK}, which is what lets the two live in one file.
+  ANSWER_BLOCK = /^[ \t]{0,3}\#{0,4}[ \t]*\**A(\d+)\b/
+
+  # The numbers named by every heading in +text+ matching +pattern+.
+  #
+  # @param text [String, nil]
+  # @param pattern [Regexp] {OPEN_BLOCK} or {ANSWER_BLOCK}
+  # @return [Array<Integer>] in the order they appear, without duplicates
+  def self.block_numbers(text, pattern)
+    text.to_s.lines.filter_map { |line| line[pattern, 1]&.to_i }.uniq
+  end
 
   # ⭕️ Technical Block and 🅱️ Product Block are the same thing on disk: a
   # `blocked.md` still naming at least one question nobody has answered. Which
