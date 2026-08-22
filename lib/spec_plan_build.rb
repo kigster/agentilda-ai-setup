@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "dry/cli"
-require_relative "./dry/cli/banner"
+require_relative "dry/cli/banner"
 require "dry/initializer"
 require "dry/monads"
 require "dry/inflector"
