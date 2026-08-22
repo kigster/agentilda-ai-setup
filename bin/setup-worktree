@@ -182,7 +182,10 @@ summary="${copied} copied"
 [[ $skipped -eq 0 ]] || summary="$summary, ${skipped} skipped"
 
 if [[ $copied -eq 0 && $already -eq 0 && $skipped -eq 0 ]]; then
-  warn "nothing to copy: the source checkout has no ignored env files or credential keys"
+  # Worth saying to a person, and not worth saying to the agent loop, which
+  # seeds every worktree it creates and would otherwise print this once per
+  # worktree in a repo that simply has no ignored files. Not an error either way.
+  [[ $QUIET -eq 1 ]] || warn "nothing to copy: the source checkout has no ignored env files or credential keys"
   say ""
   exit 0
 fi

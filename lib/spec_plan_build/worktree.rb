@@ -16,6 +16,12 @@ module SpecPlanBuild
   # carries itself from worktree creation through to a merged pull request with
   # nobody having to remember it.
   class Worktree
+    # `bin/setup-worktree`, which copies in the ignored-but-required files a new
+    # checkout does not get. Shelling out rather than reimplementing the rules
+    # here keeps one answer to "what does a worktree need", and keeps that answer
+    # usable from a shell on a machine that has never run `bundle install`.
+    SEEDER = File.expand_path("../../bin/setup-worktree", __dir__)
+
     # One plan's isolated checkout.
     #
     # @!attribute [r] ordinal
@@ -57,6 +63,18 @@ module SpecPlanBuild
 
     # Get, or create, the isolated checkout for one plan.
     #
+    # The checkout is seeded before it is handed back, on both paths. `git
+    # worktree add` brings every TRACKED file and nothing else, so an agent
+    # given a bare one cannot run the suite it was told to keep green: a Rails
+    # project dies on `MissingKeyError` because `config/credentials/*.key` is
+    # gitignored. The agent then reports a broken checkout as a broken plan,
+    # which is the worst failure this loop has, because the diagnosis points
+    # at the code rather than at the tree.
+    #
+    # A reused worktree is seeded too. {#seed} only ever adds a missing file,
+    # so running it again costs one fast subprocess and repairs the worktrees
+    # that were created before any of this existed.
+    #
     # @param feature [SpecPlanBuild::Feature]
     # @return [SpecPlanBuild::Worktree::Checkout]
     # @raise [SpecPlanBuild::Error] when git refuses
@@ -64,7 +82,10 @@ module SpecPlanBuild
       branch = branch_for(feature)
       path = File.join(dir, "#{feature.ordinal}-#{feature.slug}")
 
-      return Checkout.new(ordinal: feature.ordinal, branch:, path:, created: false) if File.directory?(path)
+      if File.directory?(path)
+        seed(path)
+        return Checkout.new(ordinal: feature.ordinal, branch:, path:, created: false)
+      end
 
       # git keeps a registration for a worktree whose directory was deleted by
       # hand, marks it `prunable`, and then refuses to create a new one at that
@@ -74,8 +95,42 @@ module SpecPlanBuild
 
       FileUtils.mkdir_p(dir)
       add(branch, path)
+      seed(path)
       Checkout.new(ordinal: feature.ordinal, branch:, path:, created: true)
     end
+
+    # Copy in the files git ignores and a new checkout therefore lacks: `.env`
+    # and friends, and credential keys.
+    #
+    # Never fatal. A repository with no ignored files is perfectly normal, and
+    # a plan is not worth abandoning over a seeding step, so this reports and
+    # carries on. It runs `--quiet`, which prints nothing on success and leaves
+    # a real failure on STDERR where the loop's other progress goes.
+    #
+    # @param path [String] the worktree to seed
+    # @return [Boolean] whether the seeder ran and succeeded
+    # `$stderr` rather than `Kernel#warn`, matching {SpecPlanBuild::UI}, which
+    # writes its progress to `$stderr` too. Style/StderrPuts prefers warn so the
+    # output can be silenced, but warn reaches file descriptor 2 through
+    # `Warning.warn` and ignores a reassigned `$stderr` entirely:
+    #
+    #   $stderr = StringIO.new; warn "x"; $stderr.string  # => ""
+    #
+    # So anything capturing this loop's output, the suite included, would never
+    # see a seeding failure. Being silenceable is worth less than being seen.
+    # rubocop: disable Style/StderrPuts
+    def seed(path)
+      unless File.executable?(SEEDER)
+        $stderr.puts "worktree: #{SEEDER} is missing, so #{path} has no .env or credential keys"
+        return false
+      end
+
+      return true if system(SEEDER, "--quiet", path, out: File::NULL)
+
+      $stderr.puts "worktree: could not seed #{path}; its suite may fail on a missing key"
+      false
+    end
+    # rubocop: enable Style/StderrPuts
 
     # @param feature [SpecPlanBuild::Feature]
     # @return [String] e.g. "kig/002.00-tenancy-households"
