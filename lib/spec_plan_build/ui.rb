@@ -329,16 +329,16 @@ module SpecPlanBuild
       end
       # standard:enable Style/StderrPuts
 
-      # TTY::Box sizes itself from the number of lines it is handed, not from
-      # the number those lines occupy once wrapped to the box's width. So any
-      # message containing a line longer than the box is drawn a row or two
+      # TTY::Box sizes itself from the number of lines you hand it, not from
+      # the number those lines occupy once wrapped to the box's width. So it
+      # draws any message containing a line longer than the box a row or two
       # short, and what falls off is the bottom, which is where the instruction
       # lives. The run that found this reported four of its ten failures and
       # cut the fifth mid-sentence.
       #
-      # Wrapped here with the same library TTY::Box wraps with, rather than by
-      # dividing by the width, because it wraps on words: a rough estimate is
-      # wrong in exactly the cases this exists for.
+      # This wraps with the same library TTY::Box wraps with rather than
+      # dividing by the width, because TTY::Box wraps on words. A rough
+      # estimate is wrong in exactly the cases this exists for.
       #
       # @param text [String]
       # @return [Integer] rows the box needs: its content, two borders, one pad

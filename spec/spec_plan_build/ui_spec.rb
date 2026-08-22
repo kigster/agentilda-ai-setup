@@ -290,7 +290,7 @@ RSpec.describe SpecPlanBuild::UI do
   end
 
   # A box that is one row short loses its last line, and the last line is where
-  # the instruction is. Ten agent failures were reported as four this way.
+  # the instruction is. One run reported ten agent failures as four this way.
   describe ".box" do
     let(:long) { "a" * (described_class.width + 40) }
 

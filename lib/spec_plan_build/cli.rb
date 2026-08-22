@@ -54,12 +54,12 @@ module SpecPlanBuild
       def commit?(options) = options.fetch(:commit, false)
 
       # `claude` prefers a credential in the environment to a claude.ai login,
-      # so a project `.env` that direnv loads on `cd` can quietly redirect
-      # every agent a run spawns to a key meant for the application itself.
+      # so a project `.env` that direnv loads on `cd` can redirect every agent
+      # a run spawns to a key meant for the application itself.
       #
-      # Said once, before anything is invoked, because the failure it causes
-      # arrives three minutes later, once per agent, and reads like an agent
-      # problem rather than an environment one.
+      # Say it once, before the run starts, because the failure arrives three
+      # minutes later, once per agent, and reads like an agent problem rather
+      # than an environment one.
       #
       # @return [void]
       def credentials_warning

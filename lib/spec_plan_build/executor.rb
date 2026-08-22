@@ -59,12 +59,12 @@ module SpecPlanBuild
     # Environment variables the `claude` CLI reads as credentials, in
     # preference to a claude.ai login.
     #
-    # A project `.env` that sets one of these for the application's own use is
-    # inherited by every agent a run spawns. `claude` then authenticates with
-    # that key rather than the login, and a stale or unrelated one turns an
-    # entire run into `401 API key is invalid`, three minutes per agent. This
-    # is warned about rather than unset: driving the CLI with an API key on
-    # purpose is legitimate, and nothing here can tell the two apart.
+    # A project `.env` that sets one of these for the application's own use
+    # reaches every agent a run spawns. `claude` then authenticates with that
+    # key rather than the login, and a stale or unrelated one turns an entire
+    # run into `401 API key is invalid`, three minutes per agent. The CLI warns
+    # rather than unsets. Driving it with an API key on purpose is legitimate,
+    # and nothing here can tell the two apart.
     CREDENTIAL_VARS = %w[ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN].freeze
 
     # @param env [Hash]
@@ -73,16 +73,16 @@ module SpecPlanBuild
       CREDENTIAL_VARS.reject { |name| env[name].to_s.strip.empty? }
     end
 
-    # What `claude` actually said, out of the four labelled sections
+    # What `claude` said, out of the four labelled sections
     # {TTY::Command::ExitError} builds its message from.
     #
     # The first of those sections is the command line, which for an agent is a
     # shell-escaped copy of its several-thousand-character prompt. Reporting it
     # said that an invocation had failed, at length, and nothing at all about
-    # why: the run that found this printed the same escaped prompt ten times
+    # why. The run that found this printed the same escaped prompt ten times
     # while the answer, `401 API key is invalid`, sat unread in `stdout:`.
     #
-    # Both streams are kept, because they carry different halves. `claude`
+    # This keeps both streams, because they carry different halves. `claude`
     # reports its own failures on stdout; the line naming the *cause* of that
     # 401 (`ANTHROPIC_API_KEY … takes precedence over your claude.ai login`)
     # was on stderr.
