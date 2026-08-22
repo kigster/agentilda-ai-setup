@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+#
+# bin/setup-worktree — give a fresh git worktree the local files git will not.
+#
+#   setup-worktree                    # seed the worktree you are standing in
+#   setup-worktree PATH               # seed the worktree at PATH
+#   setup-worktree --dry-run          # say what it would copy, touch nothing
+#   setup-worktree --force            # overwrite files already in the worktree
+#   setup-worktree --production       # include production credential keys too
+#
+# The problem it solves: `git worktree add` gives you every TRACKED file and
+# nothing else. Everything a checkout needs that git deliberately ignores is
+# absent, so a worktree that looks complete cannot run. In a Rails project the
+# suite dies immediately on
+#
+#   ActiveSupport::EncryptedFile::MissingKeyError: Missing encryption key
+#
+# because config/credentials/*.key is gitignored, and anything reading .env
+# gets defaults it was never meant to have. Both failures point at the code
+# rather than at the checkout, which is why they cost an hour the first time.
+#
+# What it copies is decided by git, not by a list kept here: the source's
+# ignored files are enumerated with `git ls-files --others --ignored`, then
+# narrowed to environment files and credential keys. A file git does not ignore
+# is never touched, so this can only ever ADD what a checkout was missing, and
+# can never shadow tracked content with a stale local copy.
+#
+# Three rules it will not break:
+#
+#   1. It never overwrites an existing file without --force. A worktree you
+#      have already edited is work in progress, and a setup script that
+#      clobbers a key you deliberately changed is a data-loss bug.
+#
+#   2. Production credential keys are opt-in. The ask this was written for was
+#      the TEST key. Skips are printed, never silent, so a missing production
+#      key never reads as a bug in this script.
+#
+#   3. It refuses to run when source and destination are the same checkout,
+#      which is what happens when you forget the PATH argument.
+#
+# It writes by default rather than requiring --commit, unlike the tools in
+# scripts/. Those rename folders and PR titles, which other people join on.
+# This one copies a machine-local file into a scratch checkout that nobody
+# else can see, and a setup step that silently does nothing is the worse
+# failure. --dry-run is there when you want to look first.
+#
+# © 2026 Konstantin Gredeskoul
+
+set -euo pipefail
+
+DRY_RUN=0
+FORCE=0
+QUIET=0
+PRODUCTION=0
+DEST=""
+SOURCE=""
+
+copied=0
+already=0
+skipped=0
+
+# Environment files and credential keys, and nothing else. Anchored so a
+# directory named .env/ cannot match, and so ".env.local" is taken while a
+# stray ".env.local.bak-20260815" is not: one dot-suffix, no more.
+PATTERN='(^|/)\.env(\.[A-Za-z0-9_-]+)?$|(^|/)config/(master\.key|credentials/[^/]+\.key)$'
+PRODUCTION_PATTERN='(^|/)config/credentials/production\.key$'
+
+# ------------------------------------------------------------------ output --
+
+if [[ -t 2 && -z "${NO_COLOR:-}" ]]; then
+  c_reset=$'\033[0m'; c_dim=$'\033[2m'; c_green=$'\033[32m'
+  c_yellow=$'\033[33m'; c_red=$'\033[31m'; c_bold=$'\033[1m'
+else
+  c_reset=""; c_dim=""; c_green=""; c_yellow=""; c_red=""; c_bold=""
+fi
+
+say()  { [[ $QUIET -eq 1 ]] || printf '%s\n' "$*" >&2; }
+ok()   { [[ $QUIET -eq 1 ]] || printf '  %s✓%s %s\n' "$c_green" "$c_reset" "$*" >&2; }
+note() { [[ $QUIET -eq 1 ]] || printf '  %s·%s %s\n' "$c_dim" "$c_reset" "$*" >&2; }
+warn() { printf '  %s!%s %s\n' "$c_yellow" "$c_reset" "$*" >&2; }
+die()  { printf '  %s✗%s %s\n' "$c_red" "$c_reset" "$*" >&2; exit 1; }
+
+usage() {
+  sed -n '3,45p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  exit 64
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -n|--dry-run)    DRY_RUN=1;    shift ;;
+    -f|--force)      FORCE=1;      shift ;;
+    -q|--quiet)      QUIET=1;      shift ;;
+    -p|--production) PRODUCTION=1; shift ;;
+    --from)          SOURCE="${2:-}"; shift 2 ;;
+    -h|--help)       usage ;;
+    -*) printf 'setup-worktree: unknown argument: %s\n\n' "$1" >&2; usage ;;
+    *)
+      [[ -z "$DEST" ]] || die "setup-worktree: more than one path given: $DEST and $1"
+      DEST="$1"; shift ;;
+  esac
+done
+
+# ------------------------------------------------------------------ resolve --
+
+DEST="${DEST:-.}"
+[[ -d "$DEST" ]] || die "no such directory: $DEST"
+DEST="$(cd "$DEST" && pwd -P)"
+
+git -C "$DEST" rev-parse --git-dir >/dev/null 2>&1 || die "not a git checkout: $DEST"
+
+# The main worktree is the first entry `git worktree list` prints. Asking git
+# beats deriving it from --git-common-dir, which lands on the .git directory
+# and needs a parent-of guess that is wrong for a bare or relocated repo.
+if [[ -z "$SOURCE" ]]; then
+  SOURCE="$(git -C "$DEST" worktree list --porcelain 2>/dev/null |
+    awk '/^worktree /{print substr($0, 10); exit}')"
+fi
+
+[[ -n "$SOURCE" && -d "$SOURCE" ]] || die "could not find the main checkout for $DEST"
+SOURCE="$(cd "$SOURCE" && pwd -P)"
+
+# Rule 3. Without a PATH argument from inside the main checkout this would
+# copy every file onto itself and report success, which is worse than an error.
+[[ "$SOURCE" != "$DEST" ]] ||
+  die "source and destination are the same checkout: $DEST
+    Run this from inside the worktree, or pass its path."
+
+say ""
+say "${c_bold}setup-worktree${c_reset}"
+say "  from ${c_dim}${SOURCE}${c_reset}"
+say "    to ${c_dim}${DEST}${c_reset}"
+[[ $DRY_RUN -eq 0 ]] || say "  ${c_yellow}dry run: nothing will be written${c_reset}"
+say ""
+
+# --------------------------------------------------------------------- copy --
+
+# --directory collapses a wholly-ignored directory into one entry, so this stays
+# fast in a repo carrying node_modules; the trailing-slash filter then drops it.
+# Without it git walks every ignored file and the listing takes seconds.
+while IFS= read -r rel; do
+  [[ -n "$rel" ]] || continue
+
+  if [[ $PRODUCTION -eq 0 ]] && [[ "$rel" =~ $PRODUCTION_PATTERN ]]; then
+    skipped=$((skipped + 1))
+    note "$rel ${c_dim}production key, pass --production to include${c_reset}"
+    continue
+  fi
+
+  src="$SOURCE/$rel"
+  dst="$DEST/$rel"
+
+  # Enumerated from the source a moment ago, so this only trips on a race or a
+  # dangling symlink. Either way the file is not there to copy.
+  [[ -f "$src" ]] || continue
+
+  if [[ -e "$dst" && $FORCE -eq 0 ]]; then
+    already=$((already + 1))
+    note "$rel ${c_dim}already there${c_reset}"
+    continue
+  fi
+
+  if [[ $DRY_RUN -eq 0 ]]; then
+    mkdir -p "$(dirname "$dst")"
+    # -p keeps the mode. A credential key is 0600 in the source and copying it
+    # to a group-readable 0644 would be a quiet downgrade of its permissions.
+    cp -p "$src" "$dst"
+  fi
+
+  copied=$((copied + 1))
+  ok "$rel"
+done < <(
+  git -C "$SOURCE" ls-files --others --ignored --exclude-standard --directory 2>/dev/null |
+    grep -vE '/$' |
+    grep -E "$PATTERN" || true
+)
+
+# ------------------------------------------------------------------ summary --
+
+say ""
+summary="${copied} copied"
+[[ $already -eq 0 ]] || summary="$summary, ${already} already there"
+[[ $skipped -eq 0 ]] || summary="$summary, ${skipped} skipped"
+
+if [[ $copied -eq 0 && $already -eq 0 && $skipped -eq 0 ]]; then
+  warn "nothing to copy: the source checkout has no ignored env files or credential keys"
+  say ""
+  exit 0
+fi
+
+say "  ${c_bold}${summary}${c_reset}"
+say ""
