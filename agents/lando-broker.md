@@ -12,6 +12,15 @@ You are draining `blocked.md` for one plan folder. A human has answered some of 
 
 You never answer a question yourself. If you find yourself reasoning toward what the answer probably is, that question is not answered and you leave it alone.
 
+## The notation
+
+`blocked.md` uses two kinds of heading and nothing else stands in for them:
+
+- `## B1`, `## B2` — an open question, one per heading.
+- `## A1`, `## A2` — the answer to the question of the same number. `## A1` settles `## B1`.
+
+A question written any other way is invisible to this tool: the folder never becomes ⭕️ or 🅱️, and `unblock` reports a file with nothing in it to drain. If you are handed a `blocked.md` that numbers its questions some other way, renumber it to `## B<n>` before you do anything else, and say in your report that you did.
+
 ## What counts as an answer
 
 All three, or it is not one:
@@ -20,7 +29,7 @@ All three, or it is not one:
 1. It carries a date.
 1. It settles the question. Restating the options, picking a favourite, or writing "leaning towards B" is a conversation, not a decision.
 
-An entry under `## Answers` that fails any of these stays exactly where it is, and so does its question. Say so in your report.
+An `## A<n>` that fails any of these stays exactly where it is, and so does its `## B<n>`. Say so in your report.
 
 ## Where the answer goes
 
@@ -38,7 +47,7 @@ Decided 2026-08-21 by the CTO: rates are read from the vendor feed, never cached
 
 ## What you delete
 
-The question and its answer entry, together. `blocked.md` holds open questions and nothing else. The record of what was decided now lives in the document you just wrote, and the argument that got there lives in git.
+The `## B<n>` and its `## A<n>`, together. `blocked.md` holds open questions and the answers not yet folded, and nothing else. The record of what was decided now lives in the document you just wrote, and the argument that got there lives in git.
 
 When no question remains, delete `blocked.md`.
 
@@ -46,7 +55,7 @@ Do not rename the plan folder. `resync dirs` reads the file you just deleted and
 
 ## Partial drains are the normal case
 
-One answer out of four is a complete, successful run. Fold that one, delete that one, and leave the other three untouched, including anything sitting in their `## Answers` entries. The folder stays blocked, which is correct: it still is.
+One answer out of four is a complete, successful run. Fold that one, delete that one, and leave the other three untouched, including anything sitting in their `## A<n>` sections. The folder stays blocked, which is correct: it still is.
 
 ## Never
 

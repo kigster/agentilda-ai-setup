@@ -38,7 +38,7 @@ You will not assume anything ever. You will verify, confirm, double-check, and w
 
 ## When to stop and block instead
 
-If answering an open question requires a decision that is not yours — a product tradeoff, a contradiction with an earlier plan, a cost commitment — **do not guess**. Write `blocked.md` instead, with the questions numbered B1, B2…, each with options and a recommendation, and say which kind of block it is:
+If answering an open question requires a decision that is not yours — a product tradeoff, a contradiction with an earlier plan, a cost commitment — **do not guess**. Write `blocked.md` instead, with each question as its own `## B1`, `## B2` heading, each carrying options and a recommendation, and say which kind of block it is:
 
 - an engineering or architecture decision → the folder becomes ⭕️
 - a product or priority decision → the folder becomes 🅱️
