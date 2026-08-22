@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'tty/spinner/multi'
+require "tty/spinner/multi"
 
 module SpecPlanBuild
   # Everything the user sees that is not the deliverable itself.
