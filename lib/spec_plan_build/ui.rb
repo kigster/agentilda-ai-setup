@@ -45,6 +45,29 @@ module SpecPlanBuild
       def reset!
         remove_instance_variable(:@pastel) if instance_variable_defined?(:@pastel)
         self.quiet = false
+        self.log_path = nil
+      end
+
+      # Where {.log} appends to, if anywhere. nil (the default) means nowhere;
+      # `spec-plan-build run` sets this before the loop starts, so a round
+      # started under a tool that discards STDERR — an agent's own Bash call,
+      # for instance — still leaves something to `tail -f`.
+      #
+      # @return [String, nil]
+      attr_accessor :log_path
+
+      # Append one timestamped line to {.log_path}. A no-op with nothing set.
+      # Safe to call from several threads at once.
+      #
+      # @param message [String]
+      # @return [void]
+      def log(message)
+        path = log_path or return
+
+        (@log_mutex ||= Mutex.new).synchronize do
+          FileUtils.mkdir_p(File.dirname(path))
+          File.open(path, "a") { |f| f.puts("[#{Time.now.strftime("%H:%M:%S")}] #{message}") }
+        end
       end
 
       # @return [Boolean] whether STDERR is an interactive terminal
@@ -112,6 +135,12 @@ module SpecPlanBuild
       # finished — a caller that had to re-sort them would be a caller that
       # eventually forgets to.
       #
+      # Every path here — one item, several without a terminal, several with
+      # one — reports something. `jobs <= 1 || list.size <= 1` used to bypass
+      # all of it and run silently, which is exactly the shape a `--plan
+      # NNN.MM` round takes: one plan, one agent, nothing printed until the
+      # whole thing finished and it was too late to tell "working" from "hung."
+      #
       # @param items [Array]
       # @param message [String] the header line
       # @param jobs [Integer] how many run at once
@@ -120,9 +149,16 @@ module SpecPlanBuild
       # @return [Array] one result per item, in input order
       def concurrently(items, message, jobs:, label: :to_s.to_proc, &block)
         list = items.to_a
-        return list.map(&block) if jobs <= 1 || list.size <= 1
+        return [] if list.empty?
 
-        return threaded(list, jobs, &block) unless animate?
+        log(message)
+
+        if jobs <= 1 || list.size <= 1
+          report_line(message) unless animate?
+          return list.map { |item| once(item, label, &block) }
+        end
+
+        return threaded(list, jobs, message, label:, &block) unless animate?
 
         results = Concurrent::Hash.new
         spinners = TTY::Spinner::Multi.new(
@@ -132,10 +168,14 @@ module SpecPlanBuild
         )
 
         list.each_with_index do |item, index|
-          spinners.register("[:spinner] #{label.call(item)}") do |spinner|
+          text = label.call(item)
+          spinners.register("[:spinner] #{text}") do |spinner|
+            log("started  #{text}")
             results[index] = block.call(item)
+            log("finished #{text}")
             spinner.success("")
           rescue => e
+            log("failed   #{text}: #{e.message.lines.first.to_s.strip}")
             results[index] = e
             spinner.error(paint(e.message.lines.first.to_s.strip, :red))
           end
@@ -145,12 +185,42 @@ module SpecPlanBuild
         list.each_index.map { |i| results[i] }
       end
 
-      # Parallelism with no UI at all — a pipe, a CI log, or --quiet.
+      # One item, no concurrency to speak of: a serial round (`--isolation
+      # shared`), or the last plan left in a parallel one. A live spinner on a
+      # terminal; a start line and a finish line with an elapsed time otherwise.
+      #
+      # @param item [Object]
+      # @param label [Proc]
+      # @yieldparam item [Object]
+      # @return [Object]
+      def once(item, label, &block)
+        text = label.call(item)
+        return spinning(text) { block.call(item) } if animate?
+
+        log("started  #{text}")
+        started = monotonic
+        result = block.call(item)
+        report_line("#{text} (#{elapsed(started)})", bullet: "✓")
+        log("finished #{text} (#{elapsed(started)})")
+        result
+      rescue => e
+        report_line("#{text}: #{e.message.lines.first.to_s.strip}", bullet: "✗")
+        log("failed   #{text}: #{e.message.lines.first.to_s.strip}")
+        raise
+      end
+
+      # Parallelism with no spinner to draw: a pipe, a CI log, or a headless
+      # agent's own tool call. Still reports a start and a finish line per
+      # item, because "no terminal" is not the same question as "no one is
+      # reading this."
       #
       # @param list [Array]
       # @param jobs [Integer]
+      # @param message [String]
+      # @param label [Proc]
       # @return [Array]
-      def threaded(list, jobs)
+      def threaded(list, jobs, message, label: :to_s.to_proc, &block)
+        report_line(message)
         results = Concurrent::Hash.new
         queue = Queue.new
         list.each_with_index { |item, index| queue << [item, index] }
@@ -163,16 +233,35 @@ module SpecPlanBuild
               nil
             end)
               item, index = pair
-              begin
-                results[index] = yield(item)
+              results[index] = begin
+                once(item, label, &block)
               rescue => e
-                results[index] = e
+                e
               end
             end
           end
         }.each(&:join)
 
         list.each_index.map { |i| results[i] }
+      end
+
+      # @return [Float] a monotonic clock reading, immune to wall-clock changes
+      def monotonic = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+      # @param started [Float] a {#monotonic} reading taken before the work began
+      # @return [String] e.g. "42s"
+      def elapsed(started) = "#{(monotonic - started).round}s"
+
+      # A progress line, thread-safe and quiet-aware — the one thing every
+      # non-spinner path above needs and would otherwise have to reimplement.
+      #
+      # @param text [String]
+      # @param bullet [String]
+      # @return [void]
+      def report_line(text, bullet: "·")
+        return if quiet
+
+        (@print_mutex ||= Mutex.new).synchronize { line(text, bullet:) }
       end
 
       # A sensible worker count: agents are mostly waiting on a model rather

@@ -124,6 +124,133 @@ RSpec.describe SpecPlanBuild::UI do
     end
   end
 
+  describe ".log" do
+    around do |example|
+      Dir.mktmpdir { |dir|
+        @log_path = File.join(dir, "sub", "run.log")
+        example.run
+      }
+    end
+
+    after { described_class.log_path = nil }
+
+    it "is a no-op with nothing set" do
+      expect { described_class.log("hello") }.not_to raise_error
+    end
+
+    it "appends a timestamped line, creating the directory if needed" do
+      described_class.log_path = @log_path
+      described_class.log("started 000.00")
+
+      expect(File.read(@log_path)).to match(/\A\[\d\d:\d\d:\d\d\] started 000\.00\n\z/)
+    end
+
+    it "appends rather than truncating on a second call" do
+      described_class.log_path = @log_path
+      described_class.log("first")
+      described_class.log("second")
+
+      lines = File.readlines(@log_path)
+
+      aggregate_failures do
+        expect(lines.size).to eq(2)
+        expect(lines.last).to match(/second/)
+      end
+    end
+  end
+
+  # `.concurrently` is what `Runner` drives every round through. These
+  # examples are what stop `jobs <= 1 || list.size <= 1` — the exact shape a
+  # `--plan NNN.MM` round takes — from silently bypassing every bit of the
+  # reporting below, the way it used to.
+  describe ".concurrently" do
+    context "with nothing to do" do
+      it "returns an empty array without touching the block" do
+        expect(described_class.concurrently([], "round", jobs: 2) { raise "never" }).to eq([])
+      end
+    end
+
+    context "one item, or jobs limited to one — not a terminal" do
+      before { allow($stderr).to receive(:tty?).and_return(false) }
+
+      it "still runs the block and returns its result" do
+        result = described_class.concurrently([:plan], "round 1 — 1 plan", jobs: 1) { |_| :done }
+
+        expect(result).to eq([:done])
+      end
+
+      it "prints a header line and a completion line rather than nothing at all" do
+        expect { described_class.concurrently([:plan], "round 1 — 1 plan", jobs: 1, label: ->(_) { "000.00" }) { |_| :done } }
+          .to output(/round 1.*000\.00/m).to_stderr
+      end
+
+      it "logs the start and the finish when a log path is set" do
+        Dir.mktmpdir do |dir|
+          described_class.log_path = File.join(dir, "run.log")
+          described_class.concurrently([:plan], "round 1", jobs: 1, label: ->(_) { "000.00" }) { |_| :done }
+
+          log = File.read(described_class.log_path)
+          aggregate_failures do
+            expect(log).to match(/started {2}000\.00/)
+            expect(log).to match(/finished 000\.00/)
+          end
+        end
+      ensure
+        described_class.log_path = nil
+      end
+
+      it "re-raises a failure after reporting it, rather than swallowing it" do
+        expect { described_class.concurrently([:plan], "round", jobs: 1, label: ->(_) { "000.00" }) { |_| raise "boom" } }
+          .to raise_error("boom")
+      end
+    end
+
+    context "several items, jobs > 1 — not a terminal" do
+      before { allow($stderr).to receive(:tty?).and_return(false) }
+
+      it "runs every item and returns results in input order, not completion order" do
+        delays = {a: 0.02, b: 0}
+        result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item|
+          sleep(delays[item])
+          item
+        }
+
+        expect(result).to eq(%i[a b])
+      end
+
+      it "prints a header line and one completion line per item" do
+        expect { described_class.concurrently(%i[a b], "round 1 — 2 plans", jobs: 2, label: ->(i) { i.to_s }) { |i| i } }
+          .to output(/round 1.*\ba\b.*\bb\b/m).to_stderr
+      end
+
+      it "captures a failing item as its error rather than aborting the others" do
+        result = described_class.concurrently(%i[a b], "round", jobs: 2) { |item|
+          raise "boom" if item == :a
+
+          :ok
+        }
+
+        aggregate_failures do
+          expect(result[0]).to be_a(RuntimeError)
+          expect(result[1]).to eq(:ok)
+        end
+      end
+    end
+
+    context "on a terminal" do
+      before do
+        allow($stderr).to receive(:tty?).and_return(true)
+      end
+
+      it "still returns every result for a single item" do
+        spinner = instance_double(TTY::Spinner, auto_spin: nil, success: nil, error: nil)
+        allow(TTY::Spinner).to receive(:new).and_return(spinner)
+
+        expect(described_class.concurrently([:plan], "round", jobs: 1) { |_| :done }).to eq([:done])
+      end
+    end
+  end
+
   # Column alignment in a terminal is measured in cells, and a character is
   # not a cell. Every example here is a case where counting characters — what
   # `format("%-4s")` does — gets the width wrong.

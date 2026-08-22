@@ -14,6 +14,11 @@
 # gitignored, both fully regenerable from sources.yml plus `skills-mine/`,
 # which this script always symlinks in too.
 #
+# A source that carries more skills than you want can narrow itself with
+# `include_skills: /re/` or `exclude_skills: /re/` in sources.yml, one or the
+# other, never both. Either is matched against the name each skill would
+# install as, so what you filter on is what you see in `skills/`.
+#
 # Deliberately dependency-free: this has to run on a machine that has not run
 # `bundle install` yet, because it is part of what makes that machine usable.
 #
@@ -24,13 +29,25 @@ require "fileutils"
 require "json"
 require "open3"
 
-ROOT = File.expand_path("..", __dir__)
+# Overridable so the suite can point a whole run at a throwaway tree. Nothing
+# else sets it; in normal use this is the repo the script lives in.
+#
+# Resolved through any symlinks on the way, because the manifest records
+# absolute paths and this tree is reachable by more than one of them:
+# ~/.agents is itself a link to wherever the checkout lives. Two runs that
+# disagreed about the spelling would each read the other's links as stale.
+ROOT = File.realpath(ENV.fetch("INSTALL_SOURCES_ROOT") { File.expand_path("..", __dir__) })
 SOURCES_FILE = File.join(ROOT, "config", "sources.yml")
 STAGING_DIR = File.join(ROOT, ".sources")
 SKILLS_DIR = File.join(ROOT, "skills")
 PLUGINS_DIR = File.join(ROOT, "plugins")
 SKILLS_MINE_DIR = File.join(ROOT, "skills-mine")
 MANIFEST_FILE = File.join(STAGING_DIR, "manifest.json")
+
+# Every dest this run installs, owner by owner, filled in by `link` before it
+# has done any writing so that a dry run previews the same prune a real one
+# would perform.
+INSTALLED = {}
 
 # ---------------------------------------------------------------- output --
 
@@ -49,10 +66,50 @@ def say(msg) = out(msg)
 
 # ----------------------------------------------------------------- source --
 
+# A sources.yml this script will not guess its way past: two filters on one
+# source, or a regular expression that does not compile. Both are typos whose
+# quiet outcome, nothing installed or everything installed, looks enough like
+# success to go unnoticed, so they stop the run instead of degrading it.
+class ConfigError < StandardError; end
+
+# `/re/` and `/re/i` both work as a filter value, and so does a bare `re`. The
+# slashes are there so the value reads as a regular expression to a human, not
+# because Ruby needs them in order to parse one.
+SLASHED = %r{\A/(?<body>.*)/(?<flags>[imx]*)\z}m
+SLASHED_FLAGS = {"i" => Regexp::IGNORECASE, "m" => Regexp::MULTILINE, "x" => Regexp::EXTENDED}.freeze
+
 # One entry from config/sources.yml.
-Source = Struct.new(:name, :type, :repo, :path) do
+#
+# `include_skills` and `exclude_skills` narrow which of the skills a source
+# carries actually reach `skills/`. At most one of the two: a source that both
+# allows and denies is a question with no defensible answer.
+Source = Struct.new(:name, :type, :repo, :path, :include_skills, :exclude_skills) do
   def self.from_yaml(hash)
-    new(name: hash.fetch("name"), type: hash.fetch("type"), repo: hash.fetch("repo"), path: hash["path"])
+    name = hash.fetch("name")
+    include_skills = compile(hash["include_skills"], name, "include_skills")
+    exclude_skills = compile(hash["exclude_skills"], name, "exclude_skills")
+
+    if include_skills && exclude_skills
+      raise ConfigError, "#{name}: include_skills and exclude_skills are both set; a source may use one or the other"
+    end
+
+    new(name:, type: hash.fetch("type"), repo: hash.fetch("repo"), path: hash["path"],
+      include_skills:, exclude_skills:)
+  end
+
+  # @param value [String, nil] the raw YAML value
+  # @param name [String] source name, for the failure message
+  # @param key [String] which of the two keys this is, for the failure message
+  # @return [Regexp, nil]
+  def self.compile(value, name, key)
+    return nil if value.nil?
+    raise ConfigError, "#{name}: #{key} must be a string such as /foo|bar/, got #{value.inspect}" unless value.is_a?(String)
+
+    match = SLASHED.match(value)
+    options = (match ? match[:flags] : "").chars.sum { |flag| SLASHED_FLAGS.fetch(flag) }
+    Regexp.new(match ? match[:body] : value, options)
+  rescue RegexpError => e
+    raise ConfigError, "#{name}: #{key} is not a valid regular expression: #{e.message}"
   end
 
   # @return [String] where this source is cloned to
@@ -60,6 +117,28 @@ Source = Struct.new(:name, :type, :repo, :path) do
 
   # @return [String] the directory inside the clone this source actually installs from
   def content_dir = path ? File.join(staging_dir, path) : staging_dir
+
+  # Matched against the name the skill would install as, `skills/<name>`, and
+  # not against its path inside the source. A category tree is one source's
+  # filing decision; the installed name is the thing you go looking for, so it
+  # is the thing you filter on.
+  #
+  # @param skill_name [String]
+  # @return [Boolean]
+  def wants_skill?(skill_name)
+    return include_skills.match?(skill_name) if include_skills
+    return !exclude_skills.match?(skill_name) if exclude_skills
+
+    true
+  end
+
+  # @return [String, nil] how this source's filter reads in the output
+  def filter_summary
+    return "include_skills /#{include_skills.source}/" if include_skills
+    return "exclude_skills /#{exclude_skills.source}/" if exclude_skills
+
+    nil
+  end
 end
 
 def load_sources
@@ -162,6 +241,7 @@ def link(source, dest, owner:, manifest:, dry_run:, force: false)
     return false
   end
 
+  INSTALLED[dest] = owner
   return true if dry_run
 
   already_right = File.symlink?(dest) && File.readlink(dest) == source
@@ -215,10 +295,31 @@ def find_skill_dirs(dir, depth: 5)
   }
 end
 
+# Narrow what a source installs down to what its filter admits, and say what
+# fell out. "Why is that skill missing" has to be answerable from the run that
+# dropped it, otherwise a filter is just an unexplained gap in `skills/`.
+#
+# @param source [Source]
+# @param skill_dirs [Array<String>] every skill directory found in the source
+# @return [Array<String>] the ones the filter admits
+def filter_skills(source, skill_dirs)
+  summary = source.filter_summary
+  return skill_dirs unless summary
+
+  kept, dropped = skill_dirs.partition { |dir| source.wants_skill?(File.basename(dir)) }
+  unless dropped.empty?
+    names = dropped.map { |dir| File.basename(dir) }.sort
+    shown = names.first(10).join(", ")
+    shown += " (+#{names.size - 10} more)" if names.size > 10
+    note("#{source.name}: #{summary} skipped #{dropped.size} of #{skill_dirs.size}: #{shown}")
+  end
+  kept
+end
+
 # @param source [Source]
 # @param manifest [Hash]
 # @param dry_run [Boolean]
-# @return [void]
+# @return [Boolean] whether this source's skills were enumerated, and so can be pruned against
 def install_skills_source(source, manifest, dry_run:, force:)
   unless File.directory?(source.content_dir)
     if dry_run
@@ -226,19 +327,20 @@ def install_skills_source(source, manifest, dry_run:, force:)
     else
       bad("#{source.name}: #{source.content_dir.sub("#{ROOT}/", "")} does not exist — check `path` in sources.yml")
     end
-    return
+    return false
   end
 
   found = find_skill_dirs(source.content_dir)
   note("#{source.name}: no SKILL.md found anywhere under #{source.path || "."}") if found.empty?
 
-  found.each do |skill_dir|
+  filter_skills(source, found).each do |skill_dir|
     name = File.basename(skill_dir)
     dest = File.join(SKILLS_DIR, name)
     if link(skill_dir, dest, owner: source.name, manifest:, dry_run:, force:)
       ok("skills/#{name} <- #{source.name}")
     end
   end
+  true
 end
 
 # A plugin is installed as one copy — not a symlink into `.sources`, which
@@ -247,10 +349,14 @@ end
 # are still just skills, reachable without knowing which plugin they came
 # from.
 #
+# `include_skills`/`exclude_skills` govern that fan-out, not the copy. The
+# bundle under `plugins/` stays whole because it is one unit with its own
+# manifest, and half a plugin is not a smaller plugin.
+#
 # @param source [Source]
 # @param manifest [Hash]
 # @param dry_run [Boolean]
-# @return [void]
+# @return [Boolean] whether this source's skills were enumerated, and so can be pruned against
 def install_plugin_source(source, manifest, dry_run:, force:)
   unless File.directory?(source.content_dir)
     if dry_run
@@ -258,7 +364,7 @@ def install_plugin_source(source, manifest, dry_run:, force:)
     else
       bad("#{source.name}: #{source.content_dir.sub("#{ROOT}/", "")} does not exist — check `path` in sources.yml")
     end
-    return
+    return false
   end
 
   dest = File.join(PLUGINS_DIR, source.name)
@@ -270,16 +376,64 @@ def install_plugin_source(source, manifest, dry_run:, force:)
   end
   ok("plugins/#{source.name}")
 
-  plugin_skills = File.join(dest, "skills")
-  return unless dry_run ? File.directory?(File.join(source.content_dir, "skills")) : File.directory?(plugin_skills)
+  skills_root = dry_run ? File.join(source.content_dir, "skills") : File.join(dest, "skills")
+  return true unless File.directory?(skills_root)
 
-  skills_root = dry_run ? File.join(source.content_dir, "skills") : plugin_skills
-  find_skill_dirs(skills_root).each do |skill_dir|
+  filter_skills(source, find_skill_dirs(skills_root)).each do |skill_dir|
     name = File.basename(skill_dir)
     skill_dest = File.join(SKILLS_DIR, name)
     if link(skill_dir, skill_dest, owner: source.name, manifest:, dry_run:, force:)
       ok("skills/#{name} <- #{source.name} (plugin)")
     end
+  end
+  true
+end
+
+# Take back the links this run no longer makes.
+#
+# A filter that only ever adds is not a filter: tighten `exclude_skills` and
+# the skill you just excluded would sit in `skills/` forever, still linked,
+# still loaded, with nothing left to say why. The same goes for a skill an
+# upstream repo has since deleted or renamed.
+#
+# Only owners this run actually enumerated are pruned, and only links the
+# manifest already claimed, so a source whose clone failed on a network blip
+# keeps its skills instead of losing them.
+#
+# The same link under the same name, spelled the way this run spells it. A
+# manifest written before ROOT was resolved holds the other spelling, and
+# unlinking one of those would take the link this run had just made.
+#
+# @param path [String]
+# @return [String]
+def canonical(path)
+  File.join(File.realpath(File.dirname(path)), File.basename(path))
+rescue Errno::ENOENT
+  path
+end
+
+# @param previous [Hash] dest => owner, as of the last run
+# @param manifest [Hash] the manifest about to be saved
+# @param reconciled [Array<String>] owners this run enumerated in full
+# @param dry_run [Boolean]
+# @return [void]
+def prune_stale(previous, manifest, reconciled, dry_run:)
+  stale = previous.select { |dest, owner|
+    reconciled.include?(owner) && !INSTALLED.key?(dest) && !INSTALLED.key?(canonical(dest))
+  }
+  return if stale.empty?
+
+  say("")
+  say(paint("no longer installed", 1))
+  stale.each do |dest, owner|
+    short = dest.sub("#{ROOT}/", "")
+    if File.symlink?(dest)
+      note("#{short}: dropped by #{owner}")
+      FileUtils.rm_f(dest) unless dry_run
+    elsif File.exist?(dest)
+      warn_("#{short} is no longer installed by #{owner} but is not a symlink — left alone")
+    end
+    manifest["paths"]&.delete(dest) unless dry_run
   end
 end
 
@@ -297,6 +451,7 @@ def cmd_list
       sha = sha_of(s.staging_dir)
       state = sha ? sha[0, 8].to_s : "not cloned"
       say("  #{s.name.ljust(14)} #{s.type.ljust(7)} #{s.repo}  [#{state}]")
+      say("  #{" ".ljust(14)} #{paint(s.filter_summary, 2)}") if s.filter_summary
     end
   end
 
@@ -311,6 +466,10 @@ def cmd_list
 end
 
 def cmd_install(force:, dry_run:)
+  # Read the config before anything is written. A sources.yml this script
+  # refuses should not first cost you a `.sources` wipe or an empty `skills/`.
+  sources = load_sources
+
   say(paint("Installing sources into #{ROOT}", 1))
   say(paint("dry run — nothing will be written", 33)) if dry_run
   say("")
@@ -320,25 +479,34 @@ def cmd_install(force:, dry_run:)
     FileUtils.rm_rf(STAGING_DIR) unless dry_run
   end
 
+  # The previous manifest is read even under --force, which starts the new one
+  # empty: forgetting what was installed is not the same as unlinking it, and
+  # only the old record knows which of today's leftovers this script put there.
+  previous = load_manifest["paths"] || {}
   manifest = force ? {} : load_manifest
   FileUtils.mkdir_p(SKILLS_DIR) unless dry_run
   FileUtils.mkdir_p(PLUGINS_DIR) unless dry_run
 
   say(paint("skills-mine", 1))
   install_mine(manifest, dry_run:, force:)
+  reconciled = File.directory?(SKILLS_MINE_DIR) ? ["skills-mine"] : []
 
-  load_sources.each do |source|
+  sources.each do |source|
     say("")
     say(paint(source.name, 1))
     next unless clone_or_update(source, dry_run:)
 
-    case source.type
+    enumerated = case source.type
     when "skills" then install_skills_source(source, manifest, dry_run:, force:)
     when "plugin" then install_plugin_source(source, manifest, dry_run:, force:)
-    else bad("#{source.name}: unknown type #{source.type.inspect} — expected skills or plugin")
+    else
+      bad("#{source.name}: unknown type #{source.type.inspect} — expected skills or plugin")
+      false
     end
+    reconciled << source.name if enumerated
   end
 
+  prune_stale(previous, manifest, reconciled, dry_run:)
   save_manifest(manifest) unless dry_run
   say("")
   say(paint("Done.", 1) + " `scripts/install-sources list` to see what's installed from where.")
@@ -354,6 +522,10 @@ def usage
       scripts/install-sources --dry-run    say what it would do, touch nothing
       scripts/install-sources -f           wipe .sources and re-clone everything
       scripts/install-sources list         what's configured, and what's installed
+
+    A source in config/sources.yml may narrow itself with `include_skills: /re/`
+    or `exclude_skills: /re/`, one or the other, matched against the name each
+    skill would install as.
   USAGE
 end
 
@@ -367,11 +539,16 @@ force = !!(args.delete("-f") || args.delete("--force"))
 dry_run = !!(args.delete("-n") || args.delete("--dry-run"))
 verb = args.shift || "install"
 
-case verb
-when "install" then cmd_install(force:, dry_run:)
-when "list" then cmd_list
-else
-  out("install-sources: unknown command #{verb.inspect}\n")
-  usage
-  exit 64
+begin
+  case verb
+  when "install" then cmd_install(force:, dry_run:)
+  when "list" then cmd_list
+  else
+    out("install-sources: unknown command #{verb.inspect}\n")
+    usage
+    exit 64
+  end
+rescue ConfigError => e
+  bad("config/sources.yml: #{e.message}")
+  exit 78
 end

@@ -113,6 +113,22 @@ RSpec.describe SpecPlanBuild::StateMachine do
       end
     end
 
+    # Answers arrive one at a time, so what stops a folder is a question still
+    # standing in `blocked.md`, not the file being there. A file holding only
+    # the answers already folded into `spec.md` stops nothing.
+    it "holds a folder at Blocked only while blocked.md still names a question" do
+      aggregate_failures do
+        %i[blocked product_blocked].each do |key|
+          status = SpecPlanBuild::STATUS_BY_KEY.fetch(key)
+          open = folder(key, files: {"blocked.md" => "### B2. Which rate source?"})
+          drained = folder(key, files: {"blocked.md" => "- **B2** \u2014 2026-08-21, CTO: the vendor feed."})
+
+          expect(status).to be_satisfied_by(open)
+          expect(status.violation(drained)).to match(/names no open question/)
+        end
+      end
+    end
+
     it "stops a folder being Retroactive once it has been documented" do
       subject = folder(:retroactive, files: {"spec.md" => "written up"}, prs: ["Merged 🟣"])
 
@@ -222,10 +238,20 @@ RSpec.describe SpecPlanBuild::StateMachine do
       expect(machine.best_fit.key).to eq(:approved)
     end
 
-    it "settles on Planned when there are no pull requests yet" do
+    it "reaches Building on spec.md and plan.md alone — no pull request has to exist yet" do
+      machine = machine_for(:planned, files: {"spec.md" => "x", "plan.md" => "y"})
+
+      expect(machine.best_fit.key).to eq(:building)
+    end
+
+    # If Building required a pull request to be entered, nothing could ever
+    # justify entering it: the only agent that opens one (`luke-implementer`)
+    # is the one this state hands work to, and it never gets a turn without
+    # the folder already being here.
+    it "does not require a pull request to arrive at Building" do
       machine = machine_for(:building, files: {"spec.md" => "x", "plan.md" => "y"})
 
-      expect(machine.best_fit.key).to eq(:planned)
+      expect(machine.best_fit.key).to eq(:building)
     end
 
     it "prefers a block over spine progress, because a block is the louder fact" do
@@ -234,10 +260,10 @@ RSpec.describe SpecPlanBuild::StateMachine do
       expect(machine.best_fit.key).to eq(:blocked)
     end
 
-    it "leaves a folder alone when its current status already holds" do
-      machine = machine_for(:planned, files: {"spec.md" => "x", "plan.md" => "y"})
+    it "leaves a folder alone when its current status already holds, and nothing further is justified" do
+      machine = machine_for(:new, files: {"spec.md" => "x"})
 
-      expect(machine.best_fit.key).to eq(:planned)
+      expect(machine.best_fit.key).to eq(:new)
     end
 
     # ⭕️ and 🅱️ share an invariant on purpose: both mean "a human must

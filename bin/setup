@@ -36,11 +36,21 @@
 # script exists: skills added after the initial link were invisible to Claude
 # Code because nothing ever linked them.
 #
+# Descending also sweeps out links whose target this repo no longer has, which
+# is what `install-sources` leaves behind when a source stops installing a
+# skill. Removing one breaks neither rule above: a dangling link aimed into
+# this repo is residue, not anything real.
+#
 # © 2026 Konstantin Gredeskoul
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The same tree with every symlink on the way resolved. ~/.agents is itself a
+# link to the checkout, so a link written as ../../.agents/skills/foo and one
+# written as ../../github/you/dot-agents/skills/foo name the same directory,
+# and only the physical path says so.
+REPO_REAL="$(cd "$REPO_ROOT" && pwd -P)"
 AGENTS_MD="$REPO_ROOT/config/AGENTS.md"
 CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
 
@@ -63,6 +73,7 @@ linked=0
 already=0
 skipped=0
 conflicts=0
+pruned=0
 
 # ------------------------------------------------------------------ output --
 
@@ -80,7 +91,7 @@ warn() { printf '  %s!%s %s\n' "$c_yellow" "$c_reset" "$*" >&2; }
 bad()  { printf '  %s✗%s %s\n' "$c_red" "$c_reset" "$*" >&2; }
 
 usage() {
-  sed -n '3,39p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '3,44p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   exit 64
 }
 
@@ -150,6 +161,29 @@ link_one() {
   linked=$((linked + 1)); ok "$label -> $want"
 }
 
+# Remove one symlink whose target is gone, if and only if it aimed into this
+# repo. The target's own parent is resolved rather than the target itself —
+# the target is exactly the thing that no longer exists — so a link left over
+# from skills/foo still proves it pointed at REPO_ROOT/skills.
+#
+#   $1 the suspect link      $2 label
+prune_dangling() {
+  local stale="$1" label="$2" target parent
+
+  [[ -L "$stale" && ! -e "$stale" ]] || return 0
+
+  target="$(readlink "$stale")"
+  parent="$(cd "$(dirname "$stale")" && cd "$(dirname "$target")" 2>/dev/null && pwd -P || true)"
+  [[ -n "$parent" && ( "$parent" == "$REPO_REAL" || "$parent" == "$REPO_REAL"/* ) ]] || {
+    conflicts=$((conflicts + 1))
+    warn "$label is broken but points outside this repo ($target) — left alone"
+    return 0
+  }
+
+  [[ $DRY_RUN -eq 1 ]] || rm "$stale"
+  pruned=$((pruned + 1)); ok "$label ${c_dim}removed, $target is gone from this repo${c_reset}"
+}
+
 in_list() {
   local needle="$1"; shift
   local item
@@ -192,6 +226,9 @@ for path in "$REPO_ROOT"/*/; do
         child_name="$(basename "$child")"
         link_one "${child%/}" "$dest/$child_name" "  $name/$child_name"
       done
+      for existing in "$dest"/*; do
+        prune_dangling "$existing" "  $name/$(basename "$existing")"
+      done
     else
       skipped=$((skipped + 1)); note "$name ${c_dim}already a real directory in ~/.claude${c_reset}"
     fi
@@ -204,8 +241,8 @@ done
 # --------------------------------------------------------------- summary ----
 
 say ""
-printf '  %slinked %d   already %d   skipped %d   conflicts %d%s\n' \
-  "$c_bold" "$linked" "$already" "$skipped" "$conflicts" "$c_reset" >&2
+printf '  %slinked %d   already %d   skipped %d   pruned %d   conflicts %d%s\n' \
+  "$c_bold" "$linked" "$already" "$skipped" "$pruned" "$conflicts" "$c_reset" >&2
 
 if [[ $conflicts -gt 0 ]]; then
   say ""

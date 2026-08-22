@@ -17,6 +17,7 @@ require "concurrent/hash"
 require "etc"
 require "fileutils"
 require "tempfile"
+require "tmpdir"
 require "shellwords"
 require "parallel"
 

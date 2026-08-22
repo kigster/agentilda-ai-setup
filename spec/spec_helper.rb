@@ -48,6 +48,10 @@ ENV["NO_COLOR"] = "1"
 $LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
 require "spec_plan_build"
 
+require "stringio"
+
+$stderr = StringIO.new
+
 require_relative "support/plans_fixture"
 
 RSpec.configure do |config|

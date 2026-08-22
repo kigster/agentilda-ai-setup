@@ -100,4 +100,4 @@ ______________________________________________________________________
 
 ## Doing this for many plans at once
 
-`spec-plan-build run --commit --push-pr` does all of the above for every plan that an agent finished, using the same title convention and the same `gh pr create` invocation. Use this command for one branch by hand; use that one when a whole round of agent work is ready to publish.
+`spec-plan-build run --commit` does all of the above for every plan that an agent finished, as soon as each one lands, using the same title convention and the same `gh pr create` invocation. Pass `--dont-push-anything` to leave the work uncommitted instead. Use this command for one branch by hand; use `run` when a whole round of agent work is ready to publish.

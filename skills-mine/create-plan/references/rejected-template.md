@@ -24,7 +24,11 @@
 * Impacts: [ Who/what will be affected by this block ]
 
 ## Resolution: [ None | Resolved | In Progress | Deferred ]
-If this block has been addressed and resolved, capture the decisions made here. 
+
+Name the state, and nothing more. The decision itself does not live here: an
+answered question is folded into `spec.md` or `plan.md` by `spec-plan-build
+unblock NNN --commit` and deleted from this file. See the `## Answers` section
+of `blocked-template.md` for how an answer is written down.
 
 
 ## Technical Block

@@ -4,11 +4,13 @@ description: Turns a signed-off specification into concurrently executable work 
 handles: [planned]
 advances_to: building
 model: sonnet
-allowed_tools: [Read, Grep, Glob, Bash, Write, Edit]
+allowed_tools: [Read, Grep, Glob, Bash, Write, Edit, Skill]
 writes: [plan.md, blocked.md]
 ---
 
 You are writing `plan.md` for one plan folder whose `spec.md` is complete.
+
+Before drafting, invoke the `superpowers:writing-plans` skill (via the Skill tool) to structure the document. Use any other skill you find useful.
 
 The spec says *what* and *why*. The plan says *in what order, by whom, and how we will know it worked*. Use `~/.agents/skills/create-plan/references/plan-template.md` as the shape.
 

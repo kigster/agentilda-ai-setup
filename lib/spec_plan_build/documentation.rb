@@ -20,6 +20,7 @@ module SpecPlanBuild
         numbering,
         starting,
         status_table,
+        blocking,
         transitions,
         diagram,
         files_section,
@@ -193,6 +194,56 @@ module SpecPlanBuild
     def merged_note
       "🟣 Merged is deliberately **not** a folder state. It describes a pull request, " \
         "and a folder that claimed it would be claiming a pull request's condition as its own."
+    end
+
+    # Why this is prose rather than another derived table: the mechanism is a
+    # rule about the *contents* of one file, and the only part of it a program
+    # can see is the invariant. Everything that makes the rule safe — a human
+    # types the command, an agent never answers anything — is a decision, and
+    # decisions belong in sentences.
+    #
+    # @return [String]
+    def blocking
+      settled = StateMachine::SETTLED.map { |k| status(k).emoji }.join(" ")
+
+      <<~MARKDOWN
+        ## When a plan is stopped, and how it starts again
+
+        #{status(:blocked).emoji} #{status(:blocked).label} and #{status(:product_blocked).emoji} #{status(:product_blocked).label} mean an agent hit a question that was not
+        its to answer and wrote `blocked.md` instead of guessing past it. Both belong to
+        the settled group `spec-plan-build run` leaves alone (#{settled}), so the loop
+        never offers a stopped plan to anybody. A loop that could move one would make
+        the state mean nothing.
+
+        Questions are numbered `B1`, `B2`, and that numbering is how the file gets
+        referenced in conversation and in pull requests. **`blocked.md` holds open
+        questions and nothing else.** That is what the #{status(:blocked).emoji}/#{status(:product_blocked).emoji} invariant reads, so a
+        file naming no question justifies neither state and `resync dirs` renames the
+        folder out of it.
+
+        Which is how a block drains, in pieces:
+
+        1. A human writes each answer under `## Answers` as it arrives, dated and
+           attributed to whoever decided.
+        1. `spec-plan-build unblock NNN --commit` hands the folder to `lando-broker`.
+           Nothing else reaches it: answers arriving is not a fact the tool can
+           observe, so a human running the command *is* the signal.
+        1. `lando-broker` folds each answered question into the document that question
+           was stopping — `spec.md` when the answer changes what we are building or
+           why, `plan.md` when it changes how or in what order — and deletes the
+           question and its answer from `blocked.md`.
+        1. When the last question goes, the file goes with it, and the folder leaves
+           #{status(:blocked).emoji} on the resync that follows.
+
+        An entry that names no decider, carries no date, or restates the options
+        instead of choosing one is not an answer, and is left exactly where it is.
+        So is any question nobody has answered yet: two answers out of five is a
+        successful run, and the plan stays stopped on the other three, which is true.
+        `lando-broker` never answers a question itself, and never retires one for
+        being stale — dropping a question is a human's call, and it makes the plan
+        #{status(:deferred).emoji} #{status(:deferred).label} or #{status(:discarded).emoji} #{status(:discarded).label}, not quietly shorter.
+
+      MARKDOWN
     end
 
     # @return [String]

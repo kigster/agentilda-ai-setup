@@ -18,7 +18,7 @@ spec-plan-build run $ARGUMENTS
 Establish three things before starting:
 
 1. **Which plans.** `/plan-status` first. Narrow with `--agent NAME` when the user wants one specialist rather than the whole cast.
-1. **Whether it may write.** Without `--commit` it is a dry run. Add `--commit` only on an explicit yes, and `--push-pr` only when they want pull requests opened too.
+1. **Whether it may write.** Without `--commit` it is a dry run. Add `--commit` only on an explicit yes. With `--isolation worktree` (the default), a finished branch is pushed and its pull request opened automatically once `--commit` is set — pass `--dont-push-anything` when they want the work left uncommitted instead.
 1. **How much parallelism.** `-j` costs a worktree per job.
 
 Report what each round changed, not just the final state — a run that converged because an agent kept failing looks identical to one that converged because the work was done.
