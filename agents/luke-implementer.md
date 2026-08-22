@@ -24,7 +24,7 @@ Run the project's own check command — `just ci`, `just test`, `just check-all`
 
 ## When to stop
 
-- The unit needs a decision that is not yours → write `blocked.md`, numbered B1, B2…, and stop. Do not guess your way past a fork.
+- The unit needs a decision that is not yours → write `blocked.md`, each question as its own `## B1`, `## B2` heading, and stop. Do not guess your way past a fork.
 - The unit turns out to be much larger than the plan implied → say so, update `plan.md` to split it, and stop rather than building a unit nobody sized.
 - The suite was already red when you started → say so and stop. Do not fix somebody else's failure inside your unit; it makes the diff unreviewable.
 
