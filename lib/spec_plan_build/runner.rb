@@ -57,7 +57,7 @@ module SpecPlanBuild
     #   @return [SpecPlanBuild::Worktree::Checkout, nil] nil when sharing a tree
     Task = Data.define(:agent, :subject, :root, :checkout) do
       # @return [String] for the spinner line
-      def label = "#{subject.feature.ordinal}  #{UI.paint(agent.name, :yellow)}"
+      def label = "#{subject.feature.ordinal}  #{UI.paint(agent.name, :yellow, :bold)}"
     end
 
     # Rounds with no movement before the loop concedes. One is not enough: an

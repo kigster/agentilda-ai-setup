@@ -56,6 +56,28 @@ module SpecPlanBuild
     # How much of what the agent said survives into a one-line report.
     REASON_LIMIT = 300
 
+    # Where the raw stream of each invocation is kept.
+    #
+    # Under `run -j` several agents work at once, and more than one
+    # `spec-plan-build` may be driving the same checkout, so a trace is named
+    # per invocation rather than shared. To get an agent's final answer back
+    # out of one afterwards:
+    #
+    #   jq -r 'select(.type=="result").result' <trace>
+    #
+    # and to replay what it did, tool call by tool call:
+    #
+    #   jq -r 'select(.type=="assistant")
+    #          | .message.content[]?
+    #          | select(.type=="tool_use")
+    #          | "\(.name) \(.input|tostring[0:80])"' <trace>
+    #
+    # Outside the repository on purpose: the harness checks afterwards that the
+    # agent moved nothing it should not have, and a megabyte of NDJSON dropped
+    # into the working tree is exactly the kind of thing that check would then
+    # have to learn to ignore.
+    TRACE_DIR = File.join(Dir.tmpdir, "spec-plan-build-traces")
+
     # Environment variables the `claude` CLI reads as credentials, in
     # preference to a claude.ai login.
     #
@@ -134,11 +156,14 @@ module SpecPlanBuild
     # @param command [TTY::Command]
     # @param timeout [Integer] seconds before one agent is abandoned
     # @param dry_run [Boolean] plan the invocation, do not run it
-    def initialize(root:, command: TTY::Command.new(printer: :null), timeout: 900, dry_run: false)
+    # @param trace_dir [String] where each invocation's raw stream is kept
+    def initialize(root:, command: TTY::Command.new(printer: :null), timeout: 900, dry_run: false,
+      trace_dir: TRACE_DIR)
       @root = File.expand_path(root)
       @command = command
       @timeout = timeout
       @dry_run = dry_run
+      @trace_dir = trace_dir
     end
 
     # @return [String]
@@ -152,7 +177,8 @@ module SpecPlanBuild
       return [true, "dry run — would invoke #{agent.name}"] if @dry_run
 
       before = head(root)
-      transcript = Transcript.new(&on_activity)
+      trace = trace_path(agent, subject)
+      transcript = Transcript.new(trace:, &on_activity)
 
       begin
         @command.run(*invocation(agent, subject, root:), timeout: @timeout) do |out, _err|
@@ -160,18 +186,19 @@ module SpecPlanBuild
         end
         transcript.finish
       rescue TTY::Command::TimeoutExceeded
-        return [false, "timed out after #{@timeout}s, last seen #{transcript.activity || "starting up"}"]
+        transcript.finish
+        return [false, "timed out after #{@timeout}s, last seen #{transcript.activity || "starting up"} — trace: #{trace}"]
       rescue TTY::Command::ExitError => e
         transcript.finish
-        return [false, "claude #{reason_for(e, transcript)}"]
+        return [false, "claude #{reason_for(e, transcript)} — trace: #{trace}"]
       end
 
-      return [false, "claude reported: #{transcript.error}"] if transcript.failed?
+      return [false, "claude reported: #{transcript.error} — trace: #{trace}"] if transcript.failed?
 
       violation = boundary_violation(before, root)
       return [false, violation] if violation
 
-      [true, "completed"]
+      [true, "completed#{" · #{transcript.tools} tool calls" if transcript.tools.positive?}"]
     end
 
     # The exact argv, exposed so a spec can assert the boundary flags without
@@ -211,6 +238,20 @@ module SpecPlanBuild
     def granted_to(agent) = agent.may - UNGRANTABLE
 
     private
+
+    # One file per invocation. The plan number and the agent's name make it
+    # findable; the pid and the clock keep two concurrent runs from writing to
+    # the same one. See {TRACE_DIR} for how to read one back.
+    #
+    # @param agent [SpecPlanBuild::Agent]
+    # @param subject [SpecPlanBuild::Subject]
+    # @return [String]
+    def trace_path(agent, subject)
+      FileUtils.mkdir_p(@trace_dir)
+      name = format("%s-%s-%s-%d-%04x.ndjson", Time.now.strftime("%Y%m%d-%H%M%S"),
+        subject.feature.ordinal, agent.name, Process.pid, rand(0x10000))
+      File.join(@trace_dir, name)
+    end
 
     # @param agent [SpecPlanBuild::Agent]
     # @param subject [SpecPlanBuild::Subject]

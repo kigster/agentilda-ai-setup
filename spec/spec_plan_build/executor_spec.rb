@@ -171,4 +171,80 @@ RSpec.describe SpecPlanBuild::Executor, :tree do
       expect(denied(hansolo)).to include("Bash(gh pr merge:*)", "Bash(git push:*)")
     end
   end
+
+  # `claude -p` says nothing until it is finished, so a fifteen minute
+  # invocation and a hung one look identical. Asked for the streaming format it
+  # reports each tool call as it makes it, and this is what reads them.
+  describe "streaming what the agent is doing" do
+    subject(:streaming) { described_class.new(root:, command: streamer, trace_dir: @traces) }
+
+    let(:seen) { [] }
+    let(:chunks) { [] }
+
+    let(:streamer) do
+      instance_double(TTY::Command).tap do |double|
+        allow(double).to receive(:run) { |*, **, &block| chunks.each { |chunk| block&.call(chunk, nil) } }
+      end
+    end
+
+    around do |example|
+      Dir.mktmpdir("executor-traces") do |dir|
+        @traces = dir
+        example.run
+      end
+    end
+
+    def event(hash) = "#{JSON.generate(hash)}\n"
+
+    def tool(name, input) = event(type: "assistant", message: {content: [{type: "tool_use", name:, input:}]})
+
+    it "asks claude for the streaming format, which needs --verbose to work at all" do
+      expect(streaming.invocation(agent, subject_plan).each_cons(2).to_a)
+        .to include(["--output-format", "stream-json"])
+        .and include(["stream-json", "--verbose"])
+    end
+
+    # A tool name is a noun and says nothing on its own. The spinner has room
+    # for a phrase, so it gets one.
+    it "hands each tool call to whoever is drawing the progress, as something being done" do
+      chunks << tool("Read", {file_path: "/repo/spec.md"})
+      streaming.call(agent, subject_plan) { |phrase| seen << phrase }
+
+      expect(seen).to eq(["reading spec.md"])
+    end
+
+    it "runs perfectly well with nothing to report to" do
+      chunks << tool("Read", {})
+
+      expect(streaming.call(agent, subject_plan).first).to be(true)
+    end
+
+    it "says how much work the agent did, rather than only that it finished" do
+      chunks.push(tool("Read", {}), tool("Edit", {}))
+
+      expect(streaming.call(agent, subject_plan).last).to eq("completed · 2 tool calls")
+    end
+
+    it "keeps the raw stream, so a run that went wrong can be read back" do
+      chunks << event(type: "result", subtype: "success", result: "Folded B3.")
+      streaming.call(agent, subject_plan)
+
+      trace = Dir.children(@traces).grep(/\.ndjson\z/).first
+      expect(File.read(File.join(@traces, trace))).to include("Folded B3.")
+    end
+
+    it "names the trace in the report when the run failed, since that is when it is wanted" do
+      allow(streamer).to receive(:run).and_raise(TTY::Command::TimeoutExceeded)
+
+      expect(streaming.call(agent, subject_plan).last).to include(".ndjson")
+    end
+
+    # Two agents run at once under `run -j`, and more than one spec-plan-build
+    # may be driving the same checkout.
+    it "gives each invocation its own trace rather than one they share" do
+      2.times { streaming.call(agent, subject_plan) }
+
+      expect(Dir.children(@traces).size).to eq(2)
+    end
+  end
 end

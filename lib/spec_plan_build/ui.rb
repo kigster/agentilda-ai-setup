@@ -209,7 +209,7 @@ module SpecPlanBuild
       # @return [Proc] phrase -> void
       def activity_for(spinner)
         lambda { |phrase|
-          spinner.update(activity: phrase.to_s.empty? ? "" : paint(": #{phrase}", :bright_blue))
+          spinner.update(activity: phrase.to_s.empty? ? "" : paint(": #{phrase}", :green, :bold))
         }
       end
 
