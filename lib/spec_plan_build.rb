@@ -2,7 +2,6 @@
 
 require "dry/cli"
 require_relative "dry/cli/banner"
-require "dry/initializer"
 require "dry/monads"
 require "dry/inflector"
 require "pastel"
