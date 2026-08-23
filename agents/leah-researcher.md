@@ -5,6 +5,9 @@ handles: [new]
 advances_to: researched
 model: opus
 network: true
+# The body below says research "may take an hour or more". The 900s default cut
+# every run of this agent off at 15 minutes, before it had written anything.
+timeout: 5400
 allowed_tools: [Read, Grep, Glob, Bash, Write, Edit, Task, WebSearch, WebFetch]
 writes: [spec.md]
 ---

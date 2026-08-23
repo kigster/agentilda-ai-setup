@@ -44,11 +44,43 @@ RSpec.describe SpecPlanBuild::Executor, :tree do
   # agent's own file. A researcher whose whole job is reading the internet was
   # otherwise handed --disallowedTools WebFetch,WebSearch on every invocation,
   # and duly ran, found nothing, and reported success.
-  def agent_with(network: false, may: [])
+  def agent_with(network: false, may: [], timeout: nil)
     SpecPlanBuild::Agent.new(
       name: "x", description: "", handles: [:new], advances_to: :planned, model: nil,
-      allowed_tools: [], may:, network:, prompt: "do it", path: "x.md"
+      allowed_tools: [], may:, network:, timeout:, prompt: "do it", path: "x.md"
     )
+  end
+
+  # A cap lower than the work does not read as a cap. The agent is killed
+  # before it writes, the plan does not advance, and the round reports a
+  # failure indistinguishable from an agent that could not do the job.
+  # `leah-researcher` says in its own prompt that research may take an hour or
+  # more; the 900s default cut every run of it off at fifteen minutes.
+  describe "#timeout_for" do
+    it "gives an agent that declares nothing the default" do
+      expect(executor.timeout_for(agent_with)).to eq(SpecPlanBuild::Executor::DEFAULT_TIMEOUT)
+    end
+
+    it "lets an agent that knows it is slow say so" do
+      expect(executor.timeout_for(agent_with(timeout: 5400))).to eq(5400)
+    end
+
+    it "prefers the agent's own number over the one the run was started with" do
+      tight = described_class.new(root:, command:, timeout: 60)
+
+      expect(tight.timeout_for(agent_with(timeout: 5400))).to eq(5400)
+    end
+
+    it "still honours an explicit default for an agent that declares none" do
+      tight = described_class.new(root:, command:, timeout: 60)
+
+      expect(tight.timeout_for(agent_with)).to eq(60)
+    end
+
+    # The real one, since it is the agent the default was killing.
+    it "reads leah-researcher's declaration from its definition file" do
+      expect(executor.timeout_for(agents.find("leah-researcher"))).to be > 900
+    end
   end
 
   def denied(agent) = described_class.new(root:, command:).invocation(agent, subject_plan)

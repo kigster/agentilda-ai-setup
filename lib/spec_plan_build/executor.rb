@@ -56,6 +56,14 @@ module SpecPlanBuild
     # How much of what the agent said survives into a one-line report.
     REASON_LIMIT = 300
 
+    # Seconds an agent gets when its definition declares no `timeout:`. Suits a
+    # specialist that reads one plan and writes one document. Anything that fans
+    # out subagents needs to say so in its own frontmatter, because a cap lower
+    # than the work does not read as a cap: the agent is killed before it
+    # writes, the plan does not advance, and the round reports a failure that
+    # looks exactly like an agent that could not do the job.
+    DEFAULT_TIMEOUT = 900
+
     # Environment variables the `claude` CLI reads as credentials, in
     # preference to a claude.ai login.
     #
@@ -112,9 +120,10 @@ module SpecPlanBuild
 
     # @param root [String] the repository the agents work in
     # @param command [TTY::Command]
-    # @param timeout [Integer] seconds before one agent is abandoned
+    # @param timeout [Integer] seconds before an agent that declares none is
+    #   abandoned. An agent's own `timeout:` wins over this; see {#timeout_for}.
     # @param dry_run [Boolean] plan the invocation, do not run it
-    def initialize(root:, command: TTY::Command.new(printer: :null), timeout: 900, dry_run: false)
+    def initialize(root:, command: TTY::Command.new(printer: :null), timeout: DEFAULT_TIMEOUT, dry_run: false)
       @root = File.expand_path(root)
       @command = command
       @timeout = timeout
@@ -124,6 +133,15 @@ module SpecPlanBuild
     # @return [String]
     attr_reader :root
 
+    # How long this agent gets. Its own declaration wins, because the agent
+    # definition is where the rest of its shape already lives and the person
+    # starting a run has no way to know that a researcher needs four times what
+    # a reviewer does.
+    #
+    # @param agent [SpecPlanBuild::Agent]
+    # @return [Integer] seconds
+    def timeout_for(agent) = agent.timeout || @timeout
+
     # @param agent [SpecPlanBuild::Agent]
     # @param subject [SpecPlanBuild::Subject]
     # @return [Array(Boolean, String)] ok, and a one-line note
@@ -131,11 +149,14 @@ module SpecPlanBuild
       return [true, "dry run — would invoke #{agent.name}"] if @dry_run
 
       before = head(root)
+      seconds = timeout_for(agent)
 
       begin
-        @command.run(*invocation(agent, subject, root:), timeout: @timeout)
+        @command.run(*invocation(agent, subject, root:), timeout: seconds)
       rescue TTY::Command::TimeoutExceeded
-        return [false, "timed out after #{@timeout}s"]
+        # Name the number. "timed out" alone sent someone hunting a hung agent
+        # when the cap was simply lower than the work.
+        return [false, "timed out after #{seconds}s"]
       rescue TTY::Command::ExitError => e
         return [false, "claude #{self.class.failure_reason(e)}"]
       end

@@ -24,8 +24,15 @@ module SpecPlanBuild
   # @!attribute [r] may
   #   @return [Array<String>] commands lifted from {Executor::FORBIDDEN_COMMANDS}
   #     for this agent alone. Nothing in {Executor::UNGRANTABLE} can be lifted.
+  # @!attribute [r] timeout
+  #   @return [Integer, nil] seconds this agent gets before it is abandoned;
+  #     nil takes {Executor}'s default. Specialists differ by more than an
+  #     order of magnitude. A reviewer reads one diff, while `leah-researcher`
+  #     fans out subagents and says in its own prompt that research "may take
+  #     an hour or more". One number for both kills the slow one every time,
+  #     and reports it as a failing plan rather than as a cap set too low.
   Agent = Data.define(:name, :description, :handles, :advances_to, :model,
-    :allowed_tools, :may, :network, :prompt, :path) do
+    :allowed_tools, :may, :network, :timeout, :prompt, :path) do
     # @return [Boolean] whether this agent changes anything on disk
     def read_only? = advances_to.nil?
 
@@ -85,6 +92,10 @@ module SpecPlanBuild
         allowed_tools: Array(meta["allowed_tools"]).map(&:to_s),
         may: Array(meta["may"]).map { |c| c.to_s.strip.squeeze(" ") },
         network: meta["network"] == true,
+        # A present-but-unparseable value reads as 0 through to_i, which would
+        # abandon the agent instantly. Only a positive integer counts; anything
+        # else falls back to the default.
+        timeout: meta["timeout"]&.to_i&.then { |n| (n > 0) ? n : nil },
         prompt: match[2].strip,
         path: path
       )
