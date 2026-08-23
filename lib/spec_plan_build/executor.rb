@@ -110,6 +110,26 @@ module SpecPlanBuild
     end
     private_class_method :tail
 
+    # What went wrong, preferring what the stream managed to parse.
+    #
+    # `claude` reports its own failures two different ways. A run that got far
+    # enough emits a `result` event saying so, and that is the readable one. A
+    # run that failed before it started — the 401 that cost a whole round three
+    # minutes an agent — prints prose on stdout and never emits an event at
+    # all, so those lines are what {Transcript#plain} holds and what is left to
+    # report. {.failure_reason} stays the last resort, for a failure that
+    # printed nothing either way.
+    #
+    # @param error [TTY::Command::ExitError]
+    # @param transcript [SpecPlanBuild::Transcript]
+    # @return [String]
+    def reason_for(error, transcript)
+      return "failed: #{transcript.error}" if transcript.failed?
+
+      said = transcript.plain.last(3).join(" ")
+      said.empty? ? self.class.failure_reason(error) : "failed: #{said}"
+    end
+
     # @param root [String] the repository the agents work in
     # @param command [TTY::Command]
     # @param timeout [Integer] seconds before one agent is abandoned
@@ -127,18 +147,26 @@ module SpecPlanBuild
     # @param agent [SpecPlanBuild::Agent]
     # @param subject [SpecPlanBuild::Subject]
     # @return [Array(Boolean, String)] ok, and a one-line note
-    def call(agent, subject, root: @root)
+    # @yieldparam phrase [String] what the agent is doing, as it changes
+    def call(agent, subject, root: @root, &on_activity)
       return [true, "dry run — would invoke #{agent.name}"] if @dry_run
 
       before = head(root)
+      transcript = Transcript.new(&on_activity)
 
       begin
-        @command.run(*invocation(agent, subject, root:), timeout: @timeout)
+        @command.run(*invocation(agent, subject, root:), timeout: @timeout) do |out, _err|
+          transcript.push(out)
+        end
+        transcript.finish
       rescue TTY::Command::TimeoutExceeded
-        return [false, "timed out after #{@timeout}s"]
+        return [false, "timed out after #{@timeout}s, last seen #{transcript.activity || "starting up"}"]
       rescue TTY::Command::ExitError => e
-        return [false, "claude #{self.class.failure_reason(e)}"]
+        transcript.finish
+        return [false, "claude #{reason_for(e, transcript)}"]
       end
+
+      return [false, "claude reported: #{transcript.error}"] if transcript.failed?
 
       violation = boundary_violation(before, root)
       return [false, violation] if violation
@@ -153,7 +181,8 @@ module SpecPlanBuild
     # @param subject [SpecPlanBuild::Subject]
     # @return [Array<String>]
     def invocation(agent, subject, root: @root)
-      argv = ["claude", "-p", prompt_for(agent, subject, root), "--add-dir", root]
+      argv = ["claude", "-p", prompt_for(agent, subject, root), "--add-dir", root,
+        "--output-format", "stream-json", "--verbose"]
       denied = denied_for(agent)
       argv += ["--disallowedTools", denied.join(",")] unless denied.empty?
       argv += ["--allowedTools", agent.allowed_tools.join(",")] unless agent.allowed_tools.empty?

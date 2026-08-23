@@ -57,7 +57,7 @@ module SpecPlanBuild
     #   @return [SpecPlanBuild::Worktree::Checkout, nil] nil when sharing a tree
     Task = Data.define(:agent, :subject, :root, :checkout) do
       # @return [String] for the spinner line
-      def label = "#{subject.feature.ordinal}  #{agent.name}"
+      def label = "#{subject.feature.ordinal}  #{UI.paint(agent.name, :yellow)}"
     end
 
     # Rounds with no movement before the loop concedes. One is not enough: an
@@ -154,8 +154,9 @@ module SpecPlanBuild
       tasks = assignments.map { |agent, subject| prepare(agent, subject) }
       return Round.new(number:, attempts: []) if tasks.empty?
 
-      results = UI.concurrently(tasks, "round #{number} — #{tasks.size} plans", jobs:, label: :label.to_proc) do |task|
-        attempt(task)
+      results = UI.concurrently(tasks, "round #{number} — #{tasks.size} plans", jobs:,
+        label: :label.to_proc) do |task, activity|
+        attempt(task, &activity)
       end
 
       # One serial pass over the *main* tree, run once per round rather than
@@ -225,11 +226,12 @@ module SpecPlanBuild
     #
     # @param task [SpecPlanBuild::Runner::Task]
     # @return [SpecPlanBuild::Runner::Attempt]
-    def attempt(task)
+    # @yieldparam phrase [String] what the agent is doing, forwarded to its line
+    def attempt(task, &on_activity)
       ordinal = task.subject.feature.ordinal.to_s
       from = task.subject.status.key
 
-      ok, note = @executor.call(task.agent, task.subject, root: task.root)
+      ok, note = @executor.call(task.agent, task.subject, root: task.root, &on_activity)
       note = "#{note} (#{task.checkout.branch})" if task.checkout
 
       Attempt.new(ordinal:, agent: task.agent.name, from:, ok: !!ok, note: note.to_s, to: from)

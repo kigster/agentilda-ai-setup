@@ -49,7 +49,7 @@ RSpec.describe SpecPlanBuild::UI do
     end
 
     context "on a terminal" do
-      let(:spinner) { instance_double(TTY::Spinner, auto_spin: nil, success: nil, error: nil) }
+      let(:spinner) { instance_double(TTY::Spinner, auto_spin: nil, success: nil, error: nil, update: nil) }
 
       before do
         allow($stderr).to receive(:tty?).and_return(true)
@@ -243,7 +243,7 @@ RSpec.describe SpecPlanBuild::UI do
       end
 
       it "still returns every result for a single item" do
-        spinner = instance_double(TTY::Spinner, auto_spin: nil, success: nil, error: nil)
+        spinner = instance_double(TTY::Spinner, auto_spin: nil, success: nil, error: nil, update: nil)
         allow(TTY::Spinner).to receive(:new).and_return(spinner)
 
         expect(described_class.concurrently([:plan], "round", jobs: 1) { |_| :done }).to eq([:done])
