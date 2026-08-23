@@ -24,6 +24,11 @@ module SpecPlanBuild
   # The reader runs on its own thread, so {#activity} is written from one
   # thread and read from another. It is a single assignment of an immutable
   # string, which is why there is no lock here.
+  #
+  # Every line is also kept verbatim in an optional trace file, written before
+  # anything is made of it, so a run that failed can be read back afterwards
+  # even where this parser made nothing of an event it had never seen. See
+  # {Executor::TRACE_DIR} for where those land and how to read one.
   class Transcript
     # Longest phrase a spinner line can carry without wrapping into the next.
     LIMIT = 56
@@ -44,15 +49,29 @@ module SpecPlanBuild
     # a better spinner line than sixty characters of absolute path.
     SUBJECTS = %w[file_path pattern description command query url].freeze
 
+    # @param trace [String, nil] a file to keep the raw stream in, or nil to
+    #   keep none. Every line is written before anything is made of it, so a
+    #   run that failed can be read back afterwards even where this parser made
+    #   nothing of an event it had never seen.
     # @yieldparam phrase [String] each time the agent moves on to something new
-    def initialize(&on_activity)
+    def initialize(trace: nil, &on_activity)
       @on_activity = on_activity
       @buffer = +""
       @plain = []
       @activity = nil
       @result = nil
       @error = nil
+      @trace_path = trace
+      @trace = trace && File.open(trace, "a")
+      @tools = 0
     end
+
+    # @return [Integer] how many tool calls have gone past, which is the one
+    #   honest measure of how much work an agent that says "done" actually did
+    attr_reader :tools
+
+    # @return [String, nil] the file the raw stream is being kept in
+    attr_reader :trace_path
 
     # @return [String, nil] the last thing the agent was seen doing
     attr_reader :activity
@@ -90,6 +109,8 @@ module SpecPlanBuild
     # @return [void]
     def finish
       consume(@buffer.slice!(0..-1).to_s)
+      @trace&.close
+      @trace = nil
     end
 
     private
@@ -99,6 +120,8 @@ module SpecPlanBuild
     def consume(line)
       text = line.strip
       return if text.empty?
+
+      record(text)
 
       unless text.start_with?("{")
         @plain << text
@@ -115,13 +138,36 @@ module SpecPlanBuild
       handle(event)
     end
 
+    # Written before the line is understood, and flushed, so the file is a
+    # complete record even when the process dies mid-invocation.
+    #
+    # @param text [String]
+    # @return [void]
+    def record(text)
+      return unless @trace
+
+      @trace.write("#{text}\n")
+      @trace.flush
+    end
+
     # @param event [Hash]
     # @return [void]
     def handle(event)
       case event["type"]
-      when "assistant" then announce(phrase_for(event))
+      when "assistant"
+        @tools += tool_calls(event)
+        announce(phrase_for(event))
       when "result" then record_result(event)
       end
+    end
+
+    # @param event [Hash]
+    # @return [Integer] how many tools this one message called
+    def tool_calls(event)
+      blocks = event.dig("message", "content")
+      return 0 unless blocks.is_a?(Array)
+
+      blocks.count { |block| block.is_a?(Hash) && block["type"] == "tool_use" }
     end
 
     # @param event [Hash]

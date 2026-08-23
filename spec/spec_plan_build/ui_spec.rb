@@ -46,6 +46,13 @@ RSpec.describe SpecPlanBuild::UI do
         expect { described_class.spinning("working") { raise ArgumentError, "boom" } }
           .to raise_error(ArgumentError, "boom")
       end
+
+      # There is nowhere to draw a live line, and the block must not have to
+      # ask whether there is: it reports, and the news goes to the log instead.
+      it "still hands the block somewhere to report progress" do
+        expect { described_class.spinning("working") { |activity| activity.call("reading spec.md") } }
+          .not_to raise_error
+      end
     end
 
     context "on a terminal" do
@@ -71,6 +78,20 @@ RSpec.describe SpecPlanBuild::UI do
         expect { described_class.spinning("working") { raise "boom" } }.to raise_error("boom")
 
         expect(spinner).to have_received(:error)
+      end
+
+      # A fifteen minute agent invocation and a hung one look identical until
+      # the spinner says what the agent is doing.
+      it "lets the work rewrite the tail of its own line while it runs" do
+        described_class.spinning("working") { |activity| activity.call("reading spec.md") }
+
+        expect(spinner).to have_received(:update).with(activity: a_string_including("reading spec.md"))
+      end
+
+      it "starts the line with an empty tail, so it reads as it always did until there is news" do
+        described_class.spinning("working") { |activity| activity.call("reading spec.md") }
+
+        expect(spinner).to have_received(:update).with(activity: "").at_least(:once)
       end
     end
   end
@@ -202,6 +223,17 @@ RSpec.describe SpecPlanBuild::UI do
       it "re-raises a failure after reporting it, rather than swallowing it" do
         expect { described_class.concurrently([:plan], "round", jobs: 1, label: ->(_) { "000.00" }) { |_| raise "boom" } }
           .to raise_error("boom")
+      end
+
+      # A spinner is not drawable here, but progress is still worth having: a
+      # CI log wants to know what the agent is doing, and which plan is doing it.
+      it "still hands each item somewhere to report what it is doing" do
+        seen = []
+        described_class.concurrently([:plan], "round", jobs: 1, label: ->(_) { "000.00" }) do |_, activity|
+          seen << activity
+        end
+
+        expect(seen.first).to respond_to(:call)
       end
     end
 
