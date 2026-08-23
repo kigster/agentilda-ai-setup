@@ -88,13 +88,14 @@ module SpecPlanBuild
       # @yieldreturn [Object] whatever the work produces
       # @return [Object] the block's value, untouched
       def spinning(message)
-        return yield unless animate?
+        return yield(logging_activity(message)) unless animate?
 
-        spinner = TTY::Spinner.new("[:spinner] #{message}", format: :dots, output: $stderr,
+        spinner = TTY::Spinner.new("[:spinner] #{message}:activity", format: :dots, output: $stderr,
           success_mark: paint("✓", :green), error_mark: paint("✖", :red))
+        spinner.update(activity: "")
         spinner.auto_spin
         begin
-          result = yield
+          result = yield(activity_for(spinner))
           spinner.success(paint("done", :bright_black))
           result
         rescue
@@ -171,9 +172,9 @@ module SpecPlanBuild
 
         list.each_with_index do |item, index|
           text = label.call(item)
-          spinners.register("[:spinner] #{text}") do |spinner|
+          child = spinners.register("[:spinner] #{text}:activity") do |spinner|
             log("started  #{text}")
-            results[index] = block.call(item)
+            results[index] = block.call(item, activity_for(spinner))
             log("finished #{text}")
             spinner.success("")
           rescue => e
@@ -181,10 +182,35 @@ module SpecPlanBuild
             results[index] = e
             spinner.error(paint(e.message.lines.first.to_s.strip, :red))
           end
+          # An unset token renders as the literal `:activity`, so every line
+          # says so until its agent gets far enough to have news.
+          child.update(activity: "")
         end
 
         spinners.auto_spin
         list.each_index.map { |i| results[i] }
+      end
+
+      # The same news, with no spinner to put it on. A piped or CI run still
+      # wants it, in the log where the rest of that run's progress goes.
+      #
+      # @param text [String] the item's label
+      # @return [Proc] phrase -> void
+      def logging_activity(text) = ->(phrase) { log("#{text}: #{phrase}") }
+
+      # A callable that writes what an agent is doing onto its own spinner line.
+      #
+      # The `:activity` token is empty until something calls this, so a line
+      # reads as it always did until there is news. It is written from the
+      # reader thread the command's output arrives on, which is why the token
+      # is replaced whole rather than appended to.
+      #
+      # @param spinner [TTY::Spinner]
+      # @return [Proc] phrase -> void
+      def activity_for(spinner)
+        lambda { |phrase|
+          spinner.update(activity: phrase.to_s.empty? ? "" : paint(": #{phrase}", :bright_blue))
+        }
       end
 
       # One item, no concurrency to speak of: a serial round (`--isolation
@@ -197,11 +223,11 @@ module SpecPlanBuild
       # @return [Object]
       def once(item, label, &block)
         text = label.call(item)
-        return spinning(text) { block.call(item) } if animate?
+        return spinning(text) { |activity| block.call(item, activity) } if animate?
 
         log("started  #{text}")
         started = monotonic
-        result = block.call(item)
+        result = block.call(item, logging_activity(text))
         report_line("#{text} (#{elapsed(started)})", bullet: "✓")
         log("finished #{text} (#{elapsed(started)})")
         result

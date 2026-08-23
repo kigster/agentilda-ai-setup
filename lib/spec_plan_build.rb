@@ -133,6 +133,7 @@ end
   index
   linear
   agent
+  transcript
   worktree
   publisher
   executor
