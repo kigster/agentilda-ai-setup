@@ -138,6 +138,7 @@ end
   publisher
   executor
   runner
+  unblocker
   documentation
   diagram
   cli
