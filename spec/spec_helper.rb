@@ -52,6 +52,7 @@ require "stringio"
 $stderr = StringIO.new
 
 require_relative "support/plans_fixture"
+require_relative "support/captured_stream"
 
 RSpec.configure do |config|
   config.example_status_persistence_file_path = ".rspec_status"

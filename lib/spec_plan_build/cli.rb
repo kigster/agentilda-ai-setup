@@ -903,6 +903,12 @@ module SpecPlanBuild
       # The agent that knows the shape of `blocked.md`.
       DEFAULT_AGENT = "lando-broker"
 
+      # What each token turned out to be, for whoever has to fix it.
+      PROBLEMS = {
+        missing: "no plan of that number",
+        not_blocked: "no blocked.md, so there is nothing to drain"
+      }.freeze
+
       desc "Fold answered blocks into a plan's documents and retire blocked.md"
 
       argument :plans, type: :array, required: true,
@@ -924,22 +930,23 @@ module SpecPlanBuild
       # @return [void]
       def call(plans:, **options)
         tree = tree_for(options)
-        root = options[:root] || File.dirname(tree.dir)
-        agent = agent_for(options)
-        subjects = targets(tree, plans)
         quiet?(options)
+        unblocker = Unblocker.new(tree:, agent: agent_for(options), root: options[:root],
+          commit: commit?(options), executor: Executor.new(root: options[:root] || File.dirname(tree.dir),
+            dry_run: !commit?(options)))
+
+        targets = unblocker.resolve(plans)
+        refused(targets, tree, options)
+        subjects = targets.select(&:drainable?).map(&:subject)
+        exit(worst(targets, [])) if subjects.empty?
+
         credentials_warning if commit?(options) && !quiet?(options)
+        preflight(subjects, unblocker, options)
 
-        executor = Executor.new(root:, dry_run: !commit?(options))
-        results = subjects.map { |subject| [subject, *executor.call(agent, subject, root:)] }
-
-        # The same pass the loop makes after every round, for the same reason:
-        # a drained folder is only *named* differently once something reads the
-        # file the agent just deleted.
-        SpecPlanBuild::Resync::Dirs.new(tree:).call(commit: true) if commit?(options)
-
-        report(tree, results, options)
-        exit((results.all? { |(_, ok, _)| ok }) ? 0 : 1)
+        outcomes = unblocker.call(subjects)
+        outcomes.each { |outcome| report(outcome, options) }
+        footer(outcomes, options) unless quiet?(options)
+        exit(worst(targets, outcomes))
       end
 
       private
@@ -955,101 +962,155 @@ module SpecPlanBuild
         end
       end
 
-      # A folder with no `blocked.md` is refused, not skipped. Whoever typed
-      # this believes an answer has arrived; running against a folder that was
-      # never stopped and saying nothing is how you come back later to a plan
-      # nobody touched and no record of why.
+      # A number that names no folder, or a folder that was never stopped, is
+      # refused rather than skipped. Whoever typed this believes an answer has
+      # arrived; running against a folder nobody blocked and saying nothing is
+      # how you come back later to a plan nobody touched and no record of why.
       #
-      # The gate is the file, not the folder's emoji. ⭕️ is *derived* from
-      # `blocked.md`, so gating the drain on it made the tool circular: a
-      # `blocked.md` whose questions are not written as `## B<n>` never earns
-      # the emoji, so `unblock` refused it, so the file could never drain and
-      # the folder could never leave 🟡. The file is the thing being drained,
-      # so the file is the thing that decides.
+      # Every bad token is reported, not just the first, because stopping at
+      # the first one hides the rest of the answer.
       #
+      # @param targets [Array<SpecPlanBuild::Unblocker::Target>]
       # @param tree [SpecPlanBuild::Tree]
-      # @param plans [Array<String>]
-      # @return [Array<SpecPlanBuild::Subject>]
-      def targets(tree, plans)
-        tokens = plans.flat_map { |token| token.split(",") }.map(&:strip).reject(&:empty?)
+      # @param options [Hash]
+      # @return [void]
+      def refused(targets, tree, options)
+        problems = targets.reject(&:drainable?)
+        return if problems.empty?
 
-        tokens.map do |token|
-          subject = tree.find(token) or begin
-            error("No plan #{token} in #{tree.dir}.\n\nKnown: #{tree.ordinals.join(", ")}")
-            exit 66
-          end
-          next subject if subject.file?("blocked.md")
+        problems.each do |target|
+          state = target.subject ? target.subject.status.key : "unknown"
+          puts "#{target.token}\t#{state}\t0 open\t#{PROBLEMS.fetch(target.problem)}"
+        end
+        return if quiet?(options)
 
-          error("#{subject.feature.ordinal} is #{subject.status} and has no blocked.md.\n\n" \
-                "There is nothing to drain.")
-          exit 65
+        error("#{problems.size} of the plans named cannot be drained:\n\n" +
+              problems.map { |t| "  #{t.token} — #{PROBLEMS.fetch(t.problem)}" }.join("\n") +
+              "\n\nThe tree holds: #{tree.ordinals.join(", ")}")
+      end
+
+      # What each folder is waiting on, said BEFORE the agent is invoked.
+      #
+      # This is the half that was missing. `--commit` hands the folder to an
+      # agent that can take a quarter of an hour, and until it came back the
+      # terminal showed nothing at all — a run that had found nothing to do and
+      # a run still working looked exactly alike.
+      #
+      # @param subjects [Array<SpecPlanBuild::Subject>]
+      # @param unblocker [SpecPlanBuild::Unblocker]
+      # @param options [Hash]
+      # @return [void]
+      def preflight(subjects, unblocker, options)
+        return if quiet?(options)
+
+        subjects.each do |subject|
+          questions = Unblocker.questions(subject)
+          answered = questions.count(&:answered)
+          say("#{paint(subject.feature.ordinal.to_s, :bright_black)} #{subject.status.emoji} " \
+              "#{subject.feature.title} — #{summary(questions.size, answered)}")
+          detail(subject, questions)
         end
       end
 
-      # What `blocked.md` still names, written as the file writes it. This is
-      # the whole of the dry run, and the whole of what a human is on the hook
-      # for afterwards.
-      #
+      # @param open [Integer]
+      # @param answered [Integer]
+      # @return [String]
+      def summary(open, answered)
+        return "nothing open" if open.zero?
+
+        "#{open} open, #{answered.zero? ? "none answered yet" : "#{answered} with an answer waiting"}"
+      end
+
       # @param subject [SpecPlanBuild::Subject]
-      # @return [Array<String>]
-      def open_questions(subject)
-        answered = subject.block_answers
-        subject.read("blocked.md").to_s.lines.grep(SpecPlanBuild::OPEN_BLOCK)
-          .map { |line| line.strip.sub(/\A\#+[ \t]*/, "") }
-          .map { |q| answered.include?(q[SpecPlanBuild::OPEN_BLOCK, 1].to_i) ? "#{q}  ← answer waiting" : q }
-      end
-
-      # @param tree [SpecPlanBuild::Tree]
-      # @param results [Array<Array>] subject, ok, note
-      # @param options [Hash]
+      # @param questions [Array<SpecPlanBuild::Unblocker::Question>]
       # @return [void]
-      def report(tree, results, options)
-        tree.reload
-
-        rows = results.map { |subject, ok, note|
-          current = tree.find(subject.feature.ordinal) || subject
-          [current, ok, note, open_questions(current)]
-        }
-
-        rows.each do |current, ok, note, questions|
-          puts "#{current.feature.ordinal}\t#{ok ? current.status.key : "failed"}\t#{questions.size} open\t#{note}"
-          next if quiet?(options)
-
-          say("#{paint(current.feature.ordinal.to_s, :bright_black)} #{current.status.emoji} #{current.feature.title}")
-          if current.unreadable_block?
-            say("  #{paint("blocked.md names no `## B<n>` question, so nothing here can be drained", :red)}",
-              bullet: " ")
-            say("  #{paint("Number each open question `## B1`, `## B2`, and each answer `## A1`, `## A2`.", :yellow)}",
-              bullet: " ")
-          elsif questions.empty?
-            say("  #{paint("nothing left open", :green)}", bullet: " ")
-          else
-            questions.each { |question| say("  #{paint(question, :yellow)}", bullet: " ") }
-          end
+      def detail(subject, questions)
+        if subject.unreadable_block?
+          say("  #{paint("blocked.md names no `## B<n>` question, so nothing here can be drained", :red)}",
+            bullet: " ")
+          say("  #{paint("Number each open question `## B1`, `## B2`, and each answer `## A1`, `## A2`.", :yellow)}",
+            bullet: " ")
+        elsif questions.empty?
+          say("  #{paint("nothing left open", :green)}", bullet: " ")
+        else
+          questions.each { |question| say("  #{paint(question.to_s, :yellow)}", bullet: " ") }
         end
-
-        footer(rows, options) unless quiet?(options)
       end
 
-      # @param rows [Array<Array>] current subject, ok, note, open questions
+      # One plan, after the fact: the deliverable line on STDOUT, and what
+      # changed on STDERR.
+      #
+      # @param outcome [SpecPlanBuild::Unblocker::Outcome]
       # @param options [Hash]
       # @return [void]
-      def footer(rows, options)
-        failed = rows.reject { |(_, ok, _, _)| ok }
+      def report(outcome, options)
+        moved = movement(outcome, commit?(options))
+        puts "#{outcome.ordinal}\t#{outcome.ok ? outcome.subject.status.key : "failed"}\t" \
+             "#{outcome.after.size} open\t#{moved}\t#{outcome.note}"
+        # A dry run changed nothing, so the preflight above it is still the
+        # whole truth. Printing the same three lines again reads as a second
+        # pass that found the same thing, which is not what happened.
+        return if quiet?(options) || !commit?(options)
+
+        say("#{paint(outcome.ordinal.to_s, :bright_black)} #{outcome.subject.status.emoji} " \
+            "#{outcome.subject.feature.title} — #{paint(moved, outcome.ok ? :green : :red)}")
+        detail(outcome.subject, outcome.after)
+      end
+
+      # What the file says happened, rather than what the agent claims. The
+      # questions are counted off disk on both sides of the run.
+      #
+      # @param outcome [SpecPlanBuild::Unblocker::Outcome]
+      # @param commit [Boolean]
+      # @return [String]
+      def movement(outcome, commit)
+        return "failed" unless outcome.ok
+        return "not attempted" unless commit
+        return "blocked.md retired" if outcome.cleared?
+        return "nothing folded" if outcome.folded.empty?
+
+        "folded #{outcome.folded.map { |n| "B#{n}" }.join(", ")}"
+      end
+
+      # @param outcomes [Array<SpecPlanBuild::Unblocker::Outcome>]
+      # @param options [Hash]
+      # @return [void]
+      def footer(outcomes, options)
+        failed = outcomes.reject(&:ok)
 
         unless commit?(options)
-          warn("Dry run: no agent was invoked.\nRe-run with --commit to fold in whatever has been answered.")
+          warn("Dry run: no agent was invoked, and #{outcomes.size} " \
+               "plan#{"s" unless outcomes.size == 1} #{(outcomes.size == 1) ? "is" : "are"} unchanged.\n" \
+               "Re-run with --commit to fold in whatever has been answered.")
           return
         end
 
-        unless failed.empty?
-          error(failed.map { |(current, _, note, _)| "#{current.feature.ordinal}: #{note}" }.join("\n"))
-          return
-        end
+        return error(failed.map { |o| "#{o.ordinal}: #{o.note}" }.join("\n")) unless failed.empty?
 
-        cleared = rows.count { |(current, _, _, _)| !current.file?("blocked.md") }
-        waiting = rows.size - cleared
-        success("#{cleared} unblocked · #{waiting} still waiting on a human.")
+        cleared = outcomes.count(&:cleared?)
+        folded = outcomes.sum { |o| o.folded.size }
+        waiting = outcomes.sum { |o| o.after.size }
+        success("#{folded} question#{"s" unless folded == 1} folded in · " \
+                "#{cleared} plan#{"s" unless cleared == 1} out of the block · " \
+                "#{waiting} still waiting on a human." +
+                (folded.zero? ? "\n\nNothing moved. An answer has to be written into blocked.md as its own " \
+                                "`## A<n>` section, answering the `## B<n>` of the same number, before " \
+                                "there is anything to fold." : ""))
+      end
+
+      # The most serious thing that happened, as an exit status. A tree that
+      # was partly drained still exits non-zero when part of it could not be.
+      #
+      # @param targets [Array<SpecPlanBuild::Unblocker::Target>]
+      # @param outcomes [Array<SpecPlanBuild::Unblocker::Outcome>]
+      # @return [Integer]
+      def worst(targets, outcomes)
+        problems = targets.map(&:problem)
+        return 66 if problems.include?(:missing)
+        return 65 if problems.include?(:not_blocked)
+        return 1 unless outcomes.all?(&:ok)
+
+        0
       end
     end
 
