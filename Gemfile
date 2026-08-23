@@ -19,30 +19,17 @@ gem "tty-screen"      # screen detection utilities
 gem "tty-command"     # if we need to execute any external command
 
 # Dry-Rb Gems
-gem "dry-cli"         # That's what we use for creating CLI entry points with commands & subcommands
-gem "dry-configurable" # Configuration management if needed
-gem "dry-logger"      # Logging to /var/log/<project>.log
-
-gem "dry-types"       # Type definitions
-gem "dry-schema"      # Schema validation
-gem "dry-validation"  # Validation
-
-gem "dry-inflector"   # String inflection utilities
-gem "dry-initializer" # Initializer for classes
-gem "dry-operation"   # Operation pattern for executing operations
-gem "dry-monads"      # Monads for functional programming
-gem "dry-effects"     # Effects for functional programming
+gem "dry-cli"         # Commands and subcommands, in cli.rb
+gem "dry-inflector"   # String inflection, in ordinal.rb
+gem "dry-monads"      # Success/Failure, in creator.rb
 
 group :development do
-  gem "colored2"
   gem "standard"
   gem "irb"
 end
 
 group :test do
-  gem "rspec_junit_formatter" # JUnit XML for CircleCI store_test_results
   gem "rspec"
-  gem "rspec-its"
   gem "simplecov"
   gem "coverage-badge"
 end

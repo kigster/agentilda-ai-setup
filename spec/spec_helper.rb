@@ -32,7 +32,6 @@ SimpleCov.at_exit do
   FileUtils.mv("coverage/badge.svg", "docs/badges/coverage_badge.svg")
 end
 
-require "rspec/its"
 require "tmpdir"
 
 # Colour is decided by `$stderr.tty?`, which is FALSE under CI (piped) and TRUE
