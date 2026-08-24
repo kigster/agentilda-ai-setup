@@ -210,21 +210,54 @@ RSpec.describe SpecPlanBuild::Executor, :tree do
     # for a phrase, so it gets one.
     it "hands each tool call to whoever is drawing the progress, as something being done" do
       chunks << tool("Read", {file_path: "/repo/spec.md"})
-      streaming.call(agent, subject_plan) { |phrase| seen << phrase }
+      streaming.call(agent, subject_plan) { |progress| seen << progress.activity }
 
       expect(seen).to eq(["reading spec.md"])
+    end
+
+    # Without it the stream reports a placeholder for what the model
+    # generated — 2 for a four-thousand-token answer — and the counter on the
+    # spinner line reads zero for the whole run.
+    it "asks for partial messages, which is the only place a settled token count arrives" do
+      expect(streaming.invocation(agent, subject_plan)).to include("--include-partial-messages")
+    end
+
+    it "reports what the invocation spent, not only whether it worked" do
+      chunks << event(type: "stream_event",
+        event: {type: "message_delta", usage: {input_tokens: 2, cache_creation_input_tokens: 100,
+                                               cache_read_input_tokens: 900, output_tokens: 40}})
+
+      expect(streaming.call(agent, subject_plan)).to have_attributes(up: 1002, down: 40)
+    end
+
+    # A run that burned two hundred thousand tokens before timing out is a
+    # different fact from one that failed to authenticate and spent nothing.
+    it "reports what a failed invocation spent too" do
+      chunks << event(type: "stream_event",
+        event: {type: "message_delta", usage: {input_tokens: 500, output_tokens: 7}})
+      chunks << event(type: "result", is_error: true, result: "it went wrong")
+
+      expect(streaming.call(agent, subject_plan)).to have_attributes(ok: false, up: 500, down: 7)
+    end
+
+    it "counts the sub-agents an agent spawned" do
+      chunks << event(type: "system", subtype: "task_started", task_id: "t1", tool_use_id: "toolu_1")
+      chunks << event(type: "system", subtype: "task_notification", task_id: "t1",
+        usage: {total_tokens: 34_116})
+
+      expect(streaming.call(agent, subject_plan)).to have_attributes(subagents: 1, delegated: 34_116)
     end
 
     it "runs perfectly well with nothing to report to" do
       chunks << tool("Read", {})
 
-      expect(streaming.call(agent, subject_plan).first).to be(true)
+      expect(streaming.call(agent, subject_plan).ok).to be(true)
     end
 
     it "says how much work the agent did, rather than only that it finished" do
       chunks.push(tool("Read", {}), tool("Edit", {}))
 
-      expect(streaming.call(agent, subject_plan).last).to eq("completed · 2 tool calls")
+      expect(streaming.call(agent, subject_plan).note).to eq("completed · 2 tool calls")
     end
 
     it "keeps the raw stream, so a run that went wrong can be read back" do
@@ -238,7 +271,7 @@ RSpec.describe SpecPlanBuild::Executor, :tree do
     it "names the trace in the report when the run failed, since that is when it is wanted" do
       allow(streamer).to receive(:run).and_raise(TTY::Command::TimeoutExceeded)
 
-      expect(streaming.call(agent, subject_plan).last).to include(".ndjson")
+      expect(streaming.call(agent, subject_plan).note).to include(".ndjson")
     end
 
     # Two agents run at once under `run -j`, and more than one spec-plan-build

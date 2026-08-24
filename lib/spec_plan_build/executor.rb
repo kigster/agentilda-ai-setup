@@ -12,6 +12,33 @@ module SpecPlanBuild
   #            appeared. A prompt is a request; a check is a guarantee, and only
   #            one of them survives a model deciding it knows better.
   class Executor
+    # What one invocation did, and what it spent doing it.
+    #
+    # {#to_ary} is deliberate: every caller of {Executor#call} destructures
+    # `ok, note = executor.call(...)`, and the meter is an addition to that
+    # answer rather than a replacement for it. Callers that want the tokens
+    # ask for them by name.
+    #
+    # @!attribute [r] ok
+    #   @return [Boolean]
+    # @!attribute [r] note
+    #   @return [String] one line, for the report
+    # @!attribute [r] up
+    #   @return [Integer] tokens sent, sub-agents included
+    # @!attribute [r] down
+    #   @return [Integer] tokens generated
+    # @!attribute [r] subagents
+    #   @return [Integer] sub-agents this agent spawned
+    # @!attribute [r] delegated
+    #   @return [Integer] of {#up}, how much arrived as an unsplit sub-agent
+    #     total rather than as a direction of its own
+    # @!attribute [r] seconds
+    #   @return [Float] wall clock, from argv to exit
+    Result = Data.define(:ok, :note, :up, :down, :subagents, :delegated, :seconds) do
+      # @return [Array(Boolean, String)]
+      def to_ary = [ok, note]
+    end
+
     # Tools no agent may use under this autonomy level, whatever its definition
     # asks for. Git itself is reachable through Bash, which is why the
     # after-check exists as well.
@@ -171,14 +198,21 @@ module SpecPlanBuild
 
     # @param agent [SpecPlanBuild::Agent]
     # @param subject [SpecPlanBuild::Subject]
-    # @return [Array(Boolean, String)] ok, and a one-line note
-    # @yieldparam phrase [String] what the agent is doing, as it changes
-    def call(agent, subject, root: @root, &on_activity)
-      return [true, "dry run — would invoke #{agent.name}"] if @dry_run
+    # @return [SpecPlanBuild::Executor::Result] whether it worked, a one-line
+    #   note, and what it spent. Destructures as `ok, note` for callers that
+    #   want no more than that.
+    # @yieldparam progress [SpecPlanBuild::Transcript::Progress] what the
+    #   agent is doing and what it has spent, as both change
+    def call(agent, subject, root: @root, &on_progress)
+      started = UI.monotonic
+      if @dry_run
+        return Result.new(ok: true, note: "dry run — would invoke #{agent.name}", up: 0, down: 0,
+          subagents: 0, delegated: 0, seconds: 0.0)
+      end
 
       before = head(root)
       trace = trace_path(agent, subject)
-      transcript = Transcript.new(trace:, &on_activity)
+      transcript = Transcript.new(trace:, &on_progress)
 
       begin
         @command.run(*invocation(agent, subject, root:), timeout: @timeout) do |out, _err|
@@ -187,18 +221,44 @@ module SpecPlanBuild
         transcript.finish
       rescue TTY::Command::TimeoutExceeded
         transcript.finish
-        return [false, "timed out after #{@timeout}s, last seen #{transcript.activity || "starting up"} — trace: #{trace}"]
+        return failure(transcript, started,
+          "timed out after #{@timeout}s, last seen #{transcript.activity || "starting up"} — trace: #{trace}")
       rescue TTY::Command::ExitError => e
         transcript.finish
-        return [false, "claude #{reason_for(e, transcript)} — trace: #{trace}"]
+        return failure(transcript, started, "claude #{reason_for(e, transcript)} — trace: #{trace}")
       end
 
-      return [false, "claude reported: #{transcript.error} — trace: #{trace}"] if transcript.failed?
+      if transcript.failed?
+        return failure(transcript, started, "claude reported: #{transcript.error} — trace: #{trace}")
+      end
 
       violation = boundary_violation(before, root)
-      return [false, violation] if violation
+      return failure(transcript, started, violation) if violation
 
-      [true, "completed#{" · #{transcript.tools} tool calls" if transcript.tools.positive?}"]
+      spent(transcript, started, ok: true,
+        note: "completed#{" · #{transcript.tools} tool calls" if transcript.tools.positive?}")
+    end
+
+    # A failed invocation still spent what it spent, and a run that burned two
+    # hundred thousand tokens before timing out is a different fact from one
+    # that failed to authenticate and spent nothing. Both used to report the
+    # same thing.
+    #
+    # @param transcript [SpecPlanBuild::Transcript]
+    # @param started [Float]
+    # @param note [String]
+    # @return [SpecPlanBuild::Executor::Result]
+    def failure(transcript, started, note) = spent(transcript, started, ok: false, note:)
+
+    # @param transcript [SpecPlanBuild::Transcript]
+    # @param started [Float]
+    # @param ok [Boolean]
+    # @param note [String]
+    # @return [SpecPlanBuild::Executor::Result]
+    def spent(transcript, started, ok:, note:)
+      Result.new(ok:, note:, up: transcript.up, down: transcript.down,
+        subagents: transcript.spawned, delegated: transcript.delegated,
+        seconds: UI.monotonic - started)
     end
 
     # The exact argv, exposed so a spec can assert the boundary flags without
@@ -208,8 +268,12 @@ module SpecPlanBuild
     # @param subject [SpecPlanBuild::Subject]
     # @return [Array<String>]
     def invocation(agent, subject, root: @root)
+      # `--include-partial-messages` is what the token meter runs on. Without
+      # it the stream reports a settled input count and a placeholder output
+      # count — 2 for a four-thousand-token answer — and a spinner counting
+      # what came back would read zero all run. See {Transcript#meter}.
       argv = ["claude", "-p", prompt_for(agent, subject, root), "--add-dir", root,
-        "--output-format", "stream-json", "--verbose"]
+        "--output-format", "stream-json", "--verbose", "--include-partial-messages"]
       denied = denied_for(agent)
       argv += ["--disallowedTools", denied.join(",")] unless denied.empty?
       argv += ["--allowedTools", agent.allowed_tools.join(",")] unless agent.allowed_tools.empty?

@@ -6,13 +6,107 @@ require "spec_helper"
 # This is what turns `claude --output-format stream-json` into the phrase that
 # line has room for.
 RSpec.describe SpecPlanBuild::Transcript do
-  subject(:transcript) { described_class.new { |phrase| seen << phrase } }
+  subject(:transcript) { described_class.new { |progress| seen << progress.activity } }
 
   let(:seen) { [] }
 
   def assistant(*blocks) = {type: "assistant", message: {content: blocks}}.to_json + "\n"
   def tool(name, input) = {type: "tool_use", name: name, input: input}
   def text(body) = {type: "text", text: body}
+
+  # One chunk per call, the way `readpartial` hands them over.
+  def feed(*chunks) = chunks.each { |chunk| transcript.push(chunk) }
+
+  def delta(usage, parent: nil)
+    {type: "stream_event", parent_tool_use_id: parent, event: {type: "message_delta", usage:}}.to_json + "\n"
+  end
+
+  def started(id, tool_use_id: "toolu_1")
+    {type: "system", subtype: "task_started", task_id: id, tool_use_id:}.to_json + "\n"
+  end
+
+  def spent(id, total, subtype: "task_notification")
+    {type: "system", subtype:, task_id: id, usage: {total_tokens: total}}.to_json + "\n"
+  end
+
+  # The meter is the number on the spinner line and the number in the closing
+  # report, and every one of these is a way `claude` reports spend that would
+  # otherwise be counted twice or not at all.
+  describe "the meter" do
+    it "counts everything that went up, cache reads included" do
+      transcript.push(delta({"input_tokens" => 2, "cache_creation_input_tokens" => 100,
+                             "cache_read_input_tokens" => 900, "output_tokens" => 40}))
+
+      expect(transcript.up).to eq(1002)
+    end
+
+    # The `assistant` event carries a usage block whose output count is the
+    # placeholder the API sends when a message starts: 2, for an answer of
+    # four thousand tokens. Only `message_delta` settles it.
+    it "counts what a message settles at, not what it started at" do
+      transcript.push(assistant(text("Working.")))
+      transcript.push(delta({"input_tokens" => 1, "output_tokens" => 3163}))
+
+      expect(transcript.down).to eq(3163)
+    end
+
+    it "adds what a sub-agent spent, since claude leaves it out of the parent's own total" do
+      feed(started("t1"), spent("t1", 34_116))
+
+      aggregate_failures do
+        expect(transcript.up).to eq(34_116)
+        expect(transcript.spawned).to eq(1)
+        expect(transcript.delegated).to eq(34_116)
+      end
+    end
+
+    # A sub-agent reports its total cumulatively, several times over. Adding
+    # those up would report a 34k sub-agent as having spent a quarter of a
+    # million.
+    it "takes a sub-agent's last report rather than the sum of them" do
+      feed(started("t1"), spent("t1", 12_000, subtype: "task_progress"),
+        spent("t1", 30_000, subtype: "task_progress"), spent("t1", 34_116))
+
+      expect(transcript.up).to eq(34_116)
+    end
+
+    # Some sub-agents stream their own messages past the parent, carrying the
+    # tool call they belong to. Those are already counted.
+    it "does not count a sub-agent twice when its own messages stream past" do
+      feed(started("t1", tool_use_id: "toolu_9"),
+        delta({"input_tokens" => 1000, "output_tokens" => 50}, parent: "toolu_9"),
+        spent("t1", 34_116))
+
+      aggregate_failures do
+        expect(transcript.up).to eq(1000)
+        expect(transcript.down).to eq(50)
+        expect(transcript.delegated).to be_zero
+      end
+    end
+
+    # The `result` event is the invocation's own final accounting, so it
+    # replaces what the stream accumulated rather than adding to it.
+    it "lets the result event settle the total it kept a running count of" do
+      feed(delta({"input_tokens" => 5, "output_tokens" => 5}))
+      transcript.push({type: "result", usage: {"input_tokens" => 8,
+                                               "cache_creation_input_tokens" => 61_673,
+                                               "cache_read_input_tokens" => 239_937,
+                                               "output_tokens" => 3163}}.to_json + "\n")
+
+      aggregate_failures do
+        expect(transcript.up).to eq(301_618)
+        expect(transcript.down).to eq(3163)
+      end
+    end
+
+    it "reports both directions and the sub-agent count in one snapshot" do
+      feed(started("t1"), spent("t1", 1000),
+        delta({"input_tokens" => 10, "output_tokens" => 20}))
+
+      expect(transcript.progress)
+        .to have_attributes(up: 1010, down: 20, subagents: 1)
+    end
+  end
 
   describe "#push" do
     it "reports a tool call as something being done, not as a tool name" do
@@ -92,6 +186,29 @@ RSpec.describe SpecPlanBuild::Transcript do
       aggregate_failures do
         expect(transcript).to be_failed
         expect(transcript.error).to eq("hit the turn limit")
+      end
+    end
+  end
+
+  # `--include-partial-messages` is what makes the meter possible and also
+  # emits one event per handful of generated characters. The trace is read by
+  # a person looking for why a run failed, and those bury everything else.
+  describe "what the trace keeps" do
+    it "keeps the events a failed run is read for, and drops the delta noise" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "trace.ndjson")
+        described_class.new(trace: path) do |_|
+        end.tap { |t|
+          t.push({type: "stream_event", event: {type: "content_block_delta",
+                                                delta: {type: "text_delta", text: "Fol"}}}.to_json + "\n")
+          t.push({type: "result", result: "Folded B3."}.to_json + "\n")
+          t.finish
+        }
+
+        aggregate_failures do
+          expect(File.read(path)).to include("Folded B3.")
+          expect(File.read(path)).not_to include("content_block_delta")
+        end
       end
     end
   end

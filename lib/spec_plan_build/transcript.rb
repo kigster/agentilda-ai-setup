@@ -30,6 +30,33 @@ module SpecPlanBuild
   # even where this parser made nothing of an event it had never seen. See
   # {Executor::TRACE_DIR} for where those land and how to read one.
   class Transcript
+    # What one line of the display knows: the phrase, and the meter beside it.
+    #
+    # Yielded whole rather than as loose arguments so a caller cannot render
+    # half an update, and frozen so the reader thread and the drawing thread
+    # are never looking at the same mutable object.
+    #
+    # @!attribute [r] activity
+    #   @return [String, nil] the last thing the agent was seen doing
+    # @!attribute [r] up
+    #   @return [Integer] tokens sent, cache reads included
+    # @!attribute [r] down
+    #   @return [Integer] tokens generated
+    # @!attribute [r] subagents
+    #   @return [Integer] sub-agents spawned so far
+    Progress = Data.define(:activity, :up, :down, :subagents)
+
+    # The one kind of line the trace does not keep.
+    #
+    # `--include-partial-messages` is what makes {#meter} possible, and it
+    # also emits one event per handful of generated characters. Those are the
+    # bulk of the stream and the only part of it nothing reads back: a
+    # fifteen-minute agent writes thousands of them, and they would bury the
+    # events a failed run is actually read for. Matched as a substring rather
+    # than parsed because the trace is written before a line is understood,
+    # which is what makes it complete when the process dies mid-invocation.
+    DELTA_NOISE = '"content_block_delta"'
+
     # Longest phrase a spinner line can carry without wrapping into the next.
     LIMIT = 56
 
@@ -53,9 +80,10 @@ module SpecPlanBuild
     #   keep none. Every line is written before anything is made of it, so a
     #   run that failed can be read back afterwards even where this parser made
     #   nothing of an event it had never seen.
-    # @yieldparam phrase [String] each time the agent moves on to something new
-    def initialize(trace: nil, &on_activity)
-      @on_activity = on_activity
+    # @yieldparam progress [SpecPlanBuild::Transcript::Progress] each time the
+    #   agent moves on to something new, and each time the meter moves
+    def initialize(trace: nil, &on_progress)
+      @on_progress = on_progress
       @buffer = +""
       @plain = []
       @activity = nil
@@ -64,7 +92,39 @@ module SpecPlanBuild
       @trace_path = trace
       @trace = trace && File.open(trace, "a")
       @tools = 0
+      @main = {up: 0, down: 0}
+      @streamed = {}
+      @tasks = {}
+      @spawned = 0
     end
+
+    # Everything sent to the model, which on any turn after the first is
+    # mostly cache reads: a typical agent turn is two fresh input tokens
+    # against a quarter of a million read back from cache. Counting only the
+    # fresh ones would report a fifteen-minute agent as having said nothing.
+    #
+    # @return [Integer]
+    def up = @main[:up] + streamed[:up] + delegated
+
+    # @return [Integer] tokens the model generated, thinking included
+    def down = @main[:down] + streamed[:down]
+
+    # @return [Integer] sub-agents this invocation started
+    attr_reader :spawned
+
+    # Sub-agent totals arrive as one number with no split between what went up
+    # and what came back, so they are counted as {#up}. They are held here as
+    # well, unmixed, because a report that says "of which N could not be
+    # split" is honest and one that quietly rounds is not.
+    #
+    # @return [Integer]
+    def delegated
+      @tasks.reject { |_, task| @streamed.key?(task[:tool_use_id]) }
+        .sum { |_, task| task[:total] }
+    end
+
+    # @return [SpecPlanBuild::Transcript::Progress] a snapshot, safe to keep
+    def progress = Progress.new(activity: @activity, up:, down:, subagents: @spawned)
 
     # @return [Integer] how many tool calls have gone past, which is the one
     #   honest measure of how much work an agent that says "done" actually did
@@ -145,6 +205,7 @@ module SpecPlanBuild
     # @return [void]
     def record(text)
       return unless @trace
+      return if text.include?(DELTA_NOISE)
 
       @trace.write("#{text}\n")
       @trace.flush
@@ -157,6 +218,8 @@ module SpecPlanBuild
       when "assistant"
         @tools += tool_calls(event)
         announce(phrase_for(event))
+      when "stream_event" then meter(event)
+      when "system" then delegation(event)
       when "result" then record_result(event)
       end
     end
@@ -170,11 +233,101 @@ module SpecPlanBuild
       blocks.count { |block| block.is_a?(Hash) && block["type"] == "tool_use" }
     end
 
+    # Where the token count comes from.
+    #
+    # Only `message_delta` is trusted. The `assistant` events carry a usage
+    # block too, and its input side is right, but its `output_tokens` is the
+    # placeholder the API sends when a message *starts*: a four-thousand-token
+    # answer reports 2 there. `message_delta` closes each message with the
+    # settled figure for both directions, which is why {Executor} asks for
+    # `--include-partial-messages` at all.
+    #
+    # A message from a sub-agent carries `parent_tool_use_id`, and is kept in
+    # its own bucket so {#delegated} knows not to count that sub-agent twice.
+    #
+    # @param event [Hash]
+    # @return [void]
+    def meter(event)
+      return unless event.dig("event", "type") == "message_delta"
+
+      usage = event.dig("event", "usage") or return
+      bucket = bucket_for(event["parent_tool_use_id"])
+      bucket[:up] += usage.values_at("input_tokens", "cache_creation_input_tokens",
+        "cache_read_input_tokens").compact.sum
+      bucket[:down] += usage["output_tokens"].to_i
+      publish
+    end
+
+    # @param parent [String, nil] the tool call a sub-agent's message belongs to
+    # @return [Hash] the counters that message belongs in
+    def bucket_for(parent)
+      return @main if parent.nil?
+
+      @streamed[parent] ||= {up: 0, down: 0}
+    end
+
+    # @return [Hash] every streamed sub-agent's counters, added together
+    def streamed
+      @streamed.values.each_with_object({up: 0, down: 0}) do |b, sum|
+        sum[:up] += b[:up]
+        sum[:down] += b[:down]
+      end
+    end
+
+    # A sub-agent starting, and a sub-agent reporting what it spent.
+    #
+    # `claude` reports a sub-agent's spend as a single `total_tokens` with no
+    # split, and reports it cumulatively: the last number for a task is the
+    # whole of it, not an increment. So the total is stored per task and
+    # replaced rather than added, which also makes a `task_progress` stream
+    # and a closing `task_notification` for the same task agree instead of
+    # counting it twice.
+    #
+    # @param event [Hash]
+    # @return [void]
+    def delegation(event)
+      case event["subtype"]
+      when "task_started" then start_task(event)
+      when "task_progress", "task_notification" then update_task(event)
+      end
+    end
+
+    # @param event [Hash]
+    # @return [void]
+    def start_task(event)
+      id = event["task_id"] or return
+
+      @tasks[id] ||= {tool_use_id: event["tool_use_id"], total: 0}
+      @spawned = @tasks.size
+      publish
+    end
+
+    # @param event [Hash]
+    # @return [void]
+    def update_task(event)
+      id = event["task_id"] or return
+
+      task = (@tasks[id] ||= {tool_use_id: event["tool_use_id"], total: 0})
+      task[:tool_use_id] ||= event["tool_use_id"]
+      task[:total] = event.dig("usage", "total_tokens").to_i
+      @spawned = @tasks.size
+      publish
+    end
+
+    # The `result` event settles what the stream could only accumulate: its
+    # usage is the invocation's own final accounting, so it replaces the
+    # running total rather than adding to it. Sub-agent spend is left alone,
+    # because `claude` leaves it out of this figure — a run whose two
+    # sub-agents burned 34k each reported 493 output tokens here.
+    #
     # @param event [Hash]
     # @return [void]
     def record_result(event)
       @result = event["result"].to_s
       @error = @result if event["is_error"]
+      settle(event["usage"])
+      @spawned = [@spawned, event.dig("subagent_stats", "spawned").to_i].max
+      publish
     end
 
     # The most recent block wins: an agent that says "now I'll edit the spec"
@@ -239,13 +392,32 @@ module SpecPlanBuild
     # @return [String]
     def clip(text) = (text.length > LIMIT) ? "#{text[0, LIMIT - 1]}…" : text
 
+    # @param usage [Hash, nil] the `result` event's own accounting
+    # @return [void]
+    def settle(usage)
+      return unless usage.is_a?(Hash)
+
+      @main = {
+        up: usage.values_at("input_tokens", "cache_creation_input_tokens",
+          "cache_read_input_tokens").compact.sum,
+        down: usage["output_tokens"].to_i
+      }
+    end
+
     # @param phrase [String, nil]
     # @return [void]
     def announce(phrase)
       return if phrase.nil? || phrase == @activity
 
       @activity = phrase
-      @on_activity&.call(phrase)
+      publish
     end
+
+    # Hand the caller a whole snapshot rather than the one field that moved.
+    # A spinner line draws the phrase and the meter together, and a caller
+    # given only the half that changed would have to remember the other.
+    #
+    # @return [void]
+    def publish = @on_progress&.call(progress)
   end
 end
