@@ -89,7 +89,7 @@ spec-retro after *words:
 
 # The status table: every plan, its state, and its pull requests
 spec-status *args:
-    {{ spb }} status {{ args }}
+    {{ spb }} list-plans {{ args }}
 
 # Write .plans/INDEX.md — every plan, its goal, PRs and documents
 spec-index *args:

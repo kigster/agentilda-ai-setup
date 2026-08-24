@@ -154,7 +154,7 @@ RSpec.describe SpecPlanBuild::UI do
 
       aggregate_failures do
         expect(lines.size).to eq(2)
-        expect(lines.last).to match(/second/)
+        expect(lines.last).to include("second")
       end
     end
   end
@@ -192,7 +192,7 @@ RSpec.describe SpecPlanBuild::UI do
           log = File.read(described_class.log_path)
           aggregate_failures do
             expect(log).to match(/started {2}000\.00/)
-            expect(log).to match(/finished 000\.00/)
+            expect(log).to include("finished 000.00")
           end
         end
       ensure

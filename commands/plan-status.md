@@ -9,7 +9,7 @@ allowed-tools:
 ```!
 export LANG="${LANG:-en_US.UTF-8}" LC_ALL="${LC_ALL:-en_US.UTF-8}"
 command -v spec-plan-build >/dev/null || export PATH="$HOME/.rbenv/shims:$HOME/.agents/scripts:$PATH"
-spec-plan-build status $ARGUMENTS
+spec-plan-build list-plans $ARGUMENTS
 ```
 
 Read-only. Interpret the table using the status vocabulary in [`context/feature-building/spec-plan-build.md`](../context/feature-building/spec-plan-build.md), never a copy of it.

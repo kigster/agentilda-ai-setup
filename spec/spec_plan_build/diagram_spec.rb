@@ -47,7 +47,7 @@ RSpec.describe SpecPlanBuild::Diagram do
 
       aggregate_failures do
         terminal.each { |s| expect(rendered).to include(s.label) }
-        expect(rendered).to match(/TERMINAL/)
+        expect(rendered).to include("TERMINAL")
       end
     end
 

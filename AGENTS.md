@@ -45,8 +45,11 @@ The `spec-plan-build` CLI itself (`scripts/spec-plan-build`):
 ```bash
 spec-plan-build create tax rule dsl                                 # 003.00-⚪️-tax-rule-dsl
 spec-plan-build create --after 002 k1 sync                          # 002.01-🕰️-k1-sync (retroactive)
-spec-plan-build status                                              # every plan, state, PRs; exits 1 on a lie
+spec-plan-build list-plans                                          # every plan, state, PRs; exits 1 on a lie
 spec-plan-build states                                              # the state machine, as a diagram
+spec-plan-build agents list                                         # every specialist, what it handles, what it advances to
+spec-plan-build agents describe luke-implementer                    # one specialist in full, prompt included
+spec-plan-build describe luke-implementer                           # the same, without the `agents` in front
 spec-plan-build resync dirs [--commit]                              # folder emoji vs folder contents
 spec-plan-build resync prs [--commit]                               # [NNN.MM] prefixes on PR titles
 spec-plan-build linear import --prefix TAX [--commit | --format json]

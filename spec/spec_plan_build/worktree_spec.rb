@@ -168,7 +168,7 @@ RSpec.describe SpecPlanBuild::Worktree do
         $stderr = original
       end
 
-      expect(captured.string).to match(/missing/)
+      expect(captured.string).to include("missing")
     end
 
     it "answers false so a caller can tell seeding did not happen" do

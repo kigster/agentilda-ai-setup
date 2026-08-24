@@ -134,6 +134,7 @@ end
   linear
   agent
   transcript
+  roster
   worktree
   publisher
   executor

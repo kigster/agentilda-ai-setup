@@ -94,7 +94,7 @@ RSpec.describe SpecPlanBuild::Resync::Dirs, :tree do
       end
 
       it "reports the state change rather than the padding" do
-        expect(changes.first.reason).to match(/contents now justify/)
+        expect(changes.first.reason).to include("contents now justify")
       end
     end
 
@@ -132,7 +132,7 @@ RSpec.describe SpecPlanBuild::Resync::Dirs, :tree do
       end
 
       it "records why, so the rename is auditable rather than mysterious" do
-        expect(changes.first.reason).to match(/1 pull request still open/)
+        expect(changes.first.reason).to include("1 pull request still open")
       end
     end
 
@@ -166,7 +166,7 @@ RSpec.describe SpecPlanBuild::Resync::Dirs, :tree do
       end
 
       it "says the file stopped justifying the name, not that the file vanished" do
-        expect(changes.first.reason).to match(/names no open question/)
+        expect(changes.first.reason).to include("names no open question")
       end
     end
 

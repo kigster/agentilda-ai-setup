@@ -92,7 +92,7 @@ module SpecPlanBuild
         UI.fit(HEADINGS[3], title_width),
         HEADINGS[4])
 
-      rule = "  " + "─" * (UI.display_width(text) - 2)
+      rule = "  " + ("─" * (UI.display_width(text) - 2))
 
       [UI.paint(text, :bold), UI.paint(rule, :bright_yellow)].join("\n")
     end

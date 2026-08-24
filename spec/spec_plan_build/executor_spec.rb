@@ -51,8 +51,10 @@ RSpec.describe SpecPlanBuild::Executor, :tree do
     )
   end
 
-  def denied(agent) = described_class.new(root:, command:).invocation(agent, subject_plan)
-    .each_cons(2).find { |flag, _| flag == "--disallowedTools" }&.last.to_s.split(",")
+  def denied(agent)
+    described_class.new(root:, command:).invocation(agent, subject_plan)
+      .each_cons(2).find { |flag, _| flag == "--disallowedTools" }&.last.to_s.split(",")
+  end
 
   # A run whose agents all failed printed ten copies of the same escaped prompt
   # and never said why. The reason was in the parts of the error this now reads.

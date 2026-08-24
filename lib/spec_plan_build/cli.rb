@@ -35,7 +35,7 @@ module SpecPlanBuild
         tree = Tree.new(dir: options.fetch(:dir, SpecPlanBuild::PLANS_DIR))
         unless tree.exist?
           error("No #{SpecPlanBuild::PLANS_DIR} directory at\n#{tree.dir}\n\n" \
-          "Run this from the project root, or pass -D.")
+                "Run this from the project root, or pass -D.")
           exit 66
         end
         tree
@@ -180,8 +180,8 @@ module SpecPlanBuild
 
         feature = Feature.parse(path)
         success("Created #{File.basename(path)}\n\n" \
-        "#{feature.status.emoji} #{feature.status.label} — #{feature.status.note}\n" \
-        "#{next_step(path, feature, from_prs:)}")
+                "#{feature.status.emoji} #{feature.status.label} — #{feature.status.note}\n" \
+                "#{next_step(path, feature, from_prs:)}")
       end
 
       # Hand the folder to the writer that already knows how to write a
@@ -306,8 +306,8 @@ module SpecPlanBuild
       end
     end
 
-    # `spec-plan-build status` — backs /spec-status.
-    class Status < Base
+    # `spec-plan-build list-plans` — backs /plan-status.
+    class ListPlans < Base
       desc "Print every plan, its state, and its pull requests"
 
       example ["", "-D .plans", "| less -R"]
@@ -440,10 +440,10 @@ module SpecPlanBuild
           return if assumed.empty?
 
           warn("#{assumed.size} title#{"s" unless assumed.size == 1} would get " \
-          "[#{SpecPlanBuild::NO_PLAN_PREFIX}] because no plan resolved.\n\n" \
-          "That is an assertion about intent, and it is yours to make: check each one\n" \
-          "before committing. A pull request that writes a plan's spec belongs to that\n" \
-          "plan however its branch was named.")
+               "[#{SpecPlanBuild::NO_PLAN_PREFIX}] because no plan resolved.\n\n" \
+               "That is an assertion about intent, and it is yours to make: check each one\n" \
+               "before committing. A pull request that writes a plan's spec belongs to that\n" \
+               "plan however its branch was named.")
         end
 
         # Creating folders is a bigger act than editing a title, so it is
@@ -617,8 +617,8 @@ module SpecPlanBuild
           raise SpecPlanBuild::Error,
             "which project? Pass -p with a project's URL, name or id.\n\n" \
             "This never creates one: a team's project list is something you curated, and " \
-            "every plan is filed under one you named.\n\n" \
-            "  spec-plan-build linear projects <TEAM>   lists them"
+            "every plan is filed under one you named.\n\n  " \
+            "spec-plan-build linear projects <TEAM>   lists them"
         end
 
         # @return [SpecPlanBuild::Linear::Import]
@@ -736,7 +736,7 @@ module SpecPlanBuild
         desc: "Agents to run at once (default: cores - 2, capped at 12)"
       option :dont_push_anything, type: :boolean, default: false,
         desc: "With --commit and --isolation worktree, a finished branch is pushed and its pull request " \
-        "opened as soon as it lands, titled [NNN.MM](X). Pass this to turn that off and leave it uncommitted."
+              "opened as soon as it lands, titled [NNN.MM](X). Pass this to turn that off and leave it uncommitted."
       option :log, desc: "Append progress to this file (default: a per-project file under the system temp dir)"
 
       example [
@@ -762,7 +762,7 @@ module SpecPlanBuild
 
         if isolation == :worktree && !Worktree.new(root:).repository?
           error("#{root} is not a git repository, so plans cannot be isolated.\n\n" \
-          "Run with --isolation shared to work in one tree, serially.")
+                "Run with --isolation shared to work in one tree, serially.")
           exit 66
         end
 
@@ -1071,14 +1071,65 @@ module SpecPlanBuild
       def call(**) = $stdout.write(Diagram.new.render)
     end
 
+    # `spec-plan-build agents list`
+    class AgentList < Dry::CLI::Command
+      include UI
+
+      desc "List every specialist, what it handles, and what it advances to"
+
+      example ["", "| less -R"]
+
+      # @return [void]
+      def call(**) = $stdout.write(Roster.new.list)
+    end
+
+    # `spec-plan-build agents describe [NAME]`
+    class AgentDescribe < Dry::CLI::Command
+      include UI
+
+      desc "Print one specialist in full, prompt included"
+
+      argument :name, required: false,
+        desc: "Which specialist, e.g. luke-implementer (default: every one)"
+
+      example [
+        "luke-implementer       # one agent, prompt and all",
+        "                       # every agent",
+        "hansolo-reviewer | less -R"
+      ]
+
+      # @param name [String, nil]
+      # @param options [Hash]
+      # @return [void]
+      def call(name: nil, **_options)
+        $stdout.write(Roster.new.describe(name))
+      rescue SpecPlanBuild::Error => e
+        error(e.message)
+        exit 65
+      end
+    end
+
     register "create", Create, aliases: %w[new c]
-    register "status", Status, aliases: %w[st]
+    # Renamed from `status`, which read as "is the tool OK?" rather than "what
+    # plans are there?". The old spellings stay registered: other repos, agent
+    # prompts and scripts call this by name.
+    register "list-plans", ListPlans, aliases: %w[status st]
     register "run", Run
     register "unblock", Unblock
     register "docs", Docs
     register "states", States, aliases: %w[diagram]
     register "index", Index, aliases: %w[idx]
     register "version", Version, aliases: %w[--version -v]
+
+    register "agents" do |prefix|
+      prefix.register "list", AgentList, aliases: %w[ls]
+      prefix.register "describe", AgentDescribe, aliases: %w[show]
+    end
+
+    # `describe <name>` without the `agents` in front of it. The bare verb is
+    # how people ask for this out loud, and a near miss that prints usage is a
+    # worse answer than the thing they wanted.
+    register "describe", AgentDescribe
 
     register "resync" do |prefix|
       prefix.register "dirs", Resync::Dirs

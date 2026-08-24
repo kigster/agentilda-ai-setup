@@ -170,7 +170,7 @@ module SpecPlanBuild
 
       url = link && link[2]
       title = titled ? titled[1] : unformat(title_cell)
-      title = title.gsub(/\\([\[\]|\\])/, '\1')   # undo the escaping {.render} applies
+      title = title.gsub(/\\([\[\]|\\])/, '\1') # undo the escaping {.render} applies
       number = cells[idx[:number] || 0].to_s[/\d+/] || url&.[](%r{/(?:pull|merge_requests)/(\d+)}, 1)
       return nil if title.empty? && url.nil?
 

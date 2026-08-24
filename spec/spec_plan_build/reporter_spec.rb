@@ -91,7 +91,7 @@ RSpec.describe SpecPlanBuild::Reporter, :tree do
     end
 
     it "explains what is wrong, not merely that something is" do
-      expect(reporter.inconsistent.first.violation).to match(/1 pull request still open/)
+      expect(reporter.inconsistent.first.violation).to include("1 pull request still open")
     end
   end
 
