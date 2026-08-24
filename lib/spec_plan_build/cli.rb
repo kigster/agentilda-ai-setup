@@ -784,8 +784,9 @@ module SpecPlanBuild
           publisher: publisher_for(root, isolation, options)
         )
 
+        started = UI.monotonic
         rounds = runner.call
-        report(runner, rounds, options)
+        report(runner, rounds, options, seconds: UI.monotonic - started)
         exit(failures(rounds).empty? ? 0 : 1)
       end
 
@@ -850,8 +851,9 @@ module SpecPlanBuild
       # @param runner [SpecPlanBuild::Runner]
       # @param rounds [Array]
       # @param options [Hash]
+      # @param seconds [Float] wall clock for the whole loop
       # @return [void]
-      def report(runner, rounds, options)
+      def report(runner, rounds, options, seconds: 0.0)
         rounds.each do |round|
           puts "round #{round.number}"
           round.attempts.each do |a|
@@ -865,6 +867,12 @@ module SpecPlanBuild
             puts "  #{a.ordinal}\t#{a.agent}\t#{mark}\t#{a.note}"
           end
         end
+
+        # What the run cost, on STDOUT with the rounds it belongs to, so a run
+        # redirected to a file keeps its bill. A dry run spent nothing and gets
+        # none of this.
+        tally = Tally.new(attempts: rounds.flat_map(&:attempts), seconds:, rounds: rounds.size)
+        puts("", tally.render) if commit?(options)
 
         return if quiet?(options)
 

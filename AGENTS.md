@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Skills to Activate Upon Start
 
- * /unslop
- * /superpowers:brainstorm
- * /writing-plans 
+- /unslop
+- /superpowers:brainstorm
+- /writing-plans
 
 ## What this repository is
 
@@ -75,10 +75,10 @@ A feature moves through five specialists, one state at a time, never further tha
 | #   | State                             | Who acts                                | What happens                                                                                                                                                                                                                                                                                                                    |
 | :-- | :-------------------------------- | :-------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1   | ⚪️ New                            | `spec-plan-build create`                | Mints the plan folder. For a genuinely new feature (not `--after`/`--prs`), scaffolds `spec.md`'s four fixed headings (*What we are trying to achieve*, *Why it matters*, *What already exists*, *What research needs to settle*), attempts a best-effort first pass via `claude -p`, and opens it. A human finishes the brief. |
-| 2   | 🔎 Researched                     | `leah-researcher`                       | Fans work out across parallel sub-agents, appends spec.md's `## Research` chapter. That heading *is* the transition. Nobody else may write it, not even empty.                                                                                                                                                                 |
+| 2   | 🔎 Researched                     | `leah-researcher`                       | Fans work out across parallel sub-agents, appends spec.md's `## Research` chapter. That heading *is* the transition. Nobody else may write it, not even empty.                                                                                                                                                                  |
 | 3   | ⭐️ Planned                        | `yoda-writer`, then `palpatine-planner` | `yoda-writer` turns the brief + research into Goal/Non-Goals/In-Out-of-scope/Conclusion, or writes `blocked.md` when a question is a human's to answer. `palpatine-planner` then decomposes the finished spec into `plan.md`'s non-overlapping work units.                                                                      |
-| 4   | 🟡 Building → 🟢 Ready for Review | `luke-implementer`                      | Builds one work unit at a time: source and tests, no commits. Opens a `[NNN.MM] …` pull request as each lands.                                                                                                                                                                                                              |
-| 5   | 👀 In Review → 🔴 / ✅            | `hansolo-reviewer`                      | Reads the diff against the plan; requests changes (back to 🟢 once fixed) or approves. Never merges. That line is enforced in code (`Executor::UNGRANTABLE`), not just in the prompt.                                                                                                                                          |
+| 4   | 🟡 Building → 🟢 Ready for Review | `luke-implementer`                      | Builds one work unit at a time: source and tests, no commits. Opens a `[NNN.MM] …` pull request as each lands.                                                                                                                                                                                                                  |
+| 5   | 👀 In Review → 🔴 / ✅            | `hansolo-reviewer`                      | Reads the diff against the plan; requests changes (back to 🟢 once fixed) or approves. Never merges. That line is enforced in code (`Executor::UNGRANTABLE`), not just in the prompt.                                                                                                                                           |
 
 Off to the side, at any point: ⭕️/🅱️ **Blocked** (a decision only a human can make, never offered to an agent by the loop) and ☢️ **Deferred** or ❌ **Discarded**.
 
@@ -109,27 +109,28 @@ Entry point `lib/spec_plan_build.rb` requires each component only if the file ex
 - **`github.rb`**, **`pull_request.rb`**: talk to `gh` to associate pull requests with plan numbers.
 - **`linear/`**: one-way export of `.plans` into Linear projects and issues. A committed `linear.md` per plan is the fingerprint that makes re-running it free.
 - **`agent.rb`**, **`worktree.rb`**, **`executor.rb`**, **`runner.rb`**: the multi-agent harness. Routes a plan to the specialist that `handles:` its state, isolates it in its own git worktree, runs rounds in parallel, verifies `HEAD` didn't move afterward. `Runner#in_scope?` is what `run --plan` filters on.
-- **`transcript.rb`**: reads the newline-delimited JSON `claude -p --output-format stream-json --verbose` writes as it works, and turns it into the short phrase a spinner line has room for, so a line says `yoda-writer: editing spec.md` rather than only `yoda-writer`. Every invocation's raw stream is also kept under `$TMPDIR/spec-plan-build-traces`, one file per run; `jq -r 'select(.type=="result").result' <trace>` gets the agent's final answer back out of a run that failed.
+- **`transcript.rb`**: reads the newline-delimited JSON `claude -p --output-format stream-json --verbose --include-partial-messages` writes as it works, and turns it into the two things a spinner line carries: the short phrase there is room for, so a line says `yoda-writer: editing spec.md` rather than only `yoda-writer`, and the token meter beside it. Tokens are counted off `message_delta` events, never off `assistant` ones, whose output count is the placeholder the API sends when a message starts. `claude` leaves a sub-agent's spend out of its parent's total and reports it separately as one unsplit number, so sub-agents are counted per task and folded into ↑. Every invocation's raw stream is also kept under `$TMPDIR/spec-plan-build-traces`, one file per run, minus the character-by-character deltas that `--include-partial-messages` also emits; `jq -r 'select(.type=="result").result' <trace>` gets the agent's final answer back out of a run that failed.
+- **`progress_log.rb`** and **`tally.rb`**: what a run says about itself. `progress_log` lays each `--log` line out as fixed-width columns (time, plan, state, agent, pid, seconds alive) so one shared log file stays readable while several runs append to it; `tally` is the closing report: plans addressed, wall clock, sub-agents spawned per agent, average agents running at once, and the tokens the whole run spent.
 - **`unblocker.rb`**: what `unblock` actually does. Resolves each number on the command line, hands the drainable ones to `lando-broker` one at a time, and counts the `## B<n>` headings off disk before and after, so "folded B3" means the heading is gone rather than that an agent said so.
 - **`documentation.rb`** and **`diagram.rb`**: generate the Markdown conventions doc and the terminal diagram, both directly off `state_machine.rb`/`status.rb`, so neither drifts from the code the way three previously hand-maintained copies of this table did.
 - **`cli.rb`**: `Dry::CLI` command definitions. Each is a thin shell that parses flags, calls one library object, and prints the result. Deliverables go to STDOUT, progress to STDERR, so every command composes in a pipe.
 
 ### Repo layout
 
-| Path                   | What it is                                                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `config/AGENTS.md`     | The instructions every agent reads; symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md` by `bin/setup`                        |
-| `config/sources.yml`   | Declarative list `scripts/install-sources` clones `skills/`/`plugins/` content from                                            |
-| `context/`             | Durable reference loaded on demand: per-language conventions, PostgreSQL, the spec-plan-build lifecycle doc, `skills-used.md`  |
-| `agents/`              | The five specialist definitions from the workflow table above                                                                  |
-| `skills/`              | Claude skills, **generated** by `install-sources`, not committed. One directory per skill, symlinked into `~/.claude/skills/`  |
-| `skills-mine/`         | Skills authored in this repo, **committed**. Folded into `skills/` by `install-sources`                                        |
-| `plugins/`             | External plugin bundles (e.g. `pstack`), also generated, not committed                                                         |
-| `commands/`            | Slash commands wrapping `spec-plan-build` (table above)                                                                        |
-| `bin/`                 | Bash executables. `setup` is a pure symlink reconciler, nothing more                                                           |
-| `scripts/`             | Ruby executables: `spec-plan-build` and `install-sources`                                                                      |
-| `lib/spec_plan_build/` | The library described above                                                                                                    |
-| `spec/`                | RSpec suite, mirroring `lib/spec_plan_build/`                                                                                  |
+| Path                   | What it is                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `config/AGENTS.md`     | The instructions every agent reads; symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md` by `bin/setup`                       |
+| `config/sources.yml`   | Declarative list `scripts/install-sources` clones `skills/`/`plugins/` content from                                           |
+| `context/`             | Durable reference loaded on demand: per-language conventions, PostgreSQL, the spec-plan-build lifecycle doc, `skills-used.md` |
+| `agents/`              | The five specialist definitions from the workflow table above                                                                 |
+| `skills/`              | Claude skills, **generated** by `install-sources`, not committed. One directory per skill, symlinked into `~/.claude/skills/` |
+| `skills-mine/`         | Skills authored in this repo, **committed**. Folded into `skills/` by `install-sources`                                       |
+| `plugins/`             | External plugin bundles (e.g. `pstack`), also generated, not committed                                                        |
+| `commands/`            | Slash commands wrapping `spec-plan-build` (table above)                                                                       |
+| `bin/`                 | Bash executables. `setup` is a pure symlink reconciler, nothing more                                                          |
+| `scripts/`             | Ruby executables: `spec-plan-build` and `install-sources`                                                                     |
+| `lib/spec_plan_build/` | The library described above                                                                                                   |
+| `spec/`                | RSpec suite, mirroring `lib/spec_plan_build/`                                                                                 |
 
 ### Vendor neutrality
 
