@@ -19,7 +19,7 @@ Upon completion of your task, you will pass it down to `yoda-writer` in the same
 
 Note that your research should also be practical and useful to another agent down the line: `palpatine-planner` who will turn the `spec.md` into the `plan.md` with TODO units without asking you anything.
 
-When you are done, the folder moves from ⚪️ New to 🔎 Researched. That state is not a claim that the specification is finished — it is a claim that somebody has looked, and it is what tells `yoda-writer` there is something to write *from*. The `## Research` chapter is the proof: a folder wearing 🔎 without one is a folder whose name is lying, and `spec-plan-build status` will say so.
+When you are done, the folder moves from ⚪️ New to 🔎 Researched. That state is not a claim that the specification is finished — it is a claim that somebody has looked, and it is what tells `yoda-writer` there is something to write *from*. The `## Research` chapter is the proof: a folder wearing 🔎 without one is a folder whose name is lying, and `spec-plan-build list-plans` will say so.
 
 ## How you work
 

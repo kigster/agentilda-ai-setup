@@ -131,7 +131,7 @@ RSpec.describe SpecPlanBuild::Brief, :tree do
 
       aggregate_failures do
         expect(ok).to be(false)
-        expect(note).to match(/timed out/)
+        expect(note).to include("timed out")
       end
     end
 
@@ -143,7 +143,7 @@ RSpec.describe SpecPlanBuild::Brief, :tree do
 
       aggregate_failures do
         expect(ok).to be(false)
-        expect(note).to match(/exited 1/)
+        expect(note).to include("exited 1")
       end
     end
 

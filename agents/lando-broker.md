@@ -3,7 +3,7 @@ name: lando-broker
 description: Folds answered blocks into the documents they were stopping, and retires blocked.md once the last question clears.
 handles: [blocked, product_blocked]
 advances_to: planned
-model: sonnet
+model: opus
 allowed_tools: [Read, Grep, Glob, Bash, Write, Edit]
 writes: [spec.md, plan.md, blocked.md]
 ---

@@ -43,11 +43,11 @@ RSpec.describe SpecPlanBuild::Index, :tree do
     end
 
     it "says so plainly when a plan has no pull requests" do
-      expect(document[/001\.00.*?<\/table>/m]).to include("<em>—</em>")
+      expect(document[%r{001\.00.*?</table>}m]).to include("<em>—</em>")
     end
 
     it "orders the documents by lifecycle, not by alphabet" do
-      links = document.scan(/<a href="002\.00[^"]*">([^<]+)<\/a>/).flatten
+      links = document.scan(%r{<a href="002\.00[^"]*">([^<]+)</a>}).flatten
 
       expect(links).to eq(["Spec", "Plan", "Pull Requests"])
     end
@@ -79,7 +79,7 @@ RSpec.describe SpecPlanBuild::Index, :tree do
     end
 
     it "counts the plans at the foot" do
-      expect(document).to match(/3 plans/)
+      expect(document).to include("3 plans")
     end
   end
 

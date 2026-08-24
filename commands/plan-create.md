@@ -33,7 +33,7 @@ For a genuinely new feature (no `--after`/`--prs`), `create` already scaffolds `
 ## What research needs to settle
 ```
 
-Verbatim, in that order — that is exactly what `create` writes, and it is what `spec-plan-build status` and the agent loop read the folder's state from having. Do not add to the set, and do not rename one to something that reads better; the folder's state is derived from this shape.
+Verbatim, in that order — that is exactly what `create` writes, and it is what `spec-plan-build list-plans` and the agent loop read the folder's state from having. Do not add to the set, and do not rename one to something that reads better; the folder's state is derived from this shape.
 
 - **Never write Goals, Non-Goals or a conclusion.** That is `yoda-writer`'s chapter, written *after* research, not before it. Writing it now decides the answer before the research runs, and a researcher handed a foregone conclusion looks for evidence of it rather than for what is actually true.
 - **Never write a `## Research` heading — not even empty.** It is not decoration, it is the state transition: the 🔎 Researched invariant matches any heading beginning with the word "Research" (`## Research`, `### Research`, case-insensitive). Seeding it — even as an empty placeholder — flips the folder to 🔎 the moment `resync dirs` runs next, and the agent loop reads that as "somebody already researched this" and skips `leah-researcher` entirely. The folder ends up *looking* done while nobody has looked.
@@ -46,7 +46,7 @@ The mechanics are three commands and do not need a skill of their own — `creat
 
 1. `spec-plan-build create <words>`, once per plan.
 2. Write (or let `create`'s draft attempt) each `spec.md`, following every constraint above.
-3. **Verify each one before handing off, not after** — `spec-plan-build status` shows every plan at a glance:
+3. **Verify each one before handing off, not after** — `spec-plan-build list-plans` shows every plan at a glance:
    - `spec.md` exists.
    - Exactly the four `##` headings above, nothing added.
    - No heading beginning with "Research".

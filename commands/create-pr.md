@@ -20,7 +20,7 @@ Turn the current work into atomic commits and a pull request, with as few questi
 If the repository has a `.plans/` directory, **the pull request title is not free-form** — it carries the plan number that `pull-requests.md`, the branch and the merged history all join on.
 
 ```bash
-spec-plan-build status          # what plans exist, and their state
+spec-plan-build list-plans      # what plans exist, and their state
 ```
 
 Resolve the plan from the branch name first (`<user>/NNN.MM-slug`), then from the diff, and **only** when the diff touches exactly one plan folder.

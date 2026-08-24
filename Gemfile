@@ -1,13 +1,12 @@
 # `true` = install missing gems automatically
 source "https://rubygems.org"
 
-# Various Gems
-gem "aasm"             # State Machine
-gem "concurrent-ruby" # Concurrency Primitives
+gem "aasm" # State Machine
+gem "concurrent-ruby"    # Concurrency Primitives
 gem "fuzzy-string-match" # Jaro-Winkler, for matching a pull request title to a plan folder
-gem "parallel"        # Fan work out over threads or processes
-gem "pastel"          # ANSI Coloring
-gem "strings"         # Wrap text the way TTY::Box wraps it, so a box can be sized to its wrapped height
+gem "parallel"           # Fan work out over threads or processes
+gem "pastel"             # ANSI Coloring
+gem "strings"            # Wrap text the way TTY::Box wraps it, so a box can be sized to its wrapped height
 gem "unicode-display_width" # How many terminal cells a string occupies
 
 gem "tty-spinner"     # Use for parallel execution, and reporting the status
@@ -24,14 +23,17 @@ gem "dry-inflector"   # String inflection, in ordinal.rb
 gem "dry-monads"      # Success/Failure, in creator.rb
 
 group :development do
-  gem "standard"
+  gem "colored2"
   gem "irb"
+  gem "standard"
 end
 
 group :test do
-  gem "rspec"
-  gem "simplecov"
   gem "coverage-badge"
+  gem "rspec"
+  gem "rspec-its"
+  gem "rspec_junit_formatter" # JUnit XML for CircleCI store_test_results
+  gem "simplecov"
 end
 
 unless File.exist?(".standard.yml")

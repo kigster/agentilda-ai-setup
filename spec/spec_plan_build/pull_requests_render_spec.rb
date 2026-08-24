@@ -50,9 +50,10 @@ RSpec.describe SpecPlanBuild::PullRequests do
     end
 
     it "says so plainly when a pull request carried no description" do
-      expect(described_class.render([pr(number: 12, body: "")])).to match(/No description was written/)
+      expect(described_class.render([pr(number: 12, body: "")])).to include("No description was written")
     end
   end
+
   # Found by a fixture, confirmed against `render` + `parse`: every title this
   # tool writes now opens with a plan number, so the row reads
   # `[[013.00] Ship it](url)` — and a markdown link whose text starts with `[`

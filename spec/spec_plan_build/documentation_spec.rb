@@ -12,7 +12,7 @@ RSpec.describe SpecPlanBuild::Documentation do
   describe "#render" do
     it "says plainly that it is generated, and how to regenerate it" do
       aggregate_failures do
-        expect(document).to match(/This file is auto generated/)
+        expect(document).to include("This file is auto generated")
         expect(document).to include("spec-plan-build docs")
       end
     end
@@ -48,14 +48,14 @@ RSpec.describe SpecPlanBuild::Documentation do
     end
 
     it "names 🟣 Merged as deliberately not a folder state" do
-      expect(document).to match(/🟣 Merged is deliberately \*\*not\*\* a folder state/)
+      expect(document).to include("🟣 Merged is deliberately **not** a folder state")
     end
 
     it "explains the numbering, including that the decimal means sibling not part" do
       aggregate_failures do
         expect(document).to include("000.00")
-        expect(document).to match(/sibling of 001 that arrived later, not a part of 001/)
-        expect(document).to match(/Two digits, always/)
+        expect(document).to include("sibling of 001 that arrived later, not a part of 001")
+        expect(document).to include("Two digits, always")
       end
     end
 
@@ -66,13 +66,13 @@ RSpec.describe SpecPlanBuild::Documentation do
     it "documents the no-plan prefix and that the tool never asserts it alone" do
       aggregate_failures do
         expect(document).to include("[#{SpecPlanBuild::NO_PLAN_PREFIX}]")
-        expect(document).to match(/assumed/)
+        expect(document).to include("assumed")
         expect(document).to match(/refuses rather than guessing/i)
       end
     end
 
     it "keeps the exit clause for the day a real issue tracker arrives" do
-      expect(document).to match(/issue key replaces it/)
+      expect(document).to include("issue key replaces it")
     end
 
     it "stamps the version it was generated from" do
@@ -89,12 +89,12 @@ RSpec.describe SpecPlanBuild::Documentation do
     it "says plainly that create writes no Goals, no Non-Goals and no Research heading" do
       aggregate_failures do
         expect(document).to match(/writes no `## Goals`, no\n`## Non-Goals`/)
-        expect(document).to match(/writes no heading beginning with the word "Research"/)
+        expect(document).to include('writes no heading beginning with the word "Research"')
       end
     end
 
     it "distinguishes the brief from the retroactive --prs path" do
-      expect(document).to match(/`create --after <plan> --prs/)
+      expect(document).to include("`create --after <plan> --prs")
     end
   end
 
