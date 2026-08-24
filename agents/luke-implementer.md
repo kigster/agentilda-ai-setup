@@ -3,7 +3,7 @@ name: luke-implementer
 description: Builds one work unit from a plan, source and tests, without committing.
 handles: [building, rejected]
 advances_to: ready_for_review
-model: sonnet
+model: fable
 allowed_tools: [Read, Grep, Glob, Bash, Write, Edit]
 writes: ["**/*"]
 ---

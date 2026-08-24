@@ -3,7 +3,7 @@ name: hansolo-reviewer
 description: Adversarially checks a plan's documents and diff against what was asked.
 handles: [ready_for_review, in_review]
 advances_to: approved
-model: sonnet
+model: opus
 allowed_tools: [Read, Grep, Glob, Bash]
 may: [gh pr review, gh pr comment]
 writes: [rewrite.md, pull-requests.md]
