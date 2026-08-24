@@ -40,8 +40,8 @@ RSpec.describe "scripts/install-sources" do
   end
 
   # @return [Array(String, Process::Status)] stderr and the exit status
-  def install(*args)
-    out, err, status = Open3.capture3({"INSTALL_SOURCES_ROOT" => root, "NO_COLOR" => "1"}, script, *args)
+  def install(*)
+    out, err, status = Open3.capture3({"INSTALL_SOURCES_ROOT" => root, "NO_COLOR" => "1"}, script, *)
     [out + err, status]
   end
 

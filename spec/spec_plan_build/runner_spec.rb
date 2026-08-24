@@ -222,6 +222,10 @@ RSpec.describe SpecPlanBuild::Runner, :tree do
     # dirty checkout. This is the harness reacting to that rename, not causing
     # it. See `agents/luke-implementer.md`.
     describe "publishing once the agent renames its own folder to ready for review" do
+      subject(:runner) do
+        described_class.new(tree:, executor:, agents:, max_rounds: 1, isolation: :worktree, worktree:, publisher:)
+      end
+
       let(:ordinal) { SpecPlanBuild::Ordinal.parse("004.00") }
       let(:checkout) do
         instance_double(SpecPlanBuild::Worktree::Checkout,
@@ -251,10 +255,6 @@ RSpec.describe SpecPlanBuild::Runner, :tree do
         plans do |t|
           t.plan "004.00", :building, "needs-a-reviewer", files: {"spec.md" => spec_body, "plan.md" => "# P"}
         end
-      end
-
-      subject(:runner) do
-        described_class.new(tree:, executor:, agents:, max_rounds: 1, isolation: :worktree, worktree:, publisher:)
       end
 
       it "publishes and leaves the folder renamed, past the family resync would not touch on its own" do

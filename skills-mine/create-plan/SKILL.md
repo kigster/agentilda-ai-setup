@@ -48,14 +48,14 @@ command -V spec-plan-build >/dev/null || {
   exit 1
 }
 if [[ -d .plans ]]; then
-  spec-plan-build status                     # every plan, its state, its PRs
+  spec-plan-build list-plans                     # every plan, its state, its PRs
 else
   dir=`/usr/bin/find . -type d -and \( -name ".plans" -or -name "plans" \) -print \
       | grep -v worktree \
       | head -1 || \
       { echo "No .plans folder found. Please ensure you are in the root of the project tree."; exit 1 }`
   if [[ -n ${dir} ]]; then
-    cd "${dir}" && spec-plan-build status
+    cd "${dir}" && spec-plan-build list-plans
   else
     echo "No .plans folder found. Please ensure you are in the root of the project tree."
   fi

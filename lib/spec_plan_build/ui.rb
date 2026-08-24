@@ -111,9 +111,9 @@ module SpecPlanBuild
       # @param message [String]
       # @yieldparam item [Object]
       # @return [Array] +items+
-      def stepping(items, message)
+      def stepping(items, message, &)
         list = items.to_a
-        return list.each { |item| yield item } unless animate? && list.size >= PROGRESS_THRESHOLD
+        return list.each(&) unless animate? && list.size >= PROGRESS_THRESHOLD
 
         bar = TTY::ProgressBar.new(
           "#{message} [:bar] :current/:total :percent",
@@ -247,7 +247,7 @@ module SpecPlanBuild
       # @param message [String]
       # @param label [Proc]
       # @return [Array]
-      def threaded(list, jobs, message, label: :to_s.to_proc, &block)
+      def threaded(list, jobs, message, label: :to_s.to_proc, &)
         report_line(message)
         results = Concurrent::Hash.new
         queue = Queue.new
@@ -262,7 +262,7 @@ module SpecPlanBuild
             end)
               item, index = pair
               results[index] = begin
-                once(item, label, &block)
+                once(item, label, &)
               rescue => e
                 e
               end
@@ -332,7 +332,7 @@ module SpecPlanBuild
       def fit(text, width)
         text = text.to_s
         text = text[0..-2] while display_width(text) > width
-        text + " " * (width - display_width(text))
+        text + (" " * (width - display_width(text)))
       end
 
       # Everything the user sees goes through here, so it writes to `$stderr`

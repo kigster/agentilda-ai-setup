@@ -67,7 +67,7 @@ RSpec.describe SpecPlanBuild::Linear do
   describe ".reason_unplaced" do
     it "gives the reason a state was deliberately left out" do
       expect(described_class.reason_unplaced(SpecPlanBuild.status(:shit)))
-        .to match(/the plan survives and its pull requests do not/)
+        .to include("the plan survives and its pull requests do not")
     end
 
     # Deliberately left out and never thought about are different problems,
