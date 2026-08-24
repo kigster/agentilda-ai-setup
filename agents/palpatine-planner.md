@@ -3,7 +3,7 @@ name: palpatine-planner
 description: Turns a signed-off specification into concurrently executable work units.
 handles: [planned]
 advances_to: building
-model: sonnet
+model: opus
 allowed_tools: [Read, Grep, Glob, Bash, Write, Edit, Skill]
 writes: [plan.md, blocked.md]
 ---
