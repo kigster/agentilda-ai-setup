@@ -147,8 +147,9 @@ module SpecPlanBuild
       return [] if subjects.empty?
 
       before = subjects.map { |subject| [subject.feature.ordinal.to_s, self.class.questions(subject)] }.to_h
-      results = UI.concurrently(subjects, headline(subjects), jobs: 1, label: method(:label)) do |subject, activity|
-        invoke(subject, &activity)
+      results = UI.concurrently(subjects, headline(subjects), jobs: 1, label: method(:label),
+        fields: method(:log_fields)) do |subject, progress|
+        invoke(subject, &progress)
       end
 
       settle
@@ -198,5 +199,9 @@ module SpecPlanBuild
     # @param subject [SpecPlanBuild::Subject]
     # @return [String]
     def label(subject) = "#{subject.feature.ordinal} → #{agent.name}"
+
+    # @param subject [SpecPlanBuild::Subject]
+    # @return [Hash] the columns this plan's log lines carry
+    def log_fields(subject) = {plan: subject.feature.ordinal.to_s, status: subject.status.to_s, agent: agent.name}
   end
 end

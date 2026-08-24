@@ -26,6 +26,74 @@ module SpecPlanBuild
     # before the eye resolves it, and the line it prints is longer than the work.
     PROGRESS_THRESHOLD = 3
 
+    # What an item contributes to its log line's columns when its caller has
+    # nothing to say about it. A round header is such an item, and it still
+    # has to line up with the agent lines under it.
+    NO_FIELDS = ->(_item) { {} }
+
+    # One item's spinner line, and the same news written to the log.
+    #
+    # These are two readers of one story and used to be told it separately:
+    # the spinner got the phrase, the log got a start and a finish, and an
+    # animated run wrote nothing about what any agent was actually doing. A
+    # {SpecPlanBuild::Transcript::Progress} arrives here several times a
+    # second; the spinner is redrawn every time, and the log takes a line only
+    # when the phrase itself changes, which is a few dozen times an agent.
+    class Line
+      # @param fields [Hash] plan, status and agent, for the log's columns
+      # @param spinner [TTY::Spinner, nil] nil where nothing is being drawn
+      # @param mark [String] what the spinner says once the work succeeds
+      def initialize(fields: {}, spinner: nil, mark: "")
+        @fields = fields
+        @spinner = spinner
+        @mark = mark
+        @started = UI.monotonic
+        @phrase = nil
+      end
+
+      # @return [Float] seconds this agent has been alive
+      def seconds = UI.monotonic - @started
+
+      # @return [String] the same, as the log and the report write it
+      def alive = "#{seconds.round}s"
+
+      # @param message [String]
+      # @return [void]
+      def note(message) = UI.log(message, **@fields, seconds:)
+
+      # @return [void]
+      def start = note("started")
+
+      # @return [void]
+      def done
+        @spinner&.success(@mark)
+        note("finished after #{alive}")
+      end
+
+      # @param reason [String]
+      # @return [void]
+      def failed(reason)
+        @spinner&.error(UI.paint(reason, :red))
+        note("failed after #{alive}: #{reason}")
+      end
+
+      # @param update [SpecPlanBuild::Transcript::Progress]
+      # @return [void]
+      def call(update)
+        @spinner&.update(meter: UI.meter(update), activity: UI.said(update.activity))
+        return if update.activity.nil? || update.activity == @phrase
+
+        @phrase = update.activity
+        note(update.activity)
+      end
+
+      # So a caller can pass this straight on as a block: {Executor} yields
+      # to it from the thread it reads the agent's stream on.
+      #
+      # @return [Proc]
+      def to_proc = method(:call).to_proc
+    end
+
     class << self
       # Set by the CLI's --quiet. Silences spinners and bars along with
       # everything else, so a quiet run really is quiet.
@@ -63,14 +131,55 @@ module SpecPlanBuild
       #
       # @param message [String]
       # @return [void]
-      def log(message)
+      def log(message, **fields)
         path = log_path or return
 
+        line = ProgressLog.render(message, **fields)
         (@log_mutex ||= Mutex.new).synchronize do
           FileUtils.mkdir_p(File.dirname(path))
-          File.open(path, "a") { |f| f.puts("[#{Time.now.strftime("%H:%M:%S")}] #{message}") }
+          File.open(path, "a") { |f| f.puts(line) }
         end
       end
+
+      # Cells the meter takes on a spinner line, per direction.
+      #
+      # Fixed, and padded to it, because the numbers grow as the agent works and
+      # a column that sizes itself to them drags the whole line sideways every
+      # few seconds.
+      METER_WIDTH = 7
+
+      # The token counter that sits between the spinner and the agent's name.
+      #
+      # Up is everything sent, cache reads included, which is most of it. Down
+      # is what the model generated. Sub-agent spend is folded into up, since
+      # `claude` reports a sub-agent's total without splitting it.
+      #
+      # @param update [SpecPlanBuild::Transcript::Progress, nil]
+      # @return [String]
+      def meter(update)
+        paint(fit("↑#{abbreviate(update&.up)}", METER_WIDTH), :bright_blue) +
+          paint(fit("↓#{abbreviate(update&.down)}", METER_WIDTH), :bright_magenta)
+      end
+
+      # Token counts run to seven figures, and seven figures on a spinner line
+      # is four cells of noise about a number nobody reads to the digit.
+      #
+      # @param count [Integer]
+      # @return [String] e.g. "512", "4.9k", "121k", "1.6M"
+      def abbreviate(count)
+        count = count.to_i
+        case count
+        when 0...1_000 then count.to_s
+        when 1_000...10_000 then "#{(count / 1000.0).round(1)}k"
+        when 10_000...1_000_000 then "#{(count / 1000.0).round}k"
+        when 1_000_000...10_000_000 then "#{(count / 1_000_000.0).round(1)}M"
+        else "#{(count / 1_000_000.0).round}M"
+        end
+      end
+
+      # @param phrase [String, nil]
+      # @return [String] the phrase as a spinner line carries it
+      def said(phrase) = phrase.to_s.empty? ? "" : paint(": #{phrase}", :green, :bold)
 
       # @return [Boolean] whether STDERR is an interactive terminal
       def tty? = $stderr.tty?
@@ -150,7 +259,7 @@ module SpecPlanBuild
       # @param label [Proc] item -> the text on its line
       # @yieldparam item [Object]
       # @return [Array] one result per item, in input order
-      def concurrently(items, message, jobs:, label: :to_s.to_proc, &block)
+      def concurrently(items, message, jobs:, label: :to_s.to_proc, fields: NO_FIELDS, &block)
         list = items.to_a
         return [] if list.empty?
 
@@ -158,10 +267,10 @@ module SpecPlanBuild
 
         if jobs <= 1 || list.size <= 1
           report_line(message) unless animate?
-          return list.map { |item| once(item, label, &block) }
+          return list.map { |item| once(item, label, fields, &block) }
         end
 
-        return threaded(list, jobs, message, label:, &block) unless animate?
+        return threaded(list, jobs, message, label:, fields:, &block) unless animate?
 
         results = Concurrent::Hash.new
         spinners = TTY::Spinner::Multi.new(
@@ -172,19 +281,20 @@ module SpecPlanBuild
 
         list.each_with_index do |item, index|
           text = label.call(item)
-          child = spinners.register("[:spinner] #{text}:activity") do |spinner|
-            log("started  #{text}")
-            results[index] = block.call(item, activity_for(spinner))
-            log("finished #{text}")
-            spinner.success("")
+          child = spinners.register("[:spinner] :meter#{text}:activity") do |spinner|
+            line = Line.new(fields: fields.call(item), spinner:)
+            line.start
+            results[index] = block.call(item, line)
+            line.done
           rescue => e
-            log("failed   #{text}: #{e.message.lines.first.to_s.strip}")
             results[index] = e
-            spinner.error(paint(e.message.lines.first.to_s.strip, :red))
+            line&.failed(e.message.lines.first.to_s.strip)
           end
           # An unset token renders as the literal `:activity`, so every line
-          # says so until its agent gets far enough to have news.
-          child.update(activity: "")
+          # says so until its agent gets far enough to have news. The meter
+          # starts at zero for the same reason, and because a counter that
+          # appears once the first number arrives shifts the whole line.
+          child.update(meter: meter(nil), activity: "")
         end
 
         spinners.auto_spin
@@ -221,20 +331,35 @@ module SpecPlanBuild
       # @param label [Proc]
       # @yieldparam item [Object]
       # @return [Object]
-      def once(item, label, &block)
+      def once(item, label, fields = NO_FIELDS, &block)
         text = label.call(item)
-        return spinning(text) { |activity| block.call(item, activity) } if animate?
-
-        log("started  #{text}")
-        started = monotonic
-        result = block.call(item, logging_activity(text))
-        report_line("#{text} (#{elapsed(started)})", bullet: "✓")
-        log("finished #{text} (#{elapsed(started)})")
+        line = Line.new(fields: fields.call(item), mark: paint("done", :bright_black),
+          spinner: (solo_spinner(text) if animate?))
+        line.start
+        begin
+          result = block.call(item, line)
+        rescue => e
+          reason = e.message.lines.first.to_s.strip
+          line.failed(reason)
+          report_line("#{text}: #{reason}", bullet: "✗") unless animate?
+          raise
+        end
+        line.done
+        report_line("#{text} (#{line.alive})", bullet: "✓") unless animate?
         result
-      rescue => e
-        report_line("#{text}: #{e.message.lines.first.to_s.strip}", bullet: "✗")
-        log("failed   #{text}: #{e.message.lines.first.to_s.strip}")
-        raise
+      end
+
+      # The spinner a lone agent gets. Registered nowhere, because there is no
+      # second line for it to line up with.
+      #
+      # @param text [String]
+      # @return [TTY::Spinner]
+      def solo_spinner(text)
+        spinner = TTY::Spinner.new("[:spinner] :meter#{text}:activity", format: :dots, output: $stderr,
+          success_mark: paint("✓", :green), error_mark: paint("✖", :red))
+        spinner.update(meter: meter(nil), activity: "")
+        spinner.auto_spin
+        spinner
       end
 
       # Parallelism with no spinner to draw: a pipe, a CI log, or a headless
@@ -247,7 +372,7 @@ module SpecPlanBuild
       # @param message [String]
       # @param label [Proc]
       # @return [Array]
-      def threaded(list, jobs, message, label: :to_s.to_proc, &)
+      def threaded(list, jobs, message, label: :to_s.to_proc, fields: NO_FIELDS, &)
         report_line(message)
         results = Concurrent::Hash.new
         queue = Queue.new
@@ -262,7 +387,7 @@ module SpecPlanBuild
             end)
               item, index = pair
               results[index] = begin
-                once(item, label, &)
+                once(item, label, fields, &)
               rescue => e
                 e
               end

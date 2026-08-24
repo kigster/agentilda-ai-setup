@@ -115,6 +115,7 @@ end
   ui
   ordinal
   status
+  progress_log
   state_machine
   dev_work
   markdown
@@ -129,6 +130,7 @@ end
   resolver
   resync
   reporter
+  tally
   index
   linear
   agent

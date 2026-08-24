@@ -145,6 +145,36 @@ RSpec.describe SpecPlanBuild::UI do
     end
   end
 
+  # The counter that sits between the spinner and the agent's name. It is
+  # redrawn several times a second, so it is padded to a fixed width: sized to
+  # its numbers, it would drag the rest of the line sideways as they grow.
+  describe ".meter" do
+    def progress(up, down) = SpecPlanBuild::Transcript::Progress.new(activity: nil, up:, down:, subagents: 0)
+
+    it "shows both directions" do
+      expect(described_class.meter(progress(1002, 40))).to include("↑").and include("↓")
+    end
+
+    it "occupies the same width whatever the numbers are" do
+      narrow = described_class.display_width(described_class.meter(progress(0, 0)))
+      wide = described_class.display_width(described_class.meter(progress(9_400_000, 812_000)))
+
+      expect(narrow).to eq(wide)
+    end
+
+    it "reads as zero before an agent has spent anything" do
+      expect(described_class.meter(nil)).to include("↑0").and include("↓0")
+    end
+  end
+
+  describe ".abbreviate" do
+    it "keeps small numbers exact and large ones short" do
+      counts = [512, 4900, 121_000, 1_590_000, 12_000_000].map { |n| described_class.abbreviate(n) }
+
+      expect(counts).to eq(["512", "4.9k", "121k", "1.6M", "12M"])
+    end
+  end
+
   describe ".log" do
     around do |example|
       Dir.mktmpdir { |dir|
@@ -159,11 +189,13 @@ RSpec.describe SpecPlanBuild::UI do
       expect { described_class.log("hello") }.not_to raise_error
     end
 
-    it "appends a timestamped line, creating the directory if needed" do
+    it "appends a line in columns, creating the directory if needed" do
       described_class.log_path = @log_path
-      described_class.log("started 000.00")
+      described_class.log("editing spec.md", plan: "003.00", status: "⭐️ Planned",
+        agent: "yoda-writer", seconds: 42)
 
-      expect(File.read(@log_path)).to match(/\A\[\d\d:\d\d:\d\d\] started 000\.00\n\z/)
+      expect(File.read(@log_path))
+        .to match(/\A\[\d\d:\d\d:\d\d \| 003\.00 +\| ⭐️ Planned +\| yoda-writer +\| +\d+ \| +42s\] editing spec\.md\n\z/)
     end
 
     it "appends rather than truncating on a second call" do
@@ -208,12 +240,13 @@ RSpec.describe SpecPlanBuild::UI do
       it "logs the start and the finish when a log path is set" do
         Dir.mktmpdir do |dir|
           described_class.log_path = File.join(dir, "run.log")
-          described_class.concurrently([:plan], "round 1", jobs: 1, label: ->(_) { "000.00" }) { |_| :done }
+          described_class.concurrently([:plan], "round 1", jobs: 1, label: ->(_) { "000.00" },
+            fields: ->(_) { {plan: "000.00", agent: "yoda-writer"} }) { |_| :done }
 
           log = File.read(described_class.log_path)
           aggregate_failures do
-            expect(log).to match(/started {2}000\.00/)
-            expect(log).to include("finished 000.00")
+            expect(log).to match(/\| 000\.00 .*yoda-writer.*\] started$/)
+            expect(log).to match(/\| 000\.00 .*\] finished after \d+s$/)
           end
         end
       ensure

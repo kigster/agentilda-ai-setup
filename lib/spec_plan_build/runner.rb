@@ -26,7 +26,18 @@ module SpecPlanBuild
     #   @return [Boolean]
     # @!attribute [r] note
     #   @return [String]
-    Attempt = Data.define(:ordinal, :agent, :from, :to, :ok, :note) do
+    # @!attribute [r] up
+    #   @return [Integer] tokens sent, sub-agents included
+    # @!attribute [r] down
+    #   @return [Integer] tokens generated
+    # @!attribute [r] subagents
+    #   @return [Integer] sub-agents this agent spawned
+    # @!attribute [r] delegated
+    #   @return [Integer] of {#up}, how much arrived unsplit from a sub-agent
+    # @!attribute [r] seconds
+    #   @return [Float] how long the agent ran
+    Attempt = Data.define(:ordinal, :agent, :from, :to, :ok, :note, :up, :down, :subagents,
+      :delegated, :seconds) do
       # @return [Boolean] whether the plan actually moved
       def advanced? = ok && from != to
     end
@@ -58,6 +69,12 @@ module SpecPlanBuild
     Task = Data.define(:agent, :subject, :root, :checkout) do
       # @return [String] for the spinner line
       def label = "#{subject.feature.ordinal}  #{UI.paint(agent.name, :yellow, :bold)}"
+
+      # The same three facts unpainted and apart, for the log file, where they
+      # are columns rather than a sentence.
+      #
+      # @return [Hash]
+      def log_fields = {plan: subject.feature.ordinal.to_s, status: subject.status.to_s, agent: agent.name}
     end
 
     # Rounds with no movement before the loop concedes. One is not enough: an
@@ -155,8 +172,8 @@ module SpecPlanBuild
       return Round.new(number:, attempts: []) if tasks.empty?
 
       results = UI.concurrently(tasks, "round #{number} — #{tasks.size} plans", jobs:,
-        label: :label.to_proc) do |task, activity|
-        attempt(task, &activity)
+        label: :label.to_proc, fields: :log_fields.to_proc) do |task, progress|
+        attempt(task, &progress)
       end
 
       # One serial pass over the *main* tree, run once per round rather than
@@ -200,7 +217,8 @@ module SpecPlanBuild
     # @return [SpecPlanBuild::Runner::Attempt]
     def failed(error)
       Attempt.new(ordinal: "?", agent: "?", from: :unknown, to: :unknown, ok: false,
-        note: error.is_a?(Exception) ? error.message.lines.first.to_s.strip : error.to_s)
+        note: error.is_a?(Exception) ? error.message.lines.first.to_s.strip : error.to_s,
+        up: 0, down: 0, subagents: 0, delegated: 0, seconds: 0.0)
     end
 
     # Exactly one agent per plan per round — the first that handles its state.
@@ -226,16 +244,29 @@ module SpecPlanBuild
     #
     # @param task [SpecPlanBuild::Runner::Task]
     # @return [SpecPlanBuild::Runner::Attempt]
-    # @yieldparam phrase [String] what the agent is doing, forwarded to its line
-    def attempt(task, &on_activity)
+    # @yieldparam progress [SpecPlanBuild::Transcript::Progress] what the agent
+    #   is doing and what it has spent, forwarded to its line
+    def attempt(task, &on_progress)
       ordinal = task.subject.feature.ordinal.to_s
       from = task.subject.status.key
 
-      ok, note = @executor.call(task.agent, task.subject, root: task.root, &on_activity)
+      result = @executor.call(task.agent, task.subject, root: task.root, &on_progress)
+      ok, note = result
       note = "#{note} (#{task.checkout.branch})" if task.checkout
 
-      Attempt.new(ordinal:, agent: task.agent.name, from:, ok: !!ok, note: note.to_s, to: from)
+      Attempt.new(ordinal:, agent: task.agent.name, from:, ok: !!ok, note: note.to_s, to: from,
+        up: spend(result, :up), down: spend(result, :down), subagents: spend(result, :subagents),
+        delegated: spend(result, :delegated), seconds: spend(result, :seconds))
     end
+
+    # An executor is anything that answers `call` and returns something that
+    # destructures as `ok, note` — the specs pass an array, and a future one
+    # may too. Whatever it spent is an extra it does not have to report.
+    #
+    # @param result [Object]
+    # @param field [Symbol]
+    # @return [Numeric]
+    def spend(result, field) = result.respond_to?(field) ? result.public_send(field) : 0
 
     # Reads what {#run_round}'s resync just settled, rather than trusting
     # what the agent claims — an agent that says "done" but wrote nothing
@@ -262,8 +293,7 @@ module SpecPlanBuild
 
       current = tree.find(task.subject.feature.ordinal)
       to = current&.status&.key || attempt.from
-      settled = Attempt.new(ordinal: attempt.ordinal, agent: attempt.agent, from: attempt.from,
-        ok: attempt.ok, to:, note: attempt.note)
+      settled = attempt.with(to:)
       return settled unless task.agent.advances_to == :ready_for_review && to == :ready_for_review
 
       publication = publish(task, current)
@@ -275,7 +305,7 @@ module SpecPlanBuild
         settled.note
       end
 
-      Attempt.new(ordinal: settled.ordinal, agent: settled.agent, from: settled.from, ok: settled.ok, to:, note:)
+      settled.with(note:)
     end
 
     # Push the finished branch and open its pull request, then record it in
