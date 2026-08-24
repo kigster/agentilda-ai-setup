@@ -14,20 +14,13 @@ RSpec.describe SpecPlanBuild::Linear::Push, :tree do
   let(:issued) { [] }
 
   let(:import) { fresh_import }
-
-  def fresh_import
-    SpecPlanBuild::Linear::Import.new(tree: SpecPlanBuild::Tree.new(dir: plans_root), team: "TAX", project:)
-  end
-
   let(:states) do
     [{"id" => "s-backlog", "name" => "Backlog", "type" => "backlog", "position" => 0},
       {"id" => "s-todo", "name" => "Todo", "type" => "unstarted", "position" => 1},
       {"id" => "s-doing", "name" => "Doing", "type" => "started", "position" => 2},
       {"id" => "s-done", "name" => "Done", "type" => "completed", "position" => 3}]
   end
-
   let(:labels) { [{"id" => "l-blocked", "name" => "blocked"}] }
-
   # Answers whichever operation it is handed, and records what it was asked.
   let(:fake) do
     lambda { |document, variables|
@@ -35,7 +28,6 @@ RSpec.describe SpecPlanBuild::Linear::Push, :tree do
       {"data" => response_for(document, variables)}
     }
   end
-
   let!(:built) do
     plans do |t|
       t.plan "002.00", :approved, "dev-foundation",
@@ -43,6 +35,10 @@ RSpec.describe SpecPlanBuild::Linear::Push, :tree do
                 "plan.md" => "## PR-1 — Test rig\n\nThe rig.\n"},
         prs: [t.merged(2, "Spec 002 PR-1: Test rig")]
     end
+  end
+
+  def fresh_import
+    SpecPlanBuild::Linear::Import.new(tree: SpecPlanBuild::Tree.new(dir: plans_root), team: "TAX", project:)
   end
 
   def response_for(document, variables)

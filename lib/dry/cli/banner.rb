@@ -10,42 +10,82 @@ module Dry
     # @since 0.1.0
     # @api private
     module Banner
-      @enabled = true
+      @color_enabled = true
 
       module ColorMethods
+        @pastel = nil
+
+        COLOR_METHODS = %i[
+          yellow
+          green
+          red
+          blue
+          magenta
+          cyan
+          white
+          black
+          gray
+          bright_white
+          bright_black
+          bright_red
+          bright_green
+          bright_blue
+          bright_magenta
+          bright_cyan
+          bright_gray
+        ].freeze
+
+        # Pastel answers a colour two ways: `yellow("text")` decorates in one
+        # call, `yellow.bold("text")` returns a chain to decorate further. The
+        # colourless stand-in has to answer both shapes, so given text it hands
+        # the text straight back and given nothing it hands back itself.
+        DECORATIONS = %i[bold dim italic underline inverse strikethrough blink].freeze
+
+        class NoColorPastel
+          (COLOR_METHODS + DECORATIONS).each do |name|
+            define_method(name) { |*args| args.empty? ? self : args.join }
+          end
+        end
+
         def pastel
-          @pastel ||= Pastel.new
+          @pastel ||= if Banner.color_enabled?
+            Pastel.new
+          else
+            NoColorPastel.new
+          end
         end
 
         extend Forwardable
 
-        def_delegators :pastel, :yellow, :green, :red, :blue, :magenta, :cyan, :white, :black, :gray, :bright_white, :bright_black, :bright_red, :bright_green, :bright_blue, :bright_magenta, :bright_cyan, :bright_gray
+        def_delegators :pastel, *COLOR_METHODS
       end
 
       extend ColorMethods
 
-      def self.enabled?
-        @enabled
+      def self.color_enabled?
+        @color_enabled
       end
 
-      def self.enable!
-        @enabled = true
+      def self.enable_color!
+        @pastel = nil
+        @color_enabled = true
       end
 
-      def self.disable!
-        @enabled = false
+      def self.disable_color!
+        @pastel = nil
+        @color_enabled = false
       end
 
       def self.color_header(string)
-        enabled? ? bright_blue.bold(string.upcase) : string.upcase
+        color_enabled? ? bright_blue.bold(string.upcase) : string.upcase
       end
 
       def self.color_command(string)
-        enabled? ? yellow.bold(string) : string
+        color_enabled? ? yellow.bold(string) : string
       end
 
       def self.color_arguments(string)
-        enabled? ? yellow.italic(string) : string
+        color_enabled? ? yellow.italic(string) : string
       end
 
       # Prints command banner

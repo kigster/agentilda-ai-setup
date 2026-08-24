@@ -53,8 +53,8 @@ RSpec.describe "bin/setup-worktree" do
   end
 
   # @return [Array(String, Process::Status)] combined output and the status
-  def run(*args)
-    out, err, status = Open3.capture3({"NO_COLOR" => "1"}, script, *args)
+  def run(*)
+    out, err, status = Open3.capture3({"NO_COLOR" => "1"}, script, *)
     [out + err, status]
   end
 

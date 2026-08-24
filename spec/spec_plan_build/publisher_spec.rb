@@ -102,7 +102,7 @@ RSpec.describe SpecPlanBuild::Publisher, :tree do
 
         aggregate_failures do
           expect(publication).not_to be_published
-          expect(publication.refusal).to match(/unchanged/)
+          expect(publication.refusal).to include("unchanged")
         end
       end
 
@@ -137,7 +137,7 @@ RSpec.describe SpecPlanBuild::Publisher, :tree do
       end
 
       it "reports the refusal instead of raising" do
-        expect(publisher.publish(checkout:, subject: plan).refusal).to match(/already exists/)
+        expect(publisher.publish(checkout:, subject: plan).refusal).to include("already exists")
       end
     end
   end

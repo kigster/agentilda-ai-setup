@@ -32,8 +32,8 @@ module SpecPlanBuild
         @endpoint = endpoint
         return if transport || (token && !token.empty?)
 
-        raise Error, "no Linear token. Set #{TOKEN_VARIABLE}, or use the MCP transport:\n" \
-                     "  spec-plan-build linear import <TEAM> -p <PROJECT> --format json"
+        raise Error, "no Linear token. Set #{TOKEN_VARIABLE}, or use the MCP transport:\n  " \
+                     "spec-plan-build linear import <TEAM> -p <PROJECT> --format json"
       end
 
       # The team, its workflow states and its labels, in one round trip.
@@ -152,7 +152,7 @@ module SpecPlanBuild
       def parse(response)
         return JSON.parse(response.body.to_s) if response.is_a?(Net::HTTPSuccess)
 
-        hint = if response.code == "400" || response.code == "401"
+        hint = if ["400", "401"].include?(response.code)
           "\n\nCheck #{TOKEN_VARIABLE}. A personal API key is sent verbatim, without a `Bearer` prefix."
         end
         raise Error, "Linear returned HTTP #{response.code}#{hint}"

@@ -99,7 +99,7 @@ RSpec.describe SpecPlanBuild::StateMachine do
           status = SpecPlanBuild::STATUS_BY_KEY.fetch(key)
 
           expect(status).to be_satisfied_by(built(key, prs: ["Open 🟡"]))
-          expect(status.violation(built(key, prs: ["Merged 🟣"]))).to match(/already merged/)
+          expect(status.violation(built(key, prs: ["Merged 🟣"]))).to include("already merged")
         end
       end
     end
@@ -124,7 +124,7 @@ RSpec.describe SpecPlanBuild::StateMachine do
           drained = folder(key, files: {"blocked.md" => "- **B2** \u2014 2026-08-21, CTO: the vendor feed."})
 
           expect(status).to be_satisfied_by(open)
-          expect(status.violation(drained)).to match(/names no open question/)
+          expect(status.violation(drained)).to include("names no open question")
         end
       end
     end
@@ -132,7 +132,7 @@ RSpec.describe SpecPlanBuild::StateMachine do
     it "stops a folder being Retroactive once it has been documented" do
       subject = folder(:retroactive, files: {"spec.md" => "written up"}, prs: ["Merged 🟣"])
 
-      expect(SpecPlanBuild::STATUS_BY_KEY[:retroactive].violation(subject)).to match(/already exists/)
+      expect(SpecPlanBuild::STATUS_BY_KEY[:retroactive].violation(subject)).to include("already exists")
     end
   end
 

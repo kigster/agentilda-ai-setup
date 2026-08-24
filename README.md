@@ -132,7 +132,7 @@ ______________________________________________________________________
 ```bash
 spec-plan-build create tax rule dsl          # 003.00-⚪️-tax-rule-dsl
 spec-plan-build create --after 002 k1 sync   # 002.01-⬜️-k1-sync (retroactive)
-spec-plan-build status                       # the table; exits 1 if a name lies
+spec-plan-build list-plans                       # the table; exits 1 if a name lies
 spec-plan-build resync dirs                  # folder emoji vs folder contents
 spec-plan-build resync prs                   # [NNN.MM] prefixes on PR titles
 spec-plan-build linear import --prefix TAX   # the plans, as Linear projects and issues
