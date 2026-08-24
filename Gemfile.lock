@@ -12,6 +12,9 @@ GEM
     coverage-badge (0.1.1)
     diff-lcs (1.6.2)
     dry-cli (1.4.1)
+    dry-cli-autocomplete (0.1.3)
+      dry-cli (>= 1.0)
+      dry-inflector (>= 1.0)
     dry-core (1.2.0)
       concurrent-ruby (~> 1.0)
       logger
@@ -144,6 +147,7 @@ DEPENDENCIES
   concurrent-ruby
   coverage-badge
   dry-cli
+  dry-cli-autocomplete
   dry-inflector
   dry-monads
   fuzzy-string-match
@@ -174,6 +178,7 @@ CHECKSUMS
   coverage-badge (0.1.1) sha256=f4ada4edadfa98cd99a50ab49f04ffc1af926e9f00513a063b774bd683eda131
   diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
   dry-cli (1.4.1) sha256=b8015bb76c708aa8705a36faf694973e75eeeffca39b89c8e172dc6f66a7d874
+  dry-cli-autocomplete (0.1.3) sha256=14f76447bda0000c71739b585c827dc0a0a763e30a68a8b4b2dff91f640768e4
   dry-core (1.2.0) sha256=0cc5a7da88df397f153947eeeae42e876e999c1e30900f3c536fb173854e96a1
   dry-inflector (1.3.1) sha256=7fb0c2bb04f67638f25c52e7ba39ab435d922a3a5c3cd196120f63accb682dcc
   dry-monads (1.10.0) sha256=68c90d77617c6ce88d60704fc3b233907e6320974152fe75ad947f968006ca39

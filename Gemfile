@@ -18,6 +18,7 @@ gem "tty-screen"      # screen detection utilities
 gem "tty-command"     # if we need to execute any external command
 
 # Dry-Rb Gems
+gem "dry-cli-autocomplete" # add completion
 gem "dry-cli"         # Commands and subcommands, in cli.rb
 gem "dry-inflector"   # String inflection, in ordinal.rb
 gem "dry-monads"      # Success/Failure, in creator.rb

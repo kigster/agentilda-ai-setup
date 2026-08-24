@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "dry/cli/autocomplete/command"
+
 module SpecPlanBuild
   # The command line. Everything here is a thin shell over the classes above:
   # a command parses flags, calls one object, and prints the result.
@@ -1201,5 +1203,7 @@ module SpecPlanBuild
       prefix.register "import", Linear::Import
       prefix.register "projects", Linear::Projects
     end
+
+    register "completion", ::Dry::CLI::Autocomplete::Command[::SpecPlanBuild::CLI]
   end
 end
