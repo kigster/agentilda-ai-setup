@@ -59,7 +59,7 @@ CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
 # as a shared folder. `src` holds what this repo writes itself, and reaches an
 # agent only after `install-sources` folds it into `skills/` — that is what
 # gets linked out, not the source it was built from.
-SKIP_DIRS=(bin scripts lib spec coverage docs tmp vendor node_modules config src skills-temporary)
+SKIP_DIRS=(bin scripts workflow coverage docs tmp vendor node_modules config src skills-temporary)
 
 # Folders that exist as real directories in ~/.claude and hold one link per
 # child rather than a single link for the whole folder.

@@ -39,11 +39,11 @@ just lefthook                            # run all pre-commit hooks against the 
 just docs                                # regenerate context/feature-building/spec-plan-build.md from the state machine
 ```
 
-`standard`, not `rubocop`, is the linter (see Gemfile comment: "standard is rubocop with the arguing removed"). `standardrb` ignores `skills/`, `plugins/`, `coverage/`, `tmp/` (see `.standard.yml`); `lib/` has its own `.standard.yml`.
+`standard`, not `rubocop`, is the linter (see Gemfile comment: "standard is rubocop with the arguing removed"). `standardrb` ignores `skills/`, `plugins/`, `coverage/`, `tmp/` (see `.standard.yml`). One config at the root governs the whole tree: lint runs from here so it sees `scripts/` and `workflow/` alike, with `BUNDLE_GEMFILE` pointed at the gem.
 
-`bin/` holds **Bash** executables, `scripts/` holds **Ruby** ones. The separation is deliberate: standardrb then has one directory to lint and one to ignore entirely, and neither has to be configured around the other. `.envrc` puts both on `PATH`; run `direnv allow .` after cloning or after editing `.envrc`.
+Executables sit in three places, by what they need in order to run. `bin/` holds **Bash**, `scripts/` holds the one **Ruby** executable that must work on a machine with no bundle yet, and `workflow/exe/` holds the gem's, which resolve `BUNDLE_GEMFILE` from their own location and so run the same from `PATH` as from another project's root. `.envrc` puts all three on `PATH`; run `direnv allow .` after cloning or after editing `.envrc`.
 
-The `spec-plan-build` CLI itself (`scripts/spec-plan-build`):
+The `spec-plan-build` CLI itself (`workflow/exe/spec-plan-build`):
 
 ```bash
 spec-plan-build create tax rule dsl                                 # 003.00-⚪️-tax-rule-dsl
@@ -89,12 +89,12 @@ Blocks drain by hand, one answer at a time. Whoever writes `blocked.md` **must**
 
 ### Invoking it: slash command or the binary directly
 
-Both paths run the same `scripts/spec-plan-build`. The difference is which guardrails come along.
+Both paths run the same `workflow/exe/spec-plan-build`. The difference is which guardrails come along.
 
-- **`scripts/spec-plan-build <command>` directly.** The whole tool, no Claude required. Use this for scripting, CI, or driving it from any other agent.
+- **`workflow/exe/spec-plan-build <command>` directly.** The whole tool, no Claude required. Use this for scripting, CI, or driving it from any other agent.
 - **A Claude Code slash command**, via `src/commands/*.md` (`/plan-create`, `/plan-research`, `/plan-run`, `/plan-status`, `/plan-unblock`, `/plan-resync-dirs`, `/plan-resync-prs`, `/plan-docs`, `/plan-insert`, `/plan-linear-import`). A thin wrapper around the same binary, plus the constraints that erode if left to memory. `/plan-create` won't seed a `## Research` heading or pre-write Goals. `/plan-run` insists on confirming scope, `--commit`, and parallelism first. **Prefer the slash command inside a Claude Code session.** It carries the constraints `src/commands/plan-create.md` documents in full.
 
-`skills/` and `agents/*.md` are a separate concern from the above: Claude's general skill/specialist library, not part of invoking `spec-plan-build` itself. `agents/*.md` *is* where the five specialists above are defined, plus `lando-broker`. Frontmatter `handles:`/`advances_to:` is exactly what `Agents#for_status` reads to route a plan.
+`skills/` and `workflow/agents/*.md` are a separate concern from the above: Claude's general skill/specialist library, not part of invoking `spec-plan-build` itself. `workflow/agents/*.md` *is* where the five specialists above are defined, plus `lando-broker`. Frontmatter `handles:`/`advances_to:` is exactly what `Agents#for_status` reads to route a plan.
 
 ## Architecture
 
@@ -102,9 +102,9 @@ Both paths run the same `scripts/spec-plan-build`. The difference is which guard
 
 Each feature gets one folder under `.plans/`, and the folder name *is* its state: `NNN.MM-<emoji>-<slug>`, e.g. `002.00-⭐️-tenancy-households`. A folder may not claim a phase whose file is missing. That's enforced by the state machine's guards, not by convention alone. See the workflow table above for what proves each state.
 
-### `lib/spec_plan_build/` quick file map
+### `workflow/lib/spec_plan_build/` quick file map
 
-Entry point `lib/spec_plan_build.rb` requires each component only if the file exists, so the suite stays green while the library is built out incrementally.
+Entry point `workflow/lib/spec_plan_build.rb` requires each component only if the file exists, so the suite stays green while the library is built out incrementally.
 
 - **`state_machine.rb`** and **`status.rb`**: the single source of truth for lifecycle topology (`aasm`) and what each state requires (`Status#satisfied_by?`). States live in a directory name, not a database column; a transition renames the folder. The two are read together, so a transition guard and a drift check can never disagree about what a state means.
 - **`ordinal.rb`**: the `NNN.MM` numbering scheme.
@@ -120,20 +120,20 @@ Entry point `lib/spec_plan_build.rb` requires each component only if the file ex
 
 ### Repo layout
 
-| Path                   | What it is                                                                                                                    |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `config/AGENTS.md`     | The instructions every agent reads; symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md` by `bin/setup`                       |
-| `config/sources.yml`   | Declarative list `scripts/install-sources` fills `skills/`/`plugins/` from, by cloning a repo or running an installer command |
-| `context/`             | Durable reference loaded on demand: per-language conventions, PostgreSQL, the spec-plan-build lifecycle doc, `skills-used.md` |
-| `agents/`              | The five specialist definitions from the workflow table above                                                                 |
-| `skills/`              | Claude skills, **generated** by `install-sources`, not committed. One directory per skill, symlinked into `~/.claude/skills/` |
-| `skills-mine/`         | Skills authored in this repo, **committed**. Folded into `skills/` by `install-sources`                                       |
-| `plugins/`             | External plugin bundles (e.g. `pstack`), also generated, not committed                                                        |
-| `src/commands/`        | Slash commands wrapping `spec-plan-build` (table above)                                                                       |
-| `bin/`                 | Bash executables. `setup` is a pure symlink reconciler, nothing more                                                          |
-| `scripts/`             | Ruby executables: `spec-plan-build` and `install-sources`                                                                     |
-| `lib/spec_plan_build/` | The library described above                                                                                                   |
-| `spec/`                | RSpec suite, mirroring `lib/spec_plan_build/`                                                                                 |
+| Path                            | What it is                                                                                                                    |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `config/AGENTS.md`              | The instructions every agent reads; symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md` by `bin/setup`                       |
+| `config/sources.yml`            | Declarative list `scripts/install-sources` fills `skills/`/`plugins/` from, by cloning a repo or running an installer command |
+| `context/`                      | Durable reference loaded on demand: per-language conventions, PostgreSQL, the spec-plan-build lifecycle doc, `skills-used.md` |
+| `src/skills/`                   | Skills authored in this repo, **committed**. Folded into `skills/` by `install-sources`                                       |
+| `src/commands/`                 | Slash commands wrapping `spec-plan-build` (table above)                                                                       |
+| `skills/`                       | Claude skills, **generated** by `install-sources`, not committed. One directory per skill, symlinked into `~/.claude/skills/` |
+| `plugins/`                      | External plugin bundles (e.g. `pstack`), also generated, not committed                                                        |
+| `bin/`                          | Bash executables of the installer half. `setup` is a pure symlink reconciler, nothing more                                    |
+| `scripts/`                      | `install-sources`, the one Ruby executable that has to run before `bundle install` ever has                                   |
+| `workflow/`                     | The `spec-plan-build` gem, and nothing that installs anything: `exe/`, `lib/`, `agents/`, `spec/`, its own Gemfile            |
+| `workflow/lib/spec_plan_build/` | The library described above                                                                                                   |
+| `workflow/agents/`              | The six specialist definitions from the workflow table above                                                                  |
 
 ### Vendor neutrality
 

@@ -5,7 +5,7 @@ executors:
   ruby:
     docker:
       - image: cimg/ruby:4.0.6
-    working_directory: ~/dot-agents
+    working_directory: ~/agentilda
 
 commands:
   install_packages:
@@ -24,7 +24,8 @@ commands:
   bundle_deps:
     description: >-
       Replaces `bundler-cache: true`. Same idea, spelled out: restore, install,
-      save, keyed on Gemfile.lock.
+      save, keyed on workflow/Gemfile.lock — the gem's bundle is the only one
+      this repo has, and it does not sit at the root.
     steps:
       # INQUIREX_PATH is deliberately ABSENT here, as on GitHub. It is the
       # Gemfile's opt-in for resolving the inquirex gems from sibling checkouts
@@ -32,18 +33,19 @@ commands:
       # single test runs. CI must always resolve the published gems.
       - restore_cache:
           keys:
-            - v1-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-{{ checksum "Gemfile.lock" }}
+            - v1-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-{{ checksum "workflow/Gemfile.lock" }}
             - v1-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-
       - run:
           name: Install Ruby dependencies
           command: |
+            cd workflow
             bundle config set --local path vendor/bundle
             bundle install --jobs=4 --retry=3
             bundle clean --force
       - save_cache:
-          key: v1-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-{{ checksum "Gemfile.lock" }}
+          key: v1-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-{{ checksum "workflow/Gemfile.lock" }}
           paths:
-            - vendor/bundle
+            - workflow/vendor/bundle
 
 jobs:
   linter:
@@ -56,7 +58,7 @@ jobs:
       # nothing to CircleCI's log renderer. Plain output; the offences are
       # identical.
       - run:
-          command: bundle exec standardrb
+          command: BUNDLE_GEMFILE=workflow/Gemfile bundle exec standardrb
           name: Lint code for consistent style
 
   test:
@@ -66,14 +68,14 @@ jobs:
     resource_class: medium
     docker:
       - image: cimg/ruby:4.0.6
-    working_directory: ~/dot-agents
+    working_directory: ~/agentilda
     steps:
       - checkout
       - install_packages
       - bundle_deps
       - run:
           name: Run tests
-          command: bundle exec rspec
+          command: cd workflow && bundle exec rspec
 
 workflows:
   # .github/workflows/ci.yml + lint.yml + biome.yml. They are separate files on

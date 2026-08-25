@@ -18,20 +18,18 @@ ______________________________________________________________________
 
 ## What is in here
 
-| Path                   | What it is                                                                                 |
-| :--------------------- | :----------------------------------------------------------------------------------------- |
-| `config/AGENTS.md`     | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md`   |
-| `context/`             | Durable reference an agent loads on demand: languages, databases, conventions              |
-| `agents/`              | Specialist definitions for the multi-agent harness                                         |
-| `src/commands/`        | Slash commands that wrap `spec-plan-build` with the right guardrails baked in              |
-| `skills/`              | Claude skills, **generated**, one directory per skill, symlinked into `~/.claude/skills/`  |
-| `skills-mine/`         | Skills authored in this repo (committed); folded into `skills/` by `install-sources`       |
-| `plugins/`             | External plugin bundles (e.g. `pstack`), also generated, not committed                     |
-| `config/sources.yml`   | The declarative list `scripts/install-sources` pulls `skills/` and `plugins/` from         |
-| `bin/`                 | **Bash** executables. `setup` is a pure symlink reconciler                                 |
-| `scripts/`             | **Ruby** executables: `spec-plan-build` and `install-sources`                              |
-| `lib/spec_plan_build/` | The library behind `spec-plan-build`                                                       |
-| `spec/`                | RSpec suite                                                                                |
+| Path                 | What it is                                                                                |
+| :------------------- | :---------------------------------------------------------------------------------------- |
+| `config/AGENTS.md`   | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md`  |
+| `context/`           | Durable reference an agent loads on demand: languages, databases, conventions             |
+| `src/skills/`        | Skills authored in this repo (committed); folded into `skills/` by `install-sources`      |
+| `src/commands/`      | Slash commands that wrap `spec-plan-build` with the right guardrails baked in             |
+| `skills/`            | Claude skills, **generated**, one directory per skill, symlinked into `~/.claude/skills/` |
+| `plugins/`           | External plugin bundles (e.g. `pstack`), also generated, not committed                    |
+| `config/sources.yml` | The declarative list `scripts/install-sources` pulls `skills/` and `plugins/` from        |
+| `bin/`               | **Bash** executables. `setup` is a pure symlink reconciler                                |
+| `scripts/`           | **Ruby**: `install-sources`, which runs before there is a bundle to run it in             |
+| `workflow/`          | The `spec-plan-build` gem: `exe/`, `lib/`, `agents/`, `spec/`, and its own Gemfile        |
 
 `bin` holds shell and `scripts` holds Ruby deliberately: `standardrb` then has a directory it must lint and one it can ignore entirely, and neither has to be configured around the other. `.envrc` puts both on `PATH`.
 
@@ -102,12 +100,12 @@ Blocks drain by hand, and in pieces. Answers are written into `blocked.md` as th
 
 ### How you invoke it
 
-Both paths end up running the same `scripts/spec-plan-build` binary. The question is just who's driving.
+Both paths end up running the same `workflow/exe/spec-plan-build` binary. The question is just who's driving.
 
 - **Directly, from a terminal or a script**: `spec-plan-build create …`, `spec-plan-build run --commit`, etc. (see "Day to day" below). This is the whole tool; nothing about it requires Claude.
 - **As a Claude Code slash command**, via `src/commands/*.md` (`/plan-create`, `/plan-research`, `/plan-run`, `/plan-status`, `/plan-resync-dirs`, `/plan-resync-prs`, `/plan-docs`, `/plan-insert`, `/plan-linear-import`). Each one is a thin wrapper around the same binary, plus the guardrails that erode if left to memory. `/plan-create` won't seed a `## Research` heading or write Goals ahead of the research. `/plan-run` insists you confirm scope, `--commit`, and parallelism before it runs anything.
 
-Use the slash commands inside a Claude Code session, since they carry the constraints. Use the binary directly for scripting, CI, or any other agent. `skills/` and `agents/*.md` are a separate concern: those are Claude's general skill/specialist library, not part of invoking `spec-plan-build` itself.
+Use the slash commands inside a Claude Code session, since they carry the constraints. Use the binary directly for scripting, CI, or any other agent. `skills/` and `workflow/agents/*.md` are a separate concern: those are Claude's general skill/specialist library, not part of invoking `spec-plan-build` itself.
 
 **The full conventions are generated, never hand-written:**
 
@@ -115,7 +113,7 @@ Use the slash commands inside a Claude Code session, since they carry the constr
 spec-plan-build docs -o context/feature-building/spec-plan-build.md
 ```
 
-The status vocabulary and transition table live in `lib/spec_plan_build/status.rb` and `state_machine.rb`, the numbering rules in `ordinal.rb`, and the document is derived from all three. This system previously had three hand-maintained copies of that table and they disagreed — the folder-creation script could mint statuses the reader did not recognise, and could not mint six that it required.
+The status vocabulary and transition table live in `workflow/lib/spec_plan_build/status.rb` and `state_machine.rb`, the numbering rules in `ordinal.rb`, and the document is derived from all three. This system previously had three hand-maintained copies of that table and they disagreed — the folder-creation script could mint statuses the reader did not recognise, and could not mint six that it required.
 
 ### The number is an identity
 
@@ -180,7 +178,7 @@ ______________________________________________________________________
 
 ## The multi-agent harness
 
-Specialists are defined in `agents/*.md`. The frontmatter routes them (`handles:`/`advances_to:` are exactly what `spec-plan-build run` reads to decide who takes a plan); the body is the prompt.
+Specialists are defined in `workflow/agents/*.md`. The frontmatter routes them (`handles:`/`advances_to:` are exactly what `spec-plan-build run` reads to decide who takes a plan); the body is the prompt.
 
 | Agent               | Handles | Advances to | Does                                                                |
 | :------------------ | :------ | :---------- | :------------------------------------------------------------------ |

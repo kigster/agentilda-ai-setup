@@ -4,12 +4,14 @@ require "open3"
 require "tmpdir"
 
 # `scripts/install-sources` is a standalone executable rather than a library:
+# it belongs to the installer at the root of this repo, not to the gem whose
+# suite it rides along in, which is why it reaches two directories up.
 # it has to run on a machine that has not seen `bundle install` yet. So it is
 # tested the way it is used, by running it, against throwaway git repositories
 # on disk and `INSTALL_SOURCES_ROOT` pointed at a throwaway tree. Nothing here
 # reaches the network.
 RSpec.describe "scripts/install-sources" do
-  let(:script) { File.expand_path("../scripts/install-sources", __dir__) }
+  let(:script) { File.expand_path("../../scripts/install-sources", __dir__) }
 
   # @param dir [String] where the repository goes
   # @param skills [Array<String>] one SKILL.md-rooted directory per name
