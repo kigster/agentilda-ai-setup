@@ -19,6 +19,14 @@
 # other, never both. Either is matched against the name each skill would
 # install as, so what you filter on is what you see in `skills/`.
 #
+# A `type: command` source has no repository. It runs its `install:` command
+# with the working directory inside `.sources/<name>` and then installs the
+# skills and plugin bundles that turned up there, which keeps a command
+# installer inside the same manifest, filter and prune that everything else
+# here relies on. Do not pass a global flag such as `npx skills add -g`: that
+# writes to ~/.claude/skills, where this script has no record of it and no
+# filter that reaches it.
+#
 # Deliberately dependency-free: this has to run on a machine that has not run
 # `bundle install` yet, because it is part of what makes that machine usable.
 #
@@ -28,6 +36,7 @@ require "yaml"
 require "fileutils"
 require "json"
 require "open3"
+require "shellwords"
 
 # Overridable so the suite can point a whole run at a throwaway tree. Nothing
 # else sets it; in normal use this is the repo the script lives in.
@@ -78,23 +87,122 @@ class ConfigError < StandardError; end
 SLASHED = %r{\A/(?<body>.*)/(?<flags>[imx]*)\z}m
 SLASHED_FLAGS = {"i" => Regexp::IGNORECASE, "m" => Regexp::MULTILINE, "x" => Regexp::EXTENDED}.freeze
 
+# The two things a source can hand over. Both by default: a command that
+# writes a plugin bundle and some loose skills is handing over both, and
+# silently taking half would be a surprise.
+ADOPTABLE = %w[skills plugins].freeze
+
+# Types for which `adopt:` is a real question. A `type: skills` source has
+# nothing but skills to give.
+ADOPTERS = %w[command plugin].freeze
+
+# Where a command's output is looked for, relative to the directory it ran in.
+# `npx skills add` without `-g` writes `./.claude/skills/<name>`, and a plugin
+# installer writes alongside it under `.claude/plugins/`, so this is the
+# convention rather than one tool's quirk. `path:` overrides it for a command
+# that does something else.
+COMMAND_ROOT = ".claude"
+
 # One entry from config/sources.yml.
 #
 # `include_skills` and `exclude_skills` narrow which of the skills a source
 # carries actually reach `skills/`. At most one of the two: a source that both
 # allows and denies is a question with no defensible answer.
-Source = Struct.new(:name, :type, :repo, :path, :include_skills, :exclude_skills) do
+Source = Struct.new(:name, :type, :repo, :path, :install, :adopt,
+  :include_skills, :exclude_skills, :include_plugins, :exclude_plugins) do
   def self.from_yaml(hash)
     name = hash.fetch("name")
-    include_skills = compile(hash["include_skills"], name, "include_skills")
-    exclude_skills = compile(hash["exclude_skills"], name, "exclude_skills")
+    type = hash.fetch("type")
+    skills = pair(hash, name, "skills")
+    plugins = pair(hash, name, "plugins")
 
-    if include_skills && exclude_skills
-      raise ConfigError, "#{name}: include_skills and exclude_skills are both set; a source may use one or the other"
+    if plugins.any? && !ADOPTERS.include?(type)
+      raise ConfigError, "#{name}: include_plugins and exclude_plugins mean nothing on a type: #{type} source, " \
+                         "which installs no plugin bundles"
     end
 
-    new(name:, type: hash.fetch("type"), repo: hash.fetch("repo"), path: hash["path"],
-      include_skills:, exclude_skills:)
+    new(name:, type:, repo: origin(hash, name, type), path: hash["path"],
+      install: command_for(hash, name, type), adopt: adoption(hash["adopt"], name, type),
+      include_skills: skills[:include], exclude_skills: skills[:exclude],
+      include_plugins: plugins[:include], exclude_plugins: plugins[:exclude])
+  end
+
+  # One `include_<kind>`/`exclude_<kind>` pair, compiled and checked.
+  #
+  # A source that both allows and denies the same kind is a question with no
+  # defensible answer, so the run stops rather than picking one.
+  #
+  # @param hash [Hash] the raw YAML entry
+  # @param name [String]
+  # @param kind [String] "skills" or "plugins"
+  # @return [Hash{Symbol => Regexp, nil}] with an `any?` of false when neither is set
+  def self.pair(hash, name, kind)
+    include_re = compile(hash["include_#{kind}"], name, "include_#{kind}")
+    exclude_re = compile(hash["exclude_#{kind}"], name, "exclude_#{kind}")
+
+    if include_re && exclude_re
+      raise ConfigError, "#{name}: include_#{kind} and exclude_#{kind} are both set; " \
+                         "a source may use one or the other"
+    end
+
+    filters = {include: include_re, exclude: exclude_re}
+    filters.define_singleton_method(:any?) { values.any? }
+    filters
+  end
+
+  # A source is fetched by cloning a repository or by running a command, and
+  # never by both. Naming the wrong one for the type is a typo whose quiet
+  # outcome is a key nobody reads, so it stops the run.
+  #
+  # @param hash [Hash] the raw YAML entry
+  # @param name [String]
+  # @param type [String]
+  # @return [String, nil]
+  def self.origin(hash, name, type)
+    return hash.fetch("repo") unless type == "command"
+    raise ConfigError, "#{name}: a type: command source is fetched by `install:`, so `repo:` would be ignored" if hash["repo"]
+
+    nil
+  end
+
+  # @param hash [Hash]
+  # @param name [String]
+  # @param type [String]
+  # @return [String, nil]
+  def self.command_for(hash, name, type)
+    value = hash["install"]
+    unless type == "command"
+      raise ConfigError, "#{name}: `install:` only runs on a type: command source, and this is type: #{type}" if value
+
+      return nil
+    end
+    raise ConfigError, "#{name}: type: command needs an `install:` command to run" if value.to_s.strip.empty?
+    raise ConfigError, "#{name}: install: must be a command line, got #{value.inspect}" unless value.is_a?(String)
+
+    value
+  end
+
+  # What a source is allowed to contribute. One command can write both a
+  # plugin bundle and loose skills, and wanting only one half of that is a
+  # normal thing to want, so it is a list rather than a type.
+  #
+  # @param value [String, Array<String>, nil]
+  # @param name [String]
+  # @param type [String]
+  # @return [Array<String>]
+  def self.adoption(value, name, type)
+    return ADOPTABLE.dup if value.nil?
+
+    unless ADOPTERS.include?(type)
+      raise ConfigError, "#{name}: `adopt:` means nothing on a type: #{type} source, which only ever installs skills"
+    end
+
+    list = Array(value).map(&:to_s)
+    unknown = list - ADOPTABLE
+    raise ConfigError, "#{name}: adopt: #{unknown.join(", ")} — expected #{ADOPTABLE.join(" or ")}" unless unknown.empty?
+    raise ConfigError, "#{name}: adopt: is empty — delete the source instead of asking it for nothing" if list.empty?
+
+    list
   end
 
   # @param value [String, nil] the raw YAML value
@@ -112,32 +220,76 @@ Source = Struct.new(:name, :type, :repo, :path, :include_skills, :exclude_skills
     raise ConfigError, "#{name}: #{key} is not a valid regular expression: #{e.message}"
   end
 
-  # @return [String] where this source is cloned to
+  # @return [Boolean]
+  def command? = type == "command"
+
+  # @param what [String] "skills" or "plugins"
+  # @return [Boolean]
+  def adopts?(what) = (adopt || ADOPTABLE).include?(what.to_s)
+
+  # @return [Array<String>] the command, split into argv. Split rather than
+  #   handed to a shell: a command line pasted out of a README should run as
+  #   the words it appears to be, without a stray quote or `$HOME` meaning
+  #   something.
+  def argv = Shellwords.split(install.to_s)
+
+  # @return [String] where this source is cloned to, or runs its command in
   def staging_dir = File.join(STAGING_DIR, name)
 
   # @return [String] the directory inside the clone this source actually installs from
-  def content_dir = path ? File.join(staging_dir, path) : staging_dir
+  def content_dir
+    return File.join(staging_dir, path) if path
 
-  # Matched against the name the skill would install as, `skills/<name>`, and
-  # not against its path inside the source. A category tree is one source's
-  # filing decision; the installed name is the thing you go looking for, so it
-  # is the thing you filter on.
+    command? ? File.join(staging_dir, COMMAND_ROOT) : staging_dir
+  end
+
+  # @return [String] where this source's loose skills are
+  def skills_root = command? ? File.join(content_dir, "skills") : content_dir
+
+  # @return [String] where this source's plugin bundles are
+  def plugins_root = File.join(content_dir, "plugins")
+
+  # Matched against the name the thing would install as, `skills/<name>` or
+  # `plugins/<name>`, and not against its path inside the source. A category
+  # tree is one source's filing decision; the installed name is the thing you
+  # go looking for, so it is the thing you filter on.
   #
-  # @param skill_name [String]
+  # @param kind [String] "skills" or "plugins"
+  # @param installed_name [String]
   # @return [Boolean]
-  def wants_skill?(skill_name)
-    return include_skills.match?(skill_name) if include_skills
-    return !exclude_skills.match?(skill_name) if exclude_skills
+  def wants?(kind, installed_name)
+    include_re, exclude_re = filters_for(kind)
+    return include_re.match?(installed_name) if include_re
+    return !exclude_re.match?(installed_name) if exclude_re
 
     true
   end
 
-  # @return [String, nil] how this source's filter reads in the output
-  def filter_summary
-    return "include_skills /#{include_skills.source}/" if include_skills
-    return "exclude_skills /#{exclude_skills.source}/" if exclude_skills
+  # @param kind [String]
+  # @return [Array(Regexp, Regexp)] the include and exclude for that kind
+  def filters_for(kind)
+    (kind.to_s == "plugins") ? [include_plugins, exclude_plugins] : [include_skills, exclude_skills]
+  end
+
+  # @param kind [String] "skills" or "plugins"
+  # @return [String, nil] how this source's filter for that kind reads in the output
+  def filter_summary(kind = "skills")
+    include_re, exclude_re = filters_for(kind)
+    return "include_#{kind} /#{include_re.source}/" if include_re
+    return "exclude_#{kind} /#{exclude_re.source}/" if exclude_re
 
     nil
+  end
+
+  # @return [Array<String>] every filter this source carries, for the listing
+  def filter_summaries = %w[skills plugins].filter_map { |kind| filter_summary(kind) }
+
+  # @return [String, nil] said only when it is not the default, since "adopt
+  #   whatever you find" is what every source without the key does
+  def adopt_summary
+    return nil if adopt.nil? || adopt.sort == ADOPTABLE.sort
+
+    "adopt #{adopt.join(", ")}"
   end
 end
 
@@ -192,6 +344,69 @@ def clone_or_update(source, dry_run:)
     FileUtils.mkdir_p(File.dirname(source.staging_dir))
     run_git("clone", "--quiet", source.repo, source.staging_dir, name: source.name, verb: "clone")
   end
+end
+
+# A command source is fetched by running its command rather than by cloning.
+#
+# It runs once. `npx` re-downloads its package on every invocation and
+# `install-sources` is a script people run several times a day, so a source
+# whose output is already sitting in `.sources` is left alone. `-f` wipes
+# `.sources` before any of this happens, which is what makes it the way to run
+# the command again.
+#
+# The command runs with its working directory inside `.sources/<name>`, which
+# is the whole reason this stays inside the model the rest of the script is
+# built on. `npx skills add … -g` would write into `~/.claude/skills` instead,
+# where there is no manifest entry to record it, no filter to narrow it and no
+# prune to take it back when you delete the line from sources.yml.
+#
+# @param source [Source]
+# @param dry_run [Boolean]
+# @return [Boolean] whether the output is there to install from
+def run_install(source, dry_run:)
+  if File.directory?(source.content_dir) && !Dir.empty?(source.content_dir)
+    note("#{source.name}: already installed — `-f` runs it again")
+    return true
+  end
+
+  note("#{source.name}: $ #{source.install}")
+  return true if dry_run
+
+  argv = source.argv
+  if argv.empty?
+    bad("#{source.name}: install: is empty")
+    return false
+  end
+
+  FileUtils.mkdir_p(source.staging_dir)
+  stdout, stderr, status = Open3.capture3(*argv, chdir: source.staging_dir)
+  return true if status.success?
+
+  bad("#{source.name}: #{argv.first} exited #{status.exitstatus}#{said(stderr, stdout)}")
+  false
+rescue Errno::ENOENT
+  bad("#{source.name}: #{argv.first} is not on PATH")
+  false
+end
+
+# The last thing a failed command said, whichever stream it said it on. A
+# command that fails is usually explaining itself on one of the two, and
+# reporting only that it exited 1 wastes the explanation.
+#
+# @param streams [Array<String>]
+# @return [String] ready to append to a message, or empty
+def said(*streams)
+  line = streams.filter_map { |stream| stream.to_s.lines.map(&:strip).reject(&:empty?).last }.first
+  line ? " — #{line}" : ""
+end
+
+# @param source [Source]
+# @param dry_run [Boolean]
+# @return [Boolean] whether this source is ready to install from
+def fetch(source, dry_run:)
+  return run_install(source, dry_run:) if source.command?
+
+  clone_or_update(source, dry_run:)
 end
 
 # @param dir [String]
@@ -300,18 +515,19 @@ end
 # dropped it, otherwise a filter is just an unexplained gap in `skills/`.
 #
 # @param source [Source]
-# @param skill_dirs [Array<String>] every skill directory found in the source
+# @param dirs [Array<String>] every directory of that kind found in the source
+# @param kind [String] "skills" or "plugins"
 # @return [Array<String>] the ones the filter admits
-def filter_skills(source, skill_dirs)
-  summary = source.filter_summary
-  return skill_dirs unless summary
+def filter_dirs(source, dirs, kind)
+  summary = source.filter_summary(kind)
+  return dirs unless summary
 
-  kept, dropped = skill_dirs.partition { |dir| source.wants_skill?(File.basename(dir)) }
+  kept, dropped = dirs.partition { |dir| source.wants?(kind, File.basename(dir)) }
   unless dropped.empty?
     names = dropped.map { |dir| File.basename(dir) }.sort
     shown = names.first(10).join(", ")
     shown += " (+#{names.size - 10} more)" if names.size > 10
-    note("#{source.name}: #{summary} skipped #{dropped.size} of #{skill_dirs.size}: #{shown}")
+    note("#{source.name}: #{summary} skipped #{dropped.size} of #{dirs.size}: #{shown}")
   end
   kept
 end
@@ -333,14 +549,29 @@ def install_skills_source(source, manifest, dry_run:, force:)
   found = find_skill_dirs(source.content_dir)
   note("#{source.name}: no SKILL.md found anywhere under #{source.path || "."}") if found.empty?
 
-  filter_skills(source, found).each do |skill_dir|
+  link_skills(source, found, manifest, dry_run:, force:)
+  true
+end
+
+# Every skill this run installs goes through here, whatever kind of source it
+# came from, so the filter and the manifest owner cannot be applied in one
+# path and forgotten in another.
+#
+# @param source [Source]
+# @param skill_dirs [Array<String>]
+# @param manifest [Hash]
+# @param dry_run [Boolean]
+# @param force [Boolean]
+# @param label [String] what the line says the skill came from
+# @return [void]
+def link_skills(source, skill_dirs, manifest, dry_run:, force:, label: nil)
+  filter_dirs(source, skill_dirs, "skills").each do |skill_dir|
     name = File.basename(skill_dir)
     dest = File.join(SKILLS_DIR, name)
-    if link(skill_dir, dest, owner: source.name, manifest:, dry_run:, force:)
-      ok("skills/#{name} <- #{source.name}")
-    end
+    next unless link(skill_dir, dest, owner: source.name, manifest:, dry_run:, force:)
+
+    ok("skills/#{name} <- #{source.name}#{" (#{label})" if label}")
   end
-  true
 end
 
 # A plugin is installed as one copy — not a symlink into `.sources`, which
@@ -349,9 +580,11 @@ end
 # are still just skills, reachable without knowing which plugin they came
 # from.
 #
-# `include_skills`/`exclude_skills` govern that fan-out, not the copy. The
-# bundle under `plugins/` stays whole because it is one unit with its own
+# `include_skills`/`exclude_skills` govern that fan-out, and
+# `include_plugins`/`exclude_plugins` govern the copy, but neither ever
+# reaches inside a bundle: it stays whole because it is one unit with its own
 # manifest, and half a plugin is not a smaller plugin.
+
 #
 # @param source [Source]
 # @param manifest [Hash]
@@ -367,25 +600,81 @@ def install_plugin_source(source, manifest, dry_run:, force:)
     return false
   end
 
-  dest = File.join(PLUGINS_DIR, source.name)
-  note("#{source.name}: installing plugin -> plugins/#{source.name}")
+  install_bundle(source.content_dir, source.name, source, manifest, dry_run:, force:)
+  true
+end
+
+# One bundle, copied whole into `plugins/<name>`, and its own skills fanned
+# out afterwards if this source adopts skills as well.
+#
+# A command source can write several bundles at once, which is why this takes
+# the directory and the name rather than reading both off the source.
+#
+# @param bundle_dir [String] the bundle as it sits in .sources
+# @param name [String] what it installs as
+# @param source [Source] whose filter and manifest owner apply
+# @param manifest [Hash]
+# @param dry_run [Boolean]
+# @param force [Boolean]
+# @return [void]
+def install_bundle(bundle_dir, name, source, manifest, dry_run:, force:)
+  unless source.wants?("plugins", name)
+    note("#{source.name}: #{source.filter_summary("plugins")} skipped plugins/#{name}")
+    return
+  end
+
+  dest = File.join(PLUGINS_DIR, name)
+  note("#{source.name}: installing plugin -> plugins/#{name}")
   unless dry_run
     FileUtils.rm_rf(dest)
     FileUtils.mkdir_p(File.dirname(dest))
-    FileUtils.cp_r(source.content_dir, dest)
+    FileUtils.cp_r(bundle_dir, dest)
   end
-  ok("plugins/#{source.name}")
+  ok("plugins/#{name}")
 
-  skills_root = dry_run ? File.join(source.content_dir, "skills") : File.join(dest, "skills")
-  return true unless File.directory?(skills_root)
+  return unless source.adopts?("skills")
 
-  filter_skills(source, find_skill_dirs(skills_root)).each do |skill_dir|
-    name = File.basename(skill_dir)
-    skill_dest = File.join(SKILLS_DIR, name)
-    if link(skill_dir, skill_dest, owner: source.name, manifest:, dry_run:, force:)
-      ok("skills/#{name} <- #{source.name} (plugin)")
+  skills_root = dry_run ? File.join(bundle_dir, "skills") : File.join(dest, "skills")
+  return unless File.directory?(skills_root)
+
+  link_skills(source, find_skill_dirs(skills_root), manifest, dry_run:, force:, label: "plugin")
+end
+
+# What a command wrote, adopted.
+#
+# The command has already run by the time this is called, so from here on a
+# command source is an ordinary directory of skills and bundles. It is
+# reconciled and pruned like any other source, which is the entire point of
+# making the command run inside `.sources` rather than wherever it would
+# rather write.
+#
+# @param source [Source]
+# @param manifest [Hash]
+# @param dry_run [Boolean]
+# @param force [Boolean]
+# @return [Boolean] whether the output was there to enumerate, and so can be pruned against
+def install_command_source(source, manifest, dry_run:, force:)
+  unless File.directory?(source.content_dir)
+    short = source.content_dir.sub("#{ROOT}/", "")
+    if dry_run
+      note("#{source.name}: would install whatever the command writes into #{short}")
+    else
+      bad("#{source.name}: the command wrote nothing to #{short} — it may need `-g` dropped, or `path:` set")
+    end
+    return false
+  end
+
+  if source.adopts?("skills") && File.directory?(source.skills_root)
+    link_skills(source, find_skill_dirs(source.skills_root), manifest, dry_run:, force:, label: "command")
+  end
+
+  if source.adopts?("plugins") && File.directory?(source.plugins_root)
+    Dir.children(source.plugins_root).sort.reject { |n| n.start_with?(".") }.each do |name|
+      bundle = File.join(source.plugins_root, name)
+      install_bundle(bundle, name, source, manifest, dry_run:, force:) if File.directory?(bundle)
     end
   end
+
   true
 end
 
@@ -439,6 +728,19 @@ end
 
 # ---------------------------------------------------------------- verbs --
 
+# @param source [Source]
+# @return [String] where this source comes from, as the listing says it
+def origin_of(source) = source.command? ? "$ #{source.install}" : source.repo.to_s
+
+# @param source [Source]
+# @return [String] how far along it is. A cloned repo can say which commit it
+#   is on; a command can only say whether it has left anything behind.
+def state_of(source)
+  return File.directory?(source.content_dir) ? "installed" : "not run" if source.command?
+
+  sha_of(source.staging_dir)&.slice(0, 8) || "not cloned"
+end
+
 def cmd_list
   sources = load_sources
   manifest = load_manifest
@@ -448,10 +750,9 @@ def cmd_list
     note("none — add one to #{SOURCES_FILE.sub("#{ROOT}/", "")}")
   else
     sources.each do |s|
-      sha = sha_of(s.staging_dir)
-      state = sha ? sha[0, 8].to_s : "not cloned"
-      say("  #{s.name.ljust(14)} #{s.type.ljust(7)} #{s.repo}  [#{state}]")
-      say("  #{" ".ljust(14)} #{paint(s.filter_summary, 2)}") if s.filter_summary
+      say("  #{s.name.ljust(14)} #{s.type.ljust(7)} #{origin_of(s)}  [#{state_of(s)}]")
+      s.filter_summaries.each { |summary| say("  #{" ".ljust(14)} #{paint(summary, 2)}") }
+      say("  #{" ".ljust(14)} #{paint(s.adopt_summary, 2)}") if s.adopt_summary
     end
   end
 
@@ -494,13 +795,14 @@ def cmd_install(force:, dry_run:)
   sources.each do |source|
     say("")
     say(paint(source.name, 1))
-    next unless clone_or_update(source, dry_run:)
+    next unless fetch(source, dry_run:)
 
     enumerated = case source.type
     when "skills" then install_skills_source(source, manifest, dry_run:, force:)
     when "plugin" then install_plugin_source(source, manifest, dry_run:, force:)
+    when "command" then install_command_source(source, manifest, dry_run:, force:)
     else
-      bad("#{source.name}: unknown type #{source.type.inspect} — expected skills or plugin")
+      bad("#{source.name}: unknown type #{source.type.inspect} — expected skills, plugin or command")
       false
     end
     reconciled << source.name if enumerated
@@ -526,6 +828,10 @@ def usage
     A source in config/sources.yml may narrow itself with `include_skills: /re/`
     or `exclude_skills: /re/`, one or the other, matched against the name each
     skill would install as.
+
+    A `type: command` source runs `install:` inside .sources/<name> instead of
+    cloning, then installs the skills and plugin bundles it wrote there.
+    `adopt: [skills, plugins]` narrows which of the two it contributes.
   USAGE
 end
 

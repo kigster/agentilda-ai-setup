@@ -1,6 +1,7 @@
 ---
 description: "Create a pull request from the current branch, titled to match its plan"
 allowed-tools:
+  - Bash(~/.agents/create-plan-folder [-D <dir>] <status> <topic words...>)
   - Bash(~/.agents/scripts/spec-plan-build *)
   - Bash(./.agents/bin/create-branch-name)
   - Bash(spec-plan-build *)

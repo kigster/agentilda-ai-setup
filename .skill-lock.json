@@ -1326,6 +1326,15 @@
       "skillFolderHash": "05f9a6b7d375d78554319bba36604c2f2eb35306",
       "installedAt": "2026-08-01T21:12:18.391Z",
       "updatedAt": "2026-08-01T21:12:18.391Z"
+    },
+    "lavish": {
+      "source": "kunchenguid/lavish-axi",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/kunchenguid/lavish-axi.git",
+      "skillPath": "skills/lavish/SKILL.md",
+      "skillFolderHash": "1a478558b7c2a681e9e8ef97b99968c411f6f905",
+      "installedAt": "2026-08-24T22:20:26.604Z",
+      "updatedAt": "2026-08-24T22:20:26.604Z"
     }
   },
   "dismissed": {
@@ -1348,6 +1357,8 @@
     "claude-code",
     "pi",
     "hermes-agent",
-    "tabnine-cli"
+    "tabnine-cli",
+    "zencoder",
+    "grok"
   ]
 }

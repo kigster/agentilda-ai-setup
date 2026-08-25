@@ -4,9 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Skills to Activate Upon Start
 
+<<<<<<< Updated upstream
  * /unslop
  * /superpowers:brainstorm
  * /writing-plans 
+||||||| Stash base
+- /unslop
+- /superpowers:brainstorm
+- /writing-plans
+=======
+- /unslop
+
+## Skills to Activate when Writing Plans, Specs or Coding
+
+- /superpowers:brainstorm
+- /writing-plans
+>>>>>>> Stashed changes
 
 ## What this repository is
 
@@ -116,6 +129,7 @@ Entry point `lib/spec_plan_build.rb` requires each component only if the file ex
 
 ### Repo layout
 
+<<<<<<< Updated upstream
 | Path                   | What it is                                                                                                                     |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `config/AGENTS.md`     | The instructions every agent reads; symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md` by `bin/setup`                        |
@@ -130,6 +144,37 @@ Entry point `lib/spec_plan_build.rb` requires each component only if the file ex
 | `scripts/`             | Ruby executables: `spec-plan-build` and `install-sources`                                                                      |
 | `lib/spec_plan_build/` | The library described above                                                                                                    |
 | `spec/`                | RSpec suite, mirroring `lib/spec_plan_build/`                                                                                  |
+||||||| Stash base
+| Path                   | What it is                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `config/AGENTS.md`     | The instructions every agent reads; symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md` by `bin/setup`                       |
+| `config/sources.yml`   | Declarative list `scripts/install-sources` clones `skills/`/`plugins/` content from                                           |
+| `context/`             | Durable reference loaded on demand: per-language conventions, PostgreSQL, the spec-plan-build lifecycle doc, `skills-used.md` |
+| `agents/`              | The five specialist definitions from the workflow table above                                                                 |
+| `skills/`              | Claude skills, **generated** by `install-sources`, not committed. One directory per skill, symlinked into `~/.claude/skills/` |
+| `skills-mine/`         | Skills authored in this repo, **committed**. Folded into `skills/` by `install-sources`                                       |
+| `plugins/`             | External plugin bundles (e.g. `pstack`), also generated, not committed                                                        |
+| `commands/`            | Slash commands wrapping `spec-plan-build` (table above)                                                                       |
+| `bin/`                 | Bash executables. `setup` is a pure symlink reconciler, nothing more                                                          |
+| `scripts/`             | Ruby executables: `spec-plan-build` and `install-sources`                                                                     |
+| `lib/spec_plan_build/` | The library described above                                                                                                   |
+| `spec/`                | RSpec suite, mirroring `lib/spec_plan_build/`                                                                                 |
+=======
+| Path                   | What it is                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `config/AGENTS.md`     | The instructions every agent reads; symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md` by `bin/setup`                       |
+| `config/sources.yml`   | Declarative list `scripts/install-sources` fills `skills/`/`plugins/` from, by cloning a repo or running an installer command |
+| `context/`             | Durable reference loaded on demand: per-language conventions, PostgreSQL, the spec-plan-build lifecycle doc, `skills-used.md` |
+| `agents/`              | The five specialist definitions from the workflow table above                                                                 |
+| `skills/`              | Claude skills, **generated** by `install-sources`, not committed. One directory per skill, symlinked into `~/.claude/skills/` |
+| `skills-mine/`         | Skills authored in this repo, **committed**. Folded into `skills/` by `install-sources`                                       |
+| `plugins/`             | External plugin bundles (e.g. `pstack`), also generated, not committed                                                        |
+| `commands/`            | Slash commands wrapping `spec-plan-build` (table above)                                                                       |
+| `bin/`                 | Bash executables. `setup` is a pure symlink reconciler, nothing more                                                          |
+| `scripts/`             | Ruby executables: `spec-plan-build` and `install-sources`                                                                     |
+| `lib/spec_plan_build/` | The library described above                                                                                                   |
+| `spec/`                | RSpec suite, mirroring `lib/spec_plan_build/`                                                                                 |
+>>>>>>> Stashed changes
 
 ### Vendor neutrality
 
@@ -143,7 +188,8 @@ Entry point `lib/spec_plan_build.rb` requires each component only if the file ex
 - **`resync` never guesses across ambiguity**: `resync prs` only edits a PR title when the diff touches exactly one plan; anything ambiguous is reported, never edited, even with `--commit`.
 - **Real names/emails**: never use real people's names or emails as placeholders anywhere in this repo (code, docs, specs, fixtures). Use `Alan Turing <alan.turing@manchester.edu>` as the canonical example person. See `config/AGENTS.md` for the specific list of names/emails that must never appear.
 - **Commit messages**: imperative mood, ≤50-char subject, no period; body only for non-trivial changes, explaining what/why, ≤30 lines, atomic (one conceptual change per commit).
+- **No co-author trailers**: never add `Co-Authored-By:` or `Claude-Session:` lines to a commit message or a pull request body. The author of a commit is the person who ran the session, and a trailer naming the model adds nothing a reader wants.
 - **Writing prose in this repo**: apply `skills/unslop/SKILL.md`'s rules as you write, not as a cleanup pass after. No em dashes, no AI-tell phrasing (puffery, hedging, inline-header-colon lists), active voice, plain words over fancy synonyms. This applies going forward; prose predating this rule was not rewritten to match.
 - **Writing a plan's `spec.md`**: the four headings `create` scaffolds are the whole of what belongs there before a specialist agent touches it. Never add Goals, Non-Goals, or a conclusion. That is `yoda-writer`'s chapter, written after research; pre-writing it decides the answer before the research runs. Never write a `## Research` heading, not even empty. It is the 🔎 Researched state transition, so seeding it flips the folder's state and the agent loop skips `leah-researcher` entirely. Full constraints, and the shape for creating several plans at once (batch the creates, verify each with `status`, one `run --commit --plan NNN,...` handoff, never one `run` per `create`), are in `commands/plan-create.md`.
-- **`skills/` and `plugins/` are regenerated, not hand-maintained**: add a repo to `config/sources.yml` and run `scripts/install-sources` rather than installing a skill by hand into either directory. Anything installed outside that path has no record of where it came from, which is the exact problem the script exists to solve.
-- **Narrowing a source**: a source in `config/sources.yml` takes `include_skills: /re/` **or** `exclude_skills: /re/`, never both, matched against the name each skill installs as (`skills/<name>`), not its path inside the source. Tightening one unlinks what the previous run installed and no longer installs, so `skills/` converges rather than accumulating; `bin/setup` sweeps the dangling `~/.claude/skills` links that leaves behind. For a `type: plugin` the filter governs the fan-out into `skills/`, not the bundle copied into `plugins/`.
+- **`skills/` and `plugins/` are regenerated, not hand-maintained**: add a source to `config/sources.yml` and run `scripts/install-sources` rather than installing a skill by hand into either directory. Anything installed outside that path has no record of where it came from, which is the exact problem the script exists to solve. A source that has no repository to clone, such as one installed by `npx skills add`, is `type: command` with an `install:` command line. That command runs with its working directory inside `.sources/<name>` and whatever it writes to `.claude/skills` and `.claude/plugins` there is installed the same way a clone's contents are. Never give it a global flag: `npx skills add … -g` writes to `~/.claude/skills`, where no manifest records it and no filter reaches it.
+- **Narrowing a source**: a source in `config/sources.yml` takes `include_skills: /re/` **or** `exclude_skills: /re/`, never both, and the same pair for `_plugins`, matched against the name each thing installs as (`skills/<name>`, `plugins/<name>`), not its path inside the source. Tightening one unlinks what the previous run installed and no longer installs, so `skills/` converges rather than accumulating; `bin/setup` sweeps the dangling `~/.claude/skills` links that leaves behind. The skills pair governs the fan-out into `skills/` and the plugins pair governs which bundles get copied, and neither reaches inside a bundle. A `type: plugin` or `type: command` source also takes `adopt: [skills, plugins]`, which is how you take a command's skills and leave its bundle, or the other way round.
