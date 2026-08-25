@@ -1,4 +1,7 @@
-# External skill and plugin sources, pulled by `scripts/install-sources`.
+# What this machine should have: which coding agents, and which skills and
+# plugins to give them. Copy to configuration.yml, which is git-ignored and
+# is the file `scripts/install-sources` actually reads. A first run does the
+# copy for you, then stops so you can read it before it installs anything.
 #
 # Add a repo here instead of installing it by hand: `scripts/install-sources`
 # clones it into `.sources/<name>` (gitignored, kept for `git pull` reuse and
@@ -68,6 +71,37 @@
 # manifest, and half a plugin is not a smaller plugin. On a one-bundle
 # `type: plugin` source, `exclude_plugins` and `adopt: skills` say the same
 # thing, which is take its skills and leave the bundle.
+# The coding agents themselves. Each `installer:` is a vendor's own line,
+# verbatim from their install page, so unlike a source's `install:` it does
+# go through a shell — that is what a `curl … | sh` is. The difference is
+# deliberate: a source's command runs on every sync, for anyone who clones
+# this repo, while an agent installer runs only when somebody asks for it by
+# name, and never as part of a routine sync.
+#
+# An agent already on PATH is left alone.
+#
+#   scripts/install-sources agents            # what is configured, and what is installed
+#   scripts/install-sources agents install    # install the ones that are missing
+#
+# This list is also what `agents:` on a source below is matched against: a
+# source for an agent that is neither installed nor listed here is skipped,
+# and said so, rather than installing skills nothing will ever read.
+agents:
+  - name: claude
+    installer: curl -fsSL https://claude.ai/install.sh | bash
+  - name: pi
+    installer: curl -fsSL https://pi.dev/install.sh | sh
+  - name: grok
+    installer: curl -fsSL https://x.ai/cli/install.sh | bash
+  - name: codex
+    installer: curl -fsSL https://chatgpt.com/codex/install.sh | sh
+  - name: kiro
+    installer: curl -fsSL https://cli.kiro.dev/install | bash
+  - name: opencode
+    installer: curl -fsSL https://opencode.ai/install | bash
+  - name: cursor
+    installer: curl https://cursor.com/install -fsS | bash
+
 sources:
   - name: mattpocock
     type: skills

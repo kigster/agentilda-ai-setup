@@ -37,8 +37,14 @@ RSpec.describe "scripts/install-sources" do
   # @param sources [Array<Hash>] the `sources:` list, written as YAML
   # @return [void]
   def write_config(sources)
-    FileUtils.mkdir_p(File.join(root, "config"))
-    File.write(File.join(root, "config", "sources.yml"), YAML.dump("sources" => sources))
+    File.write(File.join(root, "configuration.yml"), YAML.dump("sources" => sources))
+  end
+
+  # @return [String] the path it wrote
+  def write_example(sources)
+    File.join(root, "configuration.example.yml").tap do |path|
+      File.write(path, YAML.dump("sources" => sources))
+    end
   end
 
   # Runs under RUBYOPT=-W0 deliberately. That silences Kernel#warn, so a script
@@ -492,6 +498,110 @@ RSpec.describe "scripts/install-sources" do
       refuses({"name" => "cmd", "type" => "command", "install" => "true",
                "include_plugins" => "/x/", "exclude_plugins" => "/y/"},
         "include_plugins and exclude_plugins are both set")
+    end
+  end
+  # `install` here never has a terminal: Open3 gives the child a pipe. That is
+  # the same shape as cron, CI or an agent harness, and the branch that matters
+  # most, because it is the one where nobody is watching.
+  describe "a first run with no configuration.yml" do
+    it "seeds one from the example, and installs nothing until it has been read" do
+      write_example([{"name" => "up", "type" => "skills", "repo" => "/nowhere", "path" => "skills"}])
+
+      output, status = install
+      aggregate_failures do
+        expect(status).to be_success
+        expect(output).to include("seeded configuration.yml")
+        expect(File.file?(File.join(root, "configuration.yml"))).to be(true)
+        expect(File.exist?(File.join(root, "skills"))).to be(false)
+      end
+    end
+
+    it "installs on the next run, now that the file is there" do
+      repo = upstream(File.join(tmp, "up"), %w[alpha])
+      write_example([{"name" => "up", "type" => "skills", "repo" => repo, "path" => "skills"}])
+
+      install
+      _output, status = install
+
+      aggregate_failures do
+        expect(status).to be_success
+        expect(installed_skills).to eq(%w[alpha])
+      end
+    end
+
+    it "says so when there is no example to seed from either" do
+      output, status = install
+      aggregate_failures do
+        expect(status.exitstatus).to eq(78)
+        expect(output).to include("no configuration.yml")
+      end
+    end
+  end
+  # `sh` stands in for an installed agent: every machine that can run this
+  # suite has one on PATH, and none has an executable called
+  # `definitely-not-an-agent`, so neither case needs PATH rearranged under it.
+  describe "agents" do
+    def write_agents(agents)
+      File.write(File.join(root, "configuration.yml"), YAML.dump("agents" => agents))
+    end
+
+    it "says where it found an agent that is already installed" do
+      write_agents([{"name" => "sh"}])
+
+      output, status = install("agents")
+      aggregate_failures do
+        expect(status).to be_success
+        expect(output).to match(%r{/sh\b})
+      end
+    end
+
+    it "shows the command it would run for one that is missing" do
+      write_agents([{"name" => "definitely-not-an-agent", "installer" => "curl https://example.com | sh"}])
+
+      output, _status = install("agents")
+      expect(output).to include("not installed").and include("curl https://example.com | sh")
+    end
+
+    it "says so when a missing agent has no installer to run" do
+      write_agents([{"name" => "definitely-not-an-agent"}])
+
+      expect(install("agents").first).to include("no installer:")
+    end
+
+    it "names the command rather than running it under --dry-run" do
+      write_agents([{"name" => "definitely-not-an-agent", "installer" => "exit 3"}])
+
+      output, status = install("-n", "agents", "install")
+      aggregate_failures do
+        expect(status).to be_success
+        expect(output).to include("would run: exit 3")
+      end
+    end
+
+    it "reports an installer that failed" do
+      write_agents([{"name" => "definitely-not-an-agent", "installer" => "exit 3"}])
+
+      expect(install("agents", "install").first).to include("exited 3")
+    end
+
+    it "refuses a name that is not on the list" do
+      write_agents([{"name" => "sh"}])
+
+      output, status = install("agents", "install", "nosuch")
+      aggregate_failures do
+        expect(status.exitstatus).to eq(78)
+        expect(output).to include("not listed under agents: nosuch")
+      end
+    end
+
+    it "refuses an entry with no name" do
+      write_agents([{"installer" => "true"}])
+
+      output, status = install("agents")
+      aggregate_failures do
+        expect(status.exitstatus).to eq(78)
+        expect(output).to include("has no name")
+      end
     end
   end
 end

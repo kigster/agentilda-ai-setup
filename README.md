@@ -18,22 +18,22 @@ ______________________________________________________________________
 
 ## What is in here
 
-| Path                 | What it is                                                                                |
-| :------------------- | :---------------------------------------------------------------------------------------- |
-| `config/AGENTS.md`   | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md`  |
-| `context/`           | Durable reference an agent loads on demand: languages, databases, conventions             |
-| `src/skills/`        | Skills authored in this repo (committed); folded into `skills/` by `install-sources`      |
-| `src/commands/`      | Slash commands that wrap `agentilda` with the right guardrails baked in                   |
-| `skills/`            | Claude skills, **generated**, one directory per skill, symlinked into `~/.claude/skills/` |
-| `plugins/`           | External plugin bundles (e.g. `pstack`), also generated, not committed                    |
-| `config/sources.yml` | The declarative list `scripts/install-sources` pulls `skills/` and `plugins/` from        |
-| `bin/`               | **Bash** executables. `setup` is a pure symlink reconciler                                |
-| `scripts/`           | **Ruby**: `install-sources`, which runs before there is a bundle to run it in             |
-| `workflow/`          | The `agentilda` gem: `exe/`, `lib/`, `agents/`, `spec/`, and its own Gemfile              |
+| Path                        | What it is                                                                                                                         |
+| :-------------------------- | :--------------------------------------------------------------------------------------------------------------------------------- |
+| `config/AGENTS.md`          | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md`                                           |
+| `context/`                  | Durable reference an agent loads on demand: languages, databases, conventions                                                      |
+| `src/skills/`               | Skills authored in this repo (committed); folded into `skills/` by `install-sources`                                               |
+| `src/commands/`             | Slash commands that wrap `agentilda` with the right guardrails baked in                                                            |
+| `skills/`                   | Claude skills, **generated**, one directory per skill, symlinked into `~/.claude/skills/`                                          |
+| `plugins/`                  | External plugin bundles (e.g. `pstack`), also generated, not committed                                                             |
+| `configuration.example.yml` | Committed template for the git-ignored `configuration.yml`, the list `scripts/install-sources` pulls `skills/` and `plugins/` from |
+| `bin/`                      | **Bash** executables. `setup` is a pure symlink reconciler                                                                         |
+| `scripts/`                  | **Ruby**: `install-sources`, which runs before there is a bundle to run it in                                                      |
+| `workflow/`                 | The `agentilda` gem: `exe/`, `lib/`, `agents/`, `spec/`, and its own Gemfile                                                       |
 
 `bin` holds shell and `scripts` holds Ruby deliberately: `standardrb` then has a directory it must lint and one it can ignore entirely, and neither has to be configured around the other. `.envrc` puts both on `PATH`.
 
-`skills/` and `plugins/` are **not committed**. Both are entirely regenerable from `config/sources.yml` plus `skills-mine/` (which is committed, since it's this repo's own work). A skill that went stale with no way to tell where it came from was the exact problem `install-sources` exists to solve:
+`skills/` and `plugins/` are **not committed**. Both are entirely regenerable from `configuration.yml` plus `skills-mine/` (which is committed, since it's this repo's own work). A skill that went stale with no way to tell where it came from was the exact problem `install-sources` exists to solve:
 
 ```bash
 scripts/install-sources          # clone what's missing, update the rest
@@ -41,7 +41,7 @@ scripts/install-sources -f       # wipe and re-clone every source fresh
 scripts/install-sources list     # what's configured, and what's installed from where
 ```
 
-Add a repo to `config/sources.yml` instead of installing something by hand. `type: skills` treats every `SKILL.md`-rooted directory found (at any depth) as its own skill; `type: plugin` installs the whole thing into `plugins/<name>` and, if it carries its own `skills/`, fans those out individually too.
+Add a repo to `configuration.yml` instead of installing something by hand. `type: skills` treats every `SKILL.md`-rooted directory found (at any depth) as its own skill; `type: plugin` installs the whole thing into `plugins/<name>` and, if it carries its own `skills/`, fans those out individually too.
 
 A source that carries more than you want narrows itself with one regular expression, matched against the name each skill installs as:
 
@@ -53,7 +53,7 @@ A source that carries more than you want narrows itself with one regular express
     include_skills: /\A(architect|unslop|why)\z/   # or exclude_skills, never both
 ```
 
-Tightening a filter takes skills back as well as adding them: the next run unlinks whatever it installed last time and no longer installs, so `skills/` converges on what `sources.yml` says. `bin/setup` then sweeps the matching dangling links out of `~/.claude/skills`.
+Tightening a filter takes skills back as well as adding them: the next run unlinks whatever it installed last time and no longer installs, so `skills/` converges on what `configuration.yml` says. `bin/setup` then sweeps the matching dangling links out of `~/.claude/skills`.
 
 ### Vendor neutrality
 
