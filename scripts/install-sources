@@ -113,8 +113,14 @@ COMMAND_ROOT = ".claude"
 # `include_skills` and `exclude_skills` narrow which of the skills a source
 # carries actually reach `skills/`. At most one of the two: a source that both
 # allows and denies is a question with no defensible answer.
+#
+# `agents` and `exclude_agents` say which coding agents a source is for, and
+# follow the same one-or-the-other rule for the same reason. Absent means
+# portable, which is the common case and this repo's whole premise; the
+# vendor-locked source is the exception that has to say so.
 Source = Struct.new(:name, :type, :repo, :path, :install, :adopt,
-  :include_skills, :exclude_skills, :include_plugins, :exclude_plugins) do
+  :include_skills, :exclude_skills, :include_plugins, :exclude_plugins,
+  :agents, :exclude_agents) do
   def self.from_yaml(hash)
     name = hash.fetch("name")
     type = hash.fetch("type")
@@ -126,10 +132,13 @@ Source = Struct.new(:name, :type, :repo, :path, :install, :adopt,
                          "which installs no plugin bundles"
     end
 
+    targeting = names(hash, name, "agents")
+
     new(name:, type:, repo: origin(hash, name, type), path: hash["path"],
       install: command_for(hash, name, type), adopt: adoption(hash["adopt"], name, type),
       include_skills: skills[:include], exclude_skills: skills[:exclude],
-      include_plugins: plugins[:include], exclude_plugins: plugins[:exclude])
+      include_plugins: plugins[:include], exclude_plugins: plugins[:exclude],
+      agents: targeting[:include], exclude_agents: targeting[:exclude])
   end
 
   # One `include_<kind>`/`exclude_<kind>` pair, compiled and checked.
@@ -153,6 +162,62 @@ Source = Struct.new(:name, :type, :repo, :path, :install, :adopt,
     filters = {include: include_re, exclude: exclude_re}
     filters.define_singleton_method(:any?) { values.any? }
     filters
+  end
+
+  # `agents:` and `exclude_agents:` as lists of names, checked the same way
+  # the regular-expression pairs are.
+  #
+  # A list rather than a pattern because these are names from a fixed, short,
+  # declared set, and a typo in one should be caught by the run that reads it
+  # rather than quietly matching nothing.
+  #
+  # @param hash [Hash] the raw YAML entry
+  # @param name [String]
+  # @param key [String] "agents"
+  # @return [Hash{Symbol => Array<String>, nil}]
+  def self.names(hash, name, key)
+    include_list = list(hash[key], name, key)
+    exclude_list = list(hash["exclude_#{key}"], name, "exclude_#{key}")
+
+    if include_list && exclude_list
+      raise ConfigError, "#{name}: #{key} and exclude_#{key} are both set; " \
+                         "a source may use one or the other"
+    end
+
+    {include: include_list, exclude: exclude_list}
+  end
+
+  # @return [Array<String>, nil]
+  def self.list(value, name, key)
+    return nil if value.nil?
+    raise ConfigError, "#{name}: #{key} must be a list of names, got #{value.inspect}" unless value.is_a?(Array)
+
+    value.map do |entry|
+      raise ConfigError, "#{name}: #{key} must be a list of names, got #{entry.inspect}" unless entry.is_a?(String)
+      raise ConfigError, "#{name}: #{key} has an empty name in it" if entry.strip.empty?
+
+      entry.strip
+    end.tap { |l| raise ConfigError, "#{name}: #{key} is empty — leave it out to mean every agent" if l.empty? }
+  end
+
+  # Whether anything on this machine would ever read what this source
+  # installs.
+  #
+  # @param known [Array<String>] agents installed, or listed to be
+  # @return [Boolean]
+  def for_any?(known)
+    return agents.intersect?(known) if agents
+    return (known - exclude_agents).any? if exclude_agents
+
+    true
+  end
+
+  # @return [String, nil] why it was skipped, for the log
+  def targeting_note
+    return "for #{agents.join(", ")}, none of which this machine has" if agents
+    return "excluded from #{exclude_agents.join(", ")}, which is every agent here" if exclude_agents
+
+    nil
   end
 
   # A source is fetched by cloning a repository or by running a command, and
@@ -837,6 +902,18 @@ def cmd_install(force:, dry_run:)
   sources.each do |source|
     say("")
     say(paint(source.name, 1))
+
+    if known_agents.any? && !source.for_any?(known_agents)
+      note(source.targeting_note)
+      # Counted as reconciled, so whatever it installed last time is pruned.
+      # Being for nobody here is a decision, and skills/ converges on what the
+      # configuration says. A source that simply could not be fetched takes the
+      # `next` below instead and keeps its links, because a network that was
+      # down is not an instruction to uninstall anything.
+      reconciled << source.name
+      next
+    end
+
     next unless fetch(source, dry_run:)
 
     enumerated = case source.type
@@ -897,7 +974,12 @@ end
 # have. A source aimed at anything outside this set has nobody to install for.
 #
 # @return [Array<String>]
-def known_agents = load_agents.map(&:name)
+# Memoised: every source consults it, and it is a property of the run.
+#
+# Empty means the configuration has no `agents:` block at all, and targeting
+# is then inert rather than exclusive — a file written before this existed
+# should not suddenly install nothing.
+def known_agents = @known_agents ||= load_agents.map(&:name)
 
 def cmd_agents(args, dry_run:)
   agents = load_agents

@@ -604,4 +604,109 @@ RSpec.describe "scripts/install-sources" do
       end
     end
   end
+  describe "agent targeting" do
+    def write_config_with_agents(agents, sources)
+      File.write(File.join(root, "configuration.yml"),
+        YAML.dump("agents" => agents, "sources" => sources))
+    end
+
+    let(:agents) { [{"name" => "claude"}, {"name" => "codex"}] }
+
+    it "installs a source aimed at an agent this machine is configured for" do
+      repo = upstream(File.join(tmp, "up"), %w[alpha])
+      write_config_with_agents(agents,
+        [{"name" => "up", "type" => "skills", "repo" => repo, "path" => "skills", "agents" => ["claude"]}])
+
+      install
+      expect(installed_skills).to eq(%w[alpha])
+    end
+
+    it "skips one aimed at an agent that is neither installed nor listed, and says which" do
+      repo = upstream(File.join(tmp, "up"), %w[alpha])
+      write_config_with_agents(agents,
+        [{"name" => "up", "type" => "skills", "repo" => repo, "path" => "skills", "agents" => ["kiro"]}])
+
+      output, status = install
+      aggregate_failures do
+        expect(status).to be_success
+        expect(output).to include("for kiro")
+        expect(installed_skills).to be_empty
+      end
+    end
+
+    it "takes back what it installed when the targeting later excludes it" do
+      repo = upstream(File.join(tmp, "up"), %w[alpha])
+      source = {"name" => "up", "type" => "skills", "repo" => repo, "path" => "skills"}
+
+      write_config_with_agents(agents, [source])
+      install
+      expect(installed_skills).to eq(%w[alpha])
+
+      write_config_with_agents(agents, [source.merge("agents" => ["kiro"])])
+      install
+      expect(installed_skills).to be_empty
+    end
+
+    it "installs when exclude_agents leaves somebody who would read it" do
+      repo = upstream(File.join(tmp, "up"), %w[alpha])
+      write_config_with_agents(agents,
+        [{"name" => "up", "type" => "skills", "repo" => repo, "path" => "skills",
+          "exclude_agents" => ["codex"]}])
+
+      install
+      expect(installed_skills).to eq(%w[alpha])
+    end
+
+    it "skips when exclude_agents names every agent there is" do
+      repo = upstream(File.join(tmp, "up"), %w[alpha])
+      write_config_with_agents(agents,
+        [{"name" => "up", "type" => "skills", "repo" => repo, "path" => "skills",
+          "exclude_agents" => %w[claude codex]}])
+
+      expect(install.first).to include("excluded from claude, codex")
+    end
+
+    it "ignores targeting entirely when nothing declares any agents" do
+      repo = upstream(File.join(tmp, "up"), %w[alpha])
+      write_config([{"name" => "up", "type" => "skills", "repo" => repo, "path" => "skills",
+                     "agents" => ["kiro"]}])
+
+      install
+      expect(installed_skills).to eq(%w[alpha])
+    end
+
+    it "refuses a source that both names and excludes agents" do
+      write_config_with_agents(agents,
+        [{"name" => "up", "type" => "skills", "repo" => "git@example.com:x.git",
+          "agents" => ["claude"], "exclude_agents" => ["codex"]}])
+
+      output, status = install
+      aggregate_failures do
+        expect(status.exitstatus).to eq(78)
+        expect(output).to include("agents and exclude_agents are both set")
+      end
+    end
+
+    it "refuses agents written as anything but a list of names" do
+      write_config_with_agents(agents,
+        [{"name" => "up", "type" => "skills", "repo" => "git@example.com:x.git", "agents" => "claude"}])
+
+      output, status = install
+      aggregate_failures do
+        expect(status.exitstatus).to eq(78)
+        expect(output).to include("must be a list of names")
+      end
+    end
+
+    it "refuses an empty agents list rather than reading it as none" do
+      write_config_with_agents(agents,
+        [{"name" => "up", "type" => "skills", "repo" => "git@example.com:x.git", "agents" => []}])
+
+      output, status = install
+      aggregate_failures do
+        expect(status.exitstatus).to eq(78)
+        expect(output).to include("leave it out to mean every agent")
+      end
+    end
+  end
 end

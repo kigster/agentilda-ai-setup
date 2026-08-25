@@ -65,6 +65,20 @@
 # installed last time and no longer installs, so `skills/` converges on what
 # this file says rather than accumulating.
 #
+# Saying which agents a source is for:
+#
+#   agents:         [claude]   only for these
+#   exclude_agents: [claude]   for every agent named above except these
+#
+# One or the other, like the pairs above, and for the same reason. Leaving
+# both out means portable, which is what most sources are and what this repo
+# is for; the vendor-locked one is the exception, so it is the one that says
+# so. A name here is matched against the `agents:` block at the top, and a
+# source no agent there would read is skipped, and said so, rather than
+# installing skills that nothing on this machine can load. It prunes when
+# skipped, the same as a tightened filter, since being for nobody here is a
+# decision rather than a failure.
+#
 # `include_skills`/`exclude_skills` govern the fan-out into `skills/`, and
 # `include_plugins`/`exclude_plugins` govern which bundles get copied. Neither
 # reaches inside a bundle: it stays whole because it is one unit with its own
