@@ -36,24 +36,3 @@ group :test do
   gem "rspec_junit_formatter" # JUnit XML for CircleCI store_test_results
   gem "simplecov"
 end
-
-unless File.exist?(".standard.yml")
-  File.open(".standard.yml", "w") do |f|
-    f.puts <<~EOF
-      fix: true               # default: false
-      parallel: true          # default: false
-      format: progress        # default: Standard::Formatter
-      ruby_version: 4.0       # default: RUBY_VERSION
-      default_ignores: false  # default: true
-
-      ignore:                 # default: []
-        - 'vendor/**/*'
-
-      plugins:                # default: []
-        - standard-rails
-
-      extend_config:          # default: []
-        - .standard_ext.yml"
-    EOF
-  end
-end
