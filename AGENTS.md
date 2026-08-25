@@ -21,8 +21,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 bundle install                           # install gems
-just doctor                              # what `bin/setup` would link, touching nothing
-just setup                               # actually symlink into ~/.claude (bin/setup)
+just doctor                              # what `bin/install` would copy and link, touching nothing
+just install                             # copy into ~/.agents, then link into ~/.claude
 just relink                              # repoint symlinks that aim somewhere else (bin/setup --force)
 
 just lint                                # standardrb, reports only, never rewrites

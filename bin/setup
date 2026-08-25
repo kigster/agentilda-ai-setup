@@ -2,6 +2,10 @@
 #
 # bin/setup — wire ~/.agents into ~/.claude.
 #
+# The second of the two install steps. bin/install copies a checkout into
+# ~/.agents; this links ~/.agents into ~/.claude. Set AGENTS_DIR to read from
+# somewhere else.
+#
 #   bin/setup              # link everything that is not already there
 #   bin/setup --dry-run    # say what it would do, touch nothing
 #   bin/setup --force      # also repoint symlinks aimed somewhere else
@@ -45,12 +49,17 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# The same tree with every symlink on the way resolved. ~/.agents is itself a
-# link to the checkout, so a link written as ../../.agents/skills/foo and one
-# written as ../../github/you/dot-agents/skills/foo name the same directory,
-# and only the physical path says so.
-REPO_REAL="$(cd "$REPO_ROOT" && pwd -P)"
+# What gets linked out is ~/.agents, not the checkout this script happens to
+# live in. bin/install copies the checkout there first and flattens it on the
+# way, so what is walked below is the same shape it has always been. Kept
+# overridable so a run can be pointed at a throwaway tree.
+REPO_ROOT="${AGENTS_DIR:-$HOME/.agents}"
+# The same tree with every symlink on the way resolved. On a machine still
+# set up the old way ~/.agents is itself a link to a checkout, so a link
+# written as ../../.agents/skills/foo and one written as
+# ../../github/you/agentilda/skills/foo name the same directory, and only the
+# physical path says so.
+REPO_REAL="$(cd "$REPO_ROOT" 2>/dev/null && pwd -P || printf '%s' "$REPO_ROOT")"
 AGENTS_MD="$REPO_ROOT/config/AGENTS.md"
 CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
 
@@ -91,7 +100,7 @@ warn() { printf '  %s!%s %s\n' "$c_yellow" "$c_reset" "$*" >&2; }
 bad()  { printf '  %s✗%s %s\n' "$c_red" "$c_reset" "$*" >&2; }
 
 usage() {
-  sed -n '3,44p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '3,49p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   exit 64
 }
 
@@ -198,6 +207,15 @@ say "${c_bold}Linking ${REPO_ROOT} into ${CLAUDE_DIR}${c_reset}"
 [[ $DRY_RUN -eq 1 ]] && say "${c_yellow}dry run — nothing will be written${c_reset}"
 say ""
 
+# Missing is fatal for a real run and expected for a previewed one: under
+# --dry-run bin/install has not created it yet, and refusing to preview the
+# second step because the first was also only previewed helps nobody.
+if [[ ! -d "$REPO_ROOT" ]]; then
+  [[ $DRY_RUN -eq 1 ]] || { bad "$REPO_ROOT does not exist — bin/install puts it there"; exit 66; }
+  note "$REPO_ROOT does not exist yet — bin/install creates it"
+  say ""
+  exit 0
+fi
 [[ -f "$AGENTS_MD" ]] || { bad "no AGENTS.md in $(dirname "$AGENTS_MD")"; exit 66; }
 mkdir -p "$CLAUDE_DIR"
 

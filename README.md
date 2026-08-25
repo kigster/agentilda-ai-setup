@@ -7,12 +7,25 @@
 A vendor-neutral home for the instructions, context, skills and tooling that several different AI coding agents share, plus **agentilda**: a small Ruby system that keeps a project's specifications, plans and pull requests joined up, and can drive specialist agents over them in parallel.
 
 ```bash
-git clone <this repo> ~/.agents
-cd ~/.agents
-bundle install
-bin/setup            # symlinks into ~/.claude; --dry-run to preview
-direnv allow .       # puts bin/ and scripts/ on PATH
+git clone <this repo> ~/github/you/agentilda   # anywhere; this is not the install
+cd ~/github/you/agentilda
+direnv allow .              # puts bin/, scripts/ and workflow/exe on PATH
+
+scripts/install-sources     # assemble skills/ and plugins/ from configuration.yml
+bin/install                 # copy the result to ~/.agents, then link ~/.claude
 ```
+
+Two steps, and the checkout is neither of them. `install-sources` builds
+`skills/` and `plugins/` in the checkout; `bin/install` copies what it built
+into `~/.agents` with every symlink resolved, and then `bin/setup` links
+`~/.agents` into `~/.claude` the way it always has. What that buys is a
+`~/.agents` made of real files, so the checkout can be moved, renamed or
+deleted afterwards and nothing dangles. What it costs is that an edit to
+`src/skills/foo` reaches `~/.claude` only when you run it again.
+
+`bin/install --dry-run` previews both steps. `--force` is required to
+replace anything already installed, and to replace a `~/.agents` that is
+still a symlink to a checkout from the old arrangement.
 
 ______________________________________________________________________
 
@@ -238,7 +251,7 @@ just test         # rspec
 just lint         # standardrb (reports; never rewrites)
 just format       # standardrb --fix, then mdformat
 just ci           # lint + coverage
-just doctor       # what bin/setup would link, touching nothing
+just doctor       # what bin/install would copy and link, touching nothing
 ```
 
 CircleCI runs the suite and the linter, and asserts `bin/setup` reaches a fixed point by running it twice and diffing — the bug it exists to prevent is drift going unnoticed, not a first run failing.

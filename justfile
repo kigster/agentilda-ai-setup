@@ -29,21 +29,22 @@ tilda := rbenv + 'workflow/exe/agentilda'
 recipes:
     just --choose
 
-# Install gems and wire ~/.agents into ~/.claude
-install: bundle setup
+# Copy this checkout into ~/.agents, then link ~/.agents into ~/.claude
+install *args:
+    bin/install {{ args }}
 
 # Install gem dependencies only
 bundle:
     {{ rbenv }} bundle --version >/dev/null 2>&1 || gem install bundler
     cd workflow && bundle install
 
-# Symlink AGENTS.md and the shared folders into ~/.claude
+# The linking step on its own. `just install` runs it for you
 setup:
     bin/setup
 
-# Show what `just setup` would link, without touching anything
+# Show what `just install` would copy and link, without touching anything
 doctor:
-    bin/setup --dry-run
+    bin/install --dry-run
 
 # Repoint symlinks that aim somewhere else (never touches real files)
 relink:
