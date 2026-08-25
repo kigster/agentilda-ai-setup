@@ -1,16 +1,20 @@
 ---
 name: postgres-schema
-description: "PostgreSQL schema design, migration safety, and index conventions. Use when designing a table, writing or reviewing a database migration, choosing a primary key type, adding an index, naming tables or columns, or deciding between logical and physical deletes. Also triggers on strong_migrations, schema_format, concurrent index, uuidv7, timestamptz, soft delete, deleted_at, foreign key cascade, ON DELETE, partial index, N+1, strict_loading, and third-party schemas such as stripe.* or plaid.*. Useful for greenfield schema design and for reviewing a migration diff before it reaches production."
+description: "PostgreSQL schema design, migration safety, and index conventions. Use when designing a table, writing or reviewing a database migration, choosing a primary key type, adding an index, naming tables or columns, or deciding between logical and physical deletes. Also triggers on strong_migrations, schema_format, concurrent index, uuidv7, timestamptz, soft delete, deleted_at, foreign key cascade, ON DELETE, partial index, N+1, strict_loading, and third-party schemas such as stripe.* or plaid.*. Useful for greenfield schema design and for reviewing a migration diff before it reaches production. Also covers connection pooling and sizing, concurrency control and locking, money and exact numbers, autovacuum, and transaction ID wraparound."
 ---
 
 # PostgreSQL Schema Design
 
 > [!IMPORTANT]
 > **The conventions are not written here.** They live in
-> [`~/.agents/context/postgresql.md`](../../context/postgresql.md) — decades of
-> accumulated practice, and the single source of truth. **Read that file before
-> writing schema or migration code.** This skill exists to make sure you do,
-> and to name the handful of rules whose violation is silent and expensive.
+> [`references/practices.md`](references/practices.md) — decades of accumulated
+> practice, and the single source of truth. **Read that file before writing
+> schema or migration code.** This skill exists to make sure you do, and to
+> name the handful of rules whose violation is silent and expensive.
+>
+> [`references/autovacuum.md`](references/autovacuum.md) covers autovacuum and
+> transaction ID wraparound: read it before touching autovacuum settings, and
+> before assuming a wraparound warning can wait.
 
 ## When to use
 

@@ -1,3 +1,8 @@
+---
+name: python-conventions
+description: "Konstantin's Python conventions: four-space indentation, recent language features, `uv venv` for environments, a justfile to drive the project, Pydantic for data classes and PydanticAI for AI code, and Alembic or yoyo-migrations for schema changes. Use when writing or reviewing Python, or setting a Python project up."
+---
+
 ## **Python**
 
 Always use 4-spaces indentation.

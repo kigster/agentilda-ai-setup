@@ -26,7 +26,7 @@ RSpec.describe "bin/install" do
     write(root, "config/AGENTS.md", "# instructions\n")
     write(root, "src/commands/plan-run.md", "# a command\n")
     write(root, "workflow/agents/yoda-writer.md", "# a specialist\n")
-    write(root, "context/postgresql.md", "# reference\n")
+    write(root, "context/about.md", "# reference\n")
 
     # The real skill lives outside skills/, and skills/ holds a link to it.
     write(root, "src/skills/create-plan/SKILL.md", "---\nname: create-plan\n---\n")
@@ -73,7 +73,7 @@ RSpec.describe "bin/install" do
         expect(File.file?(File.join(agents_dir, "config", "AGENTS.md"))).to be(true)
         expect(File.file?(File.join(agents_dir, "commands", "plan-run.md"))).to be(true)
         expect(File.file?(File.join(agents_dir, "agents", "yoda-writer.md"))).to be(true)
-        expect(File.file?(File.join(agents_dir, "context", "postgresql.md"))).to be(true)
+        expect(File.file?(File.join(agents_dir, "context", "about.md"))).to be(true)
       end
     end
 
@@ -112,24 +112,24 @@ RSpec.describe "bin/install" do
     it "leaves an existing tree alone and says which parts it refused" do
       root = checkout
       install(root:)
-      File.write(File.join(agents_dir, "context", "postgresql.md"), "edited by hand\n")
+      File.write(File.join(agents_dir, "context", "about.md"), "edited by hand\n")
 
       output, _status = install(root:)
 
       aggregate_failures do
         expect(output).to include("already there").and include("conflicts 5")
-        expect(File.read(File.join(agents_dir, "context", "postgresql.md"))).to eq("edited by hand\n")
+        expect(File.read(File.join(agents_dir, "context", "about.md"))).to eq("edited by hand\n")
       end
     end
 
     it "replaces it under --force" do
       root = checkout
       install(root:)
-      File.write(File.join(agents_dir, "context", "postgresql.md"), "edited by hand\n")
+      File.write(File.join(agents_dir, "context", "about.md"), "edited by hand\n")
 
       install("--force", root:)
 
-      expect(File.read(File.join(agents_dir, "context", "postgresql.md"))).to eq("# reference\n")
+      expect(File.read(File.join(agents_dir, "context", "about.md"))).to eq("# reference\n")
     end
 
     # ~/.agents being a link to a checkout is the arrangement this replaces, and

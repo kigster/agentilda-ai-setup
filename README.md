@@ -34,7 +34,7 @@ ______________________________________________________________________
 | Path                        | What it is                                                                                                                         |
 | :-------------------------- | :--------------------------------------------------------------------------------------------------------------------------------- |
 | `config/AGENTS.md`          | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md`                                           |
-| `context/`                  | Durable reference an agent loads on demand: languages, databases, conventions                                                      |
+| `context/`                  | What every agent gets regardless: who Konstantin is, and the generated lifecycle doc                                               |
 | `src/skills/`               | Skills authored in this repo (committed); folded into `skills/` by `install-sources`                                               |
 | `src/commands/`             | Slash commands that wrap `agentilda` with the right guardrails baked in                                                            |
 | `skills/`                   | Claude skills, **generated**, one directory per skill, symlinked into `~/.claude/skills/`                                          |
@@ -42,6 +42,7 @@ ______________________________________________________________________
 | `configuration.example.yml` | Committed template for the git-ignored `configuration.yml`, the list `scripts/install-sources` pulls `skills/` and `plugins/` from |
 | `bin/`                      | **Bash** executables. `setup` is a pure symlink reconciler                                                                         |
 | `scripts/`                  | **Ruby**: `install-sources`, which runs before there is a bundle to run it in                                                      |
+| `docs/`                     | Documentation for people rather than context for agents: runbooks, the coverage badge, usage notes                                 |
 | `workflow/`                 | The `agentilda` gem: `exe/`, `lib/`, `agents/`, `spec/`, and its own Gemfile                                                       |
 
 `bin` holds shell and `scripts` holds Ruby deliberately: `standardrb` then has a directory it must lint and one it can ignore entirely, and neither has to be configured around the other. `.envrc` puts both on `PATH`.

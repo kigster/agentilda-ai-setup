@@ -1,3 +1,8 @@
+---
+name: markdown-conventions
+description: "Konstantin's Markdown conventions, and the one way mdformat may be installed. Use when writing, formatting or reformatting Markdown, and whenever mdformat is about to be installed or run: a Homebrew mdformat cannot see its own plugins and must be uninstalled on sight."
+---
+
 # Markdown
 
 Markdown is used everywhere now, and it's important to keep it tidy, well formatted and compatible with various tools.

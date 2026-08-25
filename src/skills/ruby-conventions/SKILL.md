@@ -1,3 +1,8 @@
+---
+name: ruby-conventions
+description: "Konstantin's Ruby conventions: how he lays out and versions a gem, YARD comment style, frozen_string_literal, standardrb rather than rubocop, and running a multi-process application locally through an explicit process definition rather than Foreman. Use when writing or reviewing Ruby, starting a new gem, setting up a Gemfile or justfile, or wiring up local processes for a Ruby project."
+---
+
 # Ruby
 
 Ruby is my favorite language and I've been doing it for 17 years. I have dozens of open source gems, with over 240M downloads: see [rubygems profile](https://rubygems.org/profiles/kigster)
