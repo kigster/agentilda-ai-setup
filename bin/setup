@@ -72,7 +72,15 @@ SKIP_DIRS=(bin scripts workflow coverage docs tmp vendor node_modules config src
 
 # Folders that exist as real directories in ~/.claude and hold one link per
 # child rather than a single link for the whole folder.
-DESCEND_DIRS=(skills commands agents)
+#
+# `plugins` belongs here for a reason worth writing down: ~/.claude/plugins is
+# Claude's own, holding installed_plugins.json, known_marketplaces.json,
+# marketplaces/ and cache/. It is a real directory on any machine Claude has
+# ever managed a plugin on, so linking the whole folder would either clobber
+# that state or, as it did, be skipped as "already a real directory" and
+# quietly link nothing at all. One link per bundle leaves Claude's files where
+# they are and puts ours beside them.
+DESCEND_DIRS=(skills commands agents plugins)
 
 DRY_RUN=0
 FORCE=0

@@ -200,6 +200,25 @@ RSpec.describe "bin/install" do
       end
     end
 
+    # ~/.claude/plugins is Claude's own directory on any machine it has ever
+    # managed a plugin on. Linking the folder wholesale would either clobber
+    # that state or be skipped as "already a real directory" and link nothing,
+    # which is what happened until plugins joined the descend list.
+    it "puts one link per bundle inside a ~/.claude/plugins that already exists" do
+      FileUtils.mkdir_p(File.join(claude_dir, "plugins", "marketplaces"))
+      File.write(File.join(claude_dir, "plugins", "installed_plugins.json"), %({"claude":"state"}))
+
+      install
+
+      aggregate_failures do
+        expect(File.readlink(File.join(claude_dir, "plugins", "a-bundle")))
+          .to eq("../../.agents/plugins/a-bundle")
+        expect(File.read(File.join(claude_dir, "plugins", "installed_plugins.json")))
+          .to eq(%({"claude":"state"}))
+        expect(File.directory?(File.join(claude_dir, "plugins", "marketplaces"))).to be(true)
+      end
+    end
+
     it "stops before it under --no-setup" do
       install("--no-setup")
 
