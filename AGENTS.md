@@ -4,22 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Skills to Activate Upon Start
 
-<<<<<<< Updated upstream
- * /unslop
- * /superpowers:brainstorm
- * /writing-plans 
-||||||| Stash base
-- /unslop
-- /superpowers:brainstorm
-- /writing-plans
-=======
 - /unslop
 
 ## Skills to Activate when Writing Plans, Specs or Coding
 
 - /superpowers:brainstorm
 - /writing-plans
->>>>>>> Stashed changes
 
 ## What this repository is
 
@@ -129,37 +119,6 @@ Entry point `lib/spec_plan_build.rb` requires each component only if the file ex
 
 ### Repo layout
 
-<<<<<<< Updated upstream
-| Path                   | What it is                                                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `config/AGENTS.md`     | The instructions every agent reads; symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md` by `bin/setup`                        |
-| `config/sources.yml`   | Declarative list `scripts/install-sources` clones `skills/`/`plugins/` content from                                            |
-| `context/`             | Durable reference loaded on demand: per-language conventions, PostgreSQL, the spec-plan-build lifecycle doc, `skills-used.md`  |
-| `agents/`              | The five specialist definitions from the workflow table above                                                                  |
-| `skills/`              | Claude skills, **generated** by `install-sources`, not committed. One directory per skill, symlinked into `~/.claude/skills/`  |
-| `skills-mine/`         | Skills authored in this repo, **committed**. Folded into `skills/` by `install-sources`                                        |
-| `plugins/`             | External plugin bundles (e.g. `pstack`), also generated, not committed                                                         |
-| `commands/`            | Slash commands wrapping `spec-plan-build` (table above)                                                                        |
-| `bin/`                 | Bash executables. `setup` is a pure symlink reconciler, nothing more                                                           |
-| `scripts/`             | Ruby executables: `spec-plan-build` and `install-sources`                                                                      |
-| `lib/spec_plan_build/` | The library described above                                                                                                    |
-| `spec/`                | RSpec suite, mirroring `lib/spec_plan_build/`                                                                                  |
-||||||| Stash base
-| Path                   | What it is                                                                                                                    |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `config/AGENTS.md`     | The instructions every agent reads; symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md` by `bin/setup`                       |
-| `config/sources.yml`   | Declarative list `scripts/install-sources` clones `skills/`/`plugins/` content from                                           |
-| `context/`             | Durable reference loaded on demand: per-language conventions, PostgreSQL, the spec-plan-build lifecycle doc, `skills-used.md` |
-| `agents/`              | The five specialist definitions from the workflow table above                                                                 |
-| `skills/`              | Claude skills, **generated** by `install-sources`, not committed. One directory per skill, symlinked into `~/.claude/skills/` |
-| `skills-mine/`         | Skills authored in this repo, **committed**. Folded into `skills/` by `install-sources`                                       |
-| `plugins/`             | External plugin bundles (e.g. `pstack`), also generated, not committed                                                        |
-| `commands/`            | Slash commands wrapping `spec-plan-build` (table above)                                                                       |
-| `bin/`                 | Bash executables. `setup` is a pure symlink reconciler, nothing more                                                          |
-| `scripts/`             | Ruby executables: `spec-plan-build` and `install-sources`                                                                     |
-| `lib/spec_plan_build/` | The library described above                                                                                                   |
-| `spec/`                | RSpec suite, mirroring `lib/spec_plan_build/`                                                                                 |
-=======
 | Path                   | What it is                                                                                                                    |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `config/AGENTS.md`     | The instructions every agent reads; symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md` by `bin/setup`                       |
@@ -174,7 +133,6 @@ Entry point `lib/spec_plan_build.rb` requires each component only if the file ex
 | `scripts/`             | Ruby executables: `spec-plan-build` and `install-sources`                                                                     |
 | `lib/spec_plan_build/` | The library described above                                                                                                   |
 | `spec/`                | RSpec suite, mirroring `lib/spec_plan_build/`                                                                                 |
->>>>>>> Stashed changes
 
 ### Vendor neutrality
 
