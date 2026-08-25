@@ -2,9 +2,9 @@
 description: "Create a single combined pull request from currently staged files. If we are on the main branch, then also create a branch with a proper title (see description)."
 allowed-tools:
   - Bash(~/.agents/create-plan-folder open <topic words...>)
-  - Bash(~/.agents/scripts/spec-plan-build *)
+  - Bash(~/.agents/scripts/agentilda *)
   - Bash(./.agents/bin/create-branch-name)
-  - Bash(spec-plan-build *)
+  - Bash(agentilda *)
   - Bash(just *)
   - Bash(make *)
   - Bash(git *)
@@ -43,7 +43,7 @@ Turn the current work into atomic commits and a pull request, with as few questi
 If the repository has a `.plans/` directory, **the pull request title is not free-form** — it carries the plan number that `pull-requests.md`, the branch and the merged history all join on.
 
 ```bash
-spec-plan-build list-plans      # what plans exist, and their state
+agentilda list-plans      # what plans exist, and their state
 ```
 
 Resolve the plan from the branch name first (`<user>/NNN.MM-slug`), then from the diff, and **only** when the diff touches exactly one plan folder.
@@ -114,7 +114,7 @@ If `gh` fails on authorisation: save the normalised description as `PR.md` in th
 If the work implements a plan, add the pull request to that folder's `pull-requests.md` so the plan's state can advance:
 
 ```bash
-spec-plan-build resync dirs      # then --commit once the table is written
+agentilda resync dirs      # then --commit once the table is written
 ```
 
 A ✅ folder with an open pull request is a lie the tooling will catch; a 🟡 folder whose pull requests are all merged is one it will fix.
@@ -123,4 +123,4 @@ ______________________________________________________________________
 
 ## Doing this for many plans at once
 
-`spec-plan-build run --commit` does all of the above for every plan that an agent finished, as soon as each one lands, using the same title convention and the same `gh pr create` invocation. Pass `--dont-push-anything` to leave the work uncommitted instead. Use this command for one branch by hand; use `run` when a whole round of agent work is ready to publish.
+`agentilda run --commit` does all of the above for every plan that an agent finished, as soon as each one lands, using the same title convention and the same `gh pr create` invocation. Pass `--dont-push-anything` to leave the work uncommitted instead. Use this command for one branch by hand; use `run` when a whole round of agent work is ready to publish.

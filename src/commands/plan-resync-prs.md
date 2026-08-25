@@ -2,15 +2,15 @@
 description: "Add missing [NNN.MM] prefixes to pull request titles (dry run first)"
 argument-hint: "[--state open|closed|merged|all]"
 allowed-tools:
-  - Bash(spec-plan-build:*)
+  - Bash(agentilda:*)
 ---
 
 # Resync pull request titles
 
 ```!
 export LANG="${LANG:-en_US.UTF-8}" LC_ALL="${LC_ALL:-en_US.UTF-8}"
-command -v spec-plan-build >/dev/null || export PATH="$HOME/.rbenv/shims:$HOME/.agents/scripts:$PATH"
-spec-plan-build resync prs $ARGUMENTS
+command -v agentilda >/dev/null || export PATH="$HOME/.rbenv/shims:$HOME/.agents/scripts:$PATH"
+agentilda resync prs $ARGUMENTS
 ```
 
 That was a **dry run** — `--commit` defaults to false, so no pull request title has been changed yet. `--state` defaults to `all`.
@@ -18,7 +18,7 @@ That was a **dry run** — `--commit` defaults to false, so no pull request titl
 Show the user the proposed retitles, then commit once they agree:
 
 ```bash
-spec-plan-build resync prs --commit
+agentilda resync prs --commit
 ```
 
 > [!NOTE]

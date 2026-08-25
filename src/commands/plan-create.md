@@ -2,7 +2,7 @@
 description: "Create the next numbered plan folder from a few words"
 argument-hint: "<two to five words describing the feature>"
 allowed-tools:
-  - Bash(spec-plan-build:*)
+  - Bash(agentilda:*)
 ---
 
 # Create a plan folder
@@ -11,8 +11,8 @@ The words after the command are the plan topic: `$ARGUMENTS`
 
 ```bash
 export LANG="${LANG:-en_US.UTF-8}" LC_ALL="${LC_ALL:-en_US.UTF-8}"
-command -v spec-plan-build >/dev/null || export PATH="$HOME/.rbenv/shims:$HOME/.agents/scripts:$PATH"
-spec-plan-build create $ARGUMENTS
+command -v agentilda >/dev/null || export PATH="$HOME/.rbenv/shims:$HOME/.agents/scripts:$PATH"
+agentilda create $ARGUMENTS
 ```
 
 Pass them **verbatim**. Do not re-word, expand or "improve" them — the slug is an identity that branch names and merged pull request titles join on, and changing it later breaks every link that joins on it.
@@ -33,7 +33,7 @@ For a genuinely new feature (no `--after`/`--prs`), `create` already scaffolds `
 ## What research needs to settle
 ```
 
-Verbatim, in that order — that is exactly what `create` writes, and it is what `spec-plan-build list-plans` and the agent loop read the folder's state from having. Do not add to the set, and do not rename one to something that reads better; the folder's state is derived from this shape.
+Verbatim, in that order — that is exactly what `create` writes, and it is what `agentilda list-plans` and the agent loop read the folder's state from having. Do not add to the set, and do not rename one to something that reads better; the folder's state is derived from this shape.
 
 - **Never write Goals, Non-Goals or a conclusion.** That is `yoda-writer`'s chapter, written *after* research, not before it. Writing it now decides the answer before the research runs, and a researcher handed a foregone conclusion looks for evidence of it rather than for what is actually true.
 - **Never write a `## Research` heading — not even empty.** It is not decoration, it is the state transition: the 🔎 Researched invariant matches any heading beginning with the word "Research" (`## Research`, `### Research`, case-insensitive). Seeding it — even as an empty placeholder — flips the folder to 🔎 the moment `resync dirs` runs next, and the agent loop reads that as "somebody already researched this" and skips `leah-researcher` entirely. The folder ends up *looking* done while nobody has looked.
@@ -44,16 +44,16 @@ Verbatim, in that order — that is exactly what `create` writes, and it is what
 
 The mechanics are three commands and do not need a skill of their own — `create`, `status`, `run --plan`. The constraints above are what erode, because nothing on disk enforces them; get them right per plan, then batch the handoff.
 
-1. `spec-plan-build create <words>`, once per plan.
+1. `agentilda create <words>`, once per plan.
 2. Write (or let `create`'s draft attempt) each `spec.md`, following every constraint above.
-3. **Verify each one before handing off, not after** — `spec-plan-build list-plans` shows every plan at a glance:
+3. **Verify each one before handing off, not after** — `agentilda list-plans` shows every plan at a glance:
    - `spec.md` exists.
    - Exactly the four `##` headings above, nothing added.
    - No heading beginning with "Research".
    - Status reads ⚪️ New, not 🔎 Researched.
 4. Report readiness and print **one** command — do not run it yourself unless asked:
    ```bash
-   spec-plan-build run --commit --plan <NNN,NNN,...>
+   agentilda run --commit --plan <NNN,NNN,...>
    ```
 
 **One handoff at the end, not N.** `run` with no `--plan` is a whole-tree loop; running it after every single `create` turns N new plans into N overlapping whole-tree loops, each claiming worktrees for plans the others are touching too — the exact concurrency hazard `config/AGENTS.md`'s "Concurrent Agents — Claim Before You Write" warns about, industrialized by a loop instead of a person. `--plan` exists so a batch step can hand off exactly the plans it just made, once.

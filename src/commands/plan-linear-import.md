@@ -2,7 +2,7 @@
 description: "Create Linear projects and issues from .plans, via MCP or LINEAR_API_KEY"
 argument-hint: "TAX [--since NNN.MM] [--status building,in_review]"
 allowed-tools:
-  - Bash(spec-plan-build:*)
+  - Bash(agentilda:*)
   - mcp__claude_ai_Linear__list_teams
   - mcp__claude_ai_Linear__list_issue_statuses
   - mcp__claude_ai_Linear__save_project
@@ -15,8 +15,8 @@ Each plan folder becomes a Linear **project**; each `PR-n` work unit inside its 
 
 ```!
 export LANG="${LANG:-en_US.UTF-8}" LC_ALL="${LC_ALL:-en_US.UTF-8}"
-command -v spec-plan-build >/dev/null || export PATH="$HOME/.rbenv/shims:$HOME/.agents/scripts:$PATH"
-spec-plan-build linear import --prefix $ARGUMENTS
+command -v agentilda >/dev/null || export PATH="$HOME/.rbenv/shims:$HOME/.agents/scripts:$PATH"
+agentilda linear import --prefix $ARGUMENTS
 ```
 
 That was a **dry run**. Nothing has been created.
@@ -28,13 +28,13 @@ Both do the same thing. The plan above is what either one applies.
 **If `LINEAR_API_KEY` is set**, let the tool do it — it is deterministic, it records what it did, and it runs unattended:
 
 ```bash
-spec-plan-build linear import --prefix <KEY> --commit
+agentilda linear import --prefix <KEY> --commit
 ```
 
 **Otherwise, do it yourself through the MCP server.** Re-run with `--format json` and apply the actions in the order they come:
 
 ```bash
-spec-plan-build linear import --prefix <KEY> --format json
+agentilda linear import --prefix <KEY> --format json
 ```
 
 Every action is already shaped as the tool call it needs. Take `args` verbatim:

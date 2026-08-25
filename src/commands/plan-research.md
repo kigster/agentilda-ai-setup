@@ -2,15 +2,15 @@
 description: "Run specialist agents over the spec's research until plan has enough to converge"
 argument-hint: "[--agent NAME] [--rounds N] [-j N] [--isolation worktree|shared]"
 allowed-tools:
-  - Bash(spec-plan-build:*)
+  - Bash(agentilda:*)
 ---
 
 # Run the specialist agents
 
 ```bash
 export LANG="${LANG:-en_US.UTF-8}" LC_ALL="${LC_ALL:-en_US.UTF-8}"
-command -v spec-plan-build >/dev/null || export PATH="$HOME/.rbenv/shims:$HOME/.agents/scripts:$PATH"
-spec-plan-build run $ARGUMENTS
+command -v agentilda >/dev/null || export PATH="$HOME/.rbenv/shims:$HOME/.agents/scripts:$PATH"
+agentilda run $ARGUMENTS
 ```
 
 **Do not run this without confirming scope first.** It loops specialist agents over every eligible plan until a round changes nothing, defaulting to `worktree` isolation, a ceiling of 10 rounds, and `--commit` off.

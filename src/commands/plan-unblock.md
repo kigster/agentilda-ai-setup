@@ -2,20 +2,20 @@
 description: "Fold answered blocks into a plan's documents and retire blocked.md"
 argument-hint: "NNN[,NNN.MM,...] [--commit] [--agent NAME]"
 allowed-tools:
-  - Bash(spec-plan-build:*)
+  - Bash(agentilda:*)
 ---
 
 # Drain a blocked plan
 
 ```bash
 export LANG="${LANG:-en_US.UTF-8}" LC_ALL="${LC_ALL:-en_US.UTF-8}"
-command -v spec-plan-build >/dev/null || export PATH="$HOME/.rbenv/shims:$HOME/.agents/scripts:$PATH"
-spec-plan-build unblock $ARGUMENTS
+command -v agentilda >/dev/null || export PATH="$HOME/.rbenv/shims:$HOME/.agents/scripts:$PATH"
+agentilda unblock $ARGUMENTS
 ```
 
 Hands a ⭕️/🅱️ folder to `lando-broker`, which moves every **answered** question out of `blocked.md` and into the document it was stopping, then deletes `blocked.md` when nothing is left in it. Without `--commit` it prints the questions still open and invokes nothing.
 
-`spec-plan-build run` cannot do this and must not learn how. A blocked plan is waiting on a human, and an autonomous loop that could move it would make the state meaningless. Someone typing this command is the signal that answers arrived; nothing else can produce that signal.
+`agentilda run` cannot do this and must not learn how. A blocked plan is waiting on a human, and an autonomous loop that could move it would make the state meaningless. Someone typing this command is the signal that answers arrived; nothing else can produce that signal.
 
 Before running it with `--commit`:
 

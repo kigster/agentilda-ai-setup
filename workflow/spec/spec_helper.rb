@@ -52,7 +52,7 @@ require "tmpdir"
 ENV["NO_COLOR"] = "1"
 
 $LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
-require "spec_plan_build"
+require "agentilda"
 
 require "stringio"
 
@@ -76,13 +76,13 @@ RSpec.configure do |config|
 
   # Pastel memoizes `enabled:` at construction, so an example that stubs
   # `tty?` or `color?` would otherwise poison every example that ran after it.
-  config.before { SpecPlanBuild::UI.reset! }
+  config.before { Agentilda::UI.reset! }
 
   # Every example tagged `:tree` gets its own throwaway `.plans` directory, so
   # the suite never reads or writes a real project.
   config.around(:each, :tree) do |example|
-    Dir.mktmpdir("spec-plan-build") do |tmp|
-      @plans_root = File.join(tmp, SpecPlanBuild::PLANS_DIR)
+    Dir.mktmpdir("agentilda") do |tmp|
+      @plans_root = File.join(tmp, Agentilda::PLANS_DIR)
       FileUtils.mkdir_p(@plans_root)
       example.run
     end

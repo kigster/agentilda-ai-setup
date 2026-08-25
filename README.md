@@ -4,7 +4,7 @@
 
 # Konstantin Gredeskoul's AI setup
 
-A vendor-neutral home for the instructions, context, skills and tooling that several different AI coding agents share, plus **spec-plan-build**: a small Ruby system that keeps a project's specifications, plans and pull requests joined up, and can drive specialist agents over them in parallel.
+A vendor-neutral home for the instructions, context, skills and tooling that several different AI coding agents share, plus **agentilda**: a small Ruby system that keeps a project's specifications, plans and pull requests joined up, and can drive specialist agents over them in parallel.
 
 ```bash
 git clone <this repo> ~/.agents
@@ -23,13 +23,13 @@ ______________________________________________________________________
 | `config/AGENTS.md`   | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md`  |
 | `context/`           | Durable reference an agent loads on demand: languages, databases, conventions             |
 | `src/skills/`        | Skills authored in this repo (committed); folded into `skills/` by `install-sources`      |
-| `src/commands/`      | Slash commands that wrap `spec-plan-build` with the right guardrails baked in             |
+| `src/commands/`      | Slash commands that wrap `agentilda` with the right guardrails baked in                   |
 | `skills/`            | Claude skills, **generated**, one directory per skill, symlinked into `~/.claude/skills/` |
 | `plugins/`           | External plugin bundles (e.g. `pstack`), also generated, not committed                    |
 | `config/sources.yml` | The declarative list `scripts/install-sources` pulls `skills/` and `plugins/` from        |
 | `bin/`               | **Bash** executables. `setup` is a pure symlink reconciler                                |
 | `scripts/`           | **Ruby**: `install-sources`, which runs before there is a bundle to run it in             |
-| `workflow/`          | The `spec-plan-build` gem: `exe/`, `lib/`, `agents/`, `spec/`, and its own Gemfile        |
+| `workflow/`          | The `agentilda` gem: `exe/`, `lib/`, `agents/`, `spec/`, and its own Gemfile              |
 
 `bin` holds shell and `scripts` holds Ruby deliberately: `standardrb` then has a directory it must lint and one it can ignore entirely, and neither has to be configured around the other. `.envrc` puts both on `PATH`.
 
@@ -88,32 +88,32 @@ A folder may not claim a phase whose file is missing. That is not a convention a
 
 A feature moves through five specialists, one state at a time, never two at once, and never further than its own documents currently justify:
 
-1. **⚪️ New.** `spec-plan-build create tax rule dsl` mints `.plans/003.00-⚪️-tax-rule-dsl/`. For a genuinely new feature it also scaffolds `spec.md` with a title and four fixed headings (*What we are trying to achieve*, *Why it matters*, *What already exists*, *What research needs to settle*), makes a best-effort attempt at them from what the project already has on disk, and opens it. You finish the brief by hand.
+1. **⚪️ New.** `agentilda create tax rule dsl` mints `.plans/003.00-⚪️-tax-rule-dsl/`. For a genuinely new feature it also scaffolds `spec.md` with a title and four fixed headings (*What we are trying to achieve*, *Why it matters*, *What already exists*, *What research needs to settle*), makes a best-effort attempt at them from what the project already has on disk, and opens it. You finish the brief by hand.
 1. **🔎 Researched.** `leah-researcher` fans work out across parallel sub-agents and appends spec.md's `## Research` chapter: themes, findings, licensing, a closing `### Findings, Conclusion & References`. Nobody else may write that heading. It *is* the state transition, so an empty one seeds a lie.
 1. **⭐️ Planned.** `yoda-writer` turns the brief plus the research into a complete specification: Goal, Non-Goals, In/Out of scope, Open questions, Conclusion. Or it writes `blocked.md` instead, when a question is a human's to answer, not a guess. `palpatine-planner` then decomposes the finished spec into `plan.md`'s non-overlapping work units, sized for independent sub-agents.
 1. **🟡 Building → 🟢 Ready for Review.** `luke-implementer` builds one work unit at a time (source and tests, no commits) and opens a pull request titled `[003.00] …` as each lands.
 1. **👀 In Review → 🔴 Changes Requested, or ✅ Approved & Merged.** `hansolo-reviewer` reads the diff against the plan and either requests changes (back to 🟢 once addressed) or approves. Nothing merges automatically: approving is reversible and attributable, merging changes a branch everyone else builds on, and that line is enforced in code, not just in the prompt.
 
-Off to the side, at any point: ⭕️/🅱️ **Blocked** (an engineering or product decision only a human can make) and ☢️ **Deferred** or ❌ **Discarded**. Blocked plans are never assigned to an agent by the loop; one that could move them would make the states meaningless. `spec-plan-build states` draws the whole machine, every legal transition included.
+Off to the side, at any point: ⭕️/🅱️ **Blocked** (an engineering or product decision only a human can make) and ☢️ **Deferred** or ❌ **Discarded**. Blocked plans are never assigned to an agent by the loop; one that could move them would make the states meaningless. `agentilda states` draws the whole machine, every legal transition included.
 
-Blocks drain by hand, and in pieces. Answers are written into `blocked.md` as they arrive, and `spec-plan-build unblock 003 --commit` hands the folder to `lando-broker`, which folds each answered question into the document it was stopping (`spec.md` for what and why, `plan.md` for how and in what order), deletes it, and deletes the file once nothing is left. `blocked.md` holds open questions and nothing else, so the pass that empties it is the pass that lets the folder out of ⭕️. Three answers out of four is a normal run: the plan stays blocked on the fourth, which is the truth.
+Blocks drain by hand, and in pieces. Answers are written into `blocked.md` as they arrive, and `agentilda unblock 003 --commit` hands the folder to `lando-broker`, which folds each answered question into the document it was stopping (`spec.md` for what and why, `plan.md` for how and in what order), deletes it, and deletes the file once nothing is left. `blocked.md` holds open questions and nothing else, so the pass that empties it is the pass that lets the folder out of ⭕️. Three answers out of four is a normal run: the plan stays blocked on the fourth, which is the truth.
 
 ### How you invoke it
 
-Both paths end up running the same `workflow/exe/spec-plan-build` binary. The question is just who's driving.
+Both paths end up running the same `workflow/exe/agentilda` binary, which `tilda` is a symlink to. The question is just who's driving.
 
-- **Directly, from a terminal or a script**: `spec-plan-build create …`, `spec-plan-build run --commit`, etc. (see "Day to day" below). This is the whole tool; nothing about it requires Claude.
+- **Directly, from a terminal or a script**: `agentilda create …`, `agentilda run --commit`, etc. (see "Day to day" below). This is the whole tool; nothing about it requires Claude.
 - **As a Claude Code slash command**, via `src/commands/*.md` (`/plan-create`, `/plan-research`, `/plan-run`, `/plan-status`, `/plan-resync-dirs`, `/plan-resync-prs`, `/plan-docs`, `/plan-insert`, `/plan-linear-import`). Each one is a thin wrapper around the same binary, plus the guardrails that erode if left to memory. `/plan-create` won't seed a `## Research` heading or write Goals ahead of the research. `/plan-run` insists you confirm scope, `--commit`, and parallelism before it runs anything.
 
-Use the slash commands inside a Claude Code session, since they carry the constraints. Use the binary directly for scripting, CI, or any other agent. `skills/` and `workflow/agents/*.md` are a separate concern: those are Claude's general skill/specialist library, not part of invoking `spec-plan-build` itself.
+Use the slash commands inside a Claude Code session, since they carry the constraints. Use the binary directly for scripting, CI, or any other agent. `skills/` and `workflow/agents/*.md` are a separate concern: those are Claude's general skill/specialist library, not part of invoking `agentilda` itself.
 
 **The full conventions are generated, never hand-written:**
 
 ```bash
-spec-plan-build docs -o context/feature-building/spec-plan-build.md
+agentilda docs -o context/feature-building/agentilda.md
 ```
 
-The status vocabulary and transition table live in `workflow/lib/spec_plan_build/status.rb` and `state_machine.rb`, the numbering rules in `ordinal.rb`, and the document is derived from all three. This system previously had three hand-maintained copies of that table and they disagreed — the folder-creation script could mint statuses the reader did not recognise, and could not mint six that it required.
+The status vocabulary and transition table live in `workflow/lib/agentilda/status.rb` and `state_machine.rb`, the numbering rules in `ordinal.rb`, and the document is derived from all three. This system previously had three hand-maintained copies of that table and they disagreed — the folder-creation script could mint statuses the reader did not recognise, and could not mint six that it required.
 
 ### The number is an identity
 
@@ -128,15 +128,15 @@ ______________________________________________________________________
 ## Day to day
 
 ```bash
-spec-plan-build create tax rule dsl          # 003.00-⚪️-tax-rule-dsl
-spec-plan-build create --after 002 k1 sync   # 002.01-⬜️-k1-sync (retroactive)
-spec-plan-build list-plans                       # the table; exits 1 if a name lies
-spec-plan-build resync dirs                  # folder emoji vs folder contents
-spec-plan-build resync prs                   # [NNN.MM] prefixes on PR titles
-spec-plan-build linear import --prefix TAX   # the plans, as Linear projects and issues
-spec-plan-build docs                         # regenerate the conventions
-spec-plan-build states                       # the state machine, as a diagram
-spec-plan-build run --commit --plan 003      # hand specific plans to the agents
+agentilda create tax rule dsl          # 003.00-⚪️-tax-rule-dsl
+agentilda create --after 002 k1 sync   # 002.01-⬜️-k1-sync (retroactive)
+agentilda list-plans                       # the table; exits 1 if a name lies
+agentilda resync dirs                  # folder emoji vs folder contents
+agentilda resync prs                   # [NNN.MM] prefixes on PR titles
+agentilda linear import --prefix TAX   # the plans, as Linear projects and issues
+agentilda docs                         # regenerate the conventions
+agentilda states                       # the state machine, as a diagram
+agentilda run --commit --plan 003      # hand specific plans to the agents
 ```
 
 **Everything that writes is a dry run until `--commit`.** Folder names and pull request titles are things other people join on; changing one silently is how work ends up filed under a plan that did not do it.
@@ -164,8 +164,8 @@ The whole decision is made from disk, which is what makes the dry run worth read
 Two transports apply the same plan:
 
 ```bash
-spec-plan-build linear import --prefix TAX --commit        # needs LINEAR_API_KEY
-spec-plan-build linear import --prefix TAX --format json   # for /plan-linear-import, over MCP
+agentilda linear import --prefix TAX --commit        # needs LINEAR_API_KEY
+agentilda linear import --prefix TAX --format json   # for /plan-linear-import, over MCP
 ```
 
 The JSON is shaped as the Linear MCP server's own `save_project` and `save_issue` arguments, so both transports read one contract and cannot drift apart.
@@ -178,7 +178,7 @@ ______________________________________________________________________
 
 ## The multi-agent harness
 
-Specialists are defined in `workflow/agents/*.md`. The frontmatter routes them (`handles:`/`advances_to:` are exactly what `spec-plan-build run` reads to decide who takes a plan); the body is the prompt.
+Specialists are defined in `workflow/agents/*.md`. The frontmatter routes them (`handles:`/`advances_to:` are exactly what `agentilda run` reads to decide who takes a plan); the body is the prompt.
 
 | Agent               | Handles | Advances to | Does                                                                |
 | :------------------ | :------ | :---------- | :------------------------------------------------------------------ |
@@ -190,14 +190,14 @@ Specialists are defined in `workflow/agents/*.md`. The frontmatter routes them (
 | `lando-broker`      | ⭕️, 🅱️  | ⭐️          | folds answered blocks into spec.md/plan.md; never invoked by the loop |
 
 ```bash
-spec-plan-build run                              # dry run: who would take what
-spec-plan-build run --commit                     # one git worktree per plan, in parallel
-spec-plan-build run --commit -j 4                # …four at a time
-spec-plan-build run --isolation shared           # one tree, serial; no git needed
-spec-plan-build run --commit --plan 003,005.01   # only these plans, see below
-spec-plan-build unblock 003                      # what 003 is still waiting on a human for
-spec-plan-build unblock 003 --commit             # fold in whatever has been answered
-spec-plan-build states                           # the whole machine, as a diagram
+agentilda run                              # dry run: who would take what
+agentilda run --commit                     # one git worktree per plan, in parallel
+agentilda run --commit -j 4                # …four at a time
+agentilda run --isolation shared           # one tree, serial; no git needed
+agentilda run --commit --plan 003,005.01   # only these plans, see below
+agentilda unblock 003                      # what 003 is still waiting on a human for
+agentilda unblock 003 --commit             # fold in whatever has been answered
+agentilda states                           # the whole machine, as a diagram
 ```
 
 ### Handing off several plans at once with `--plan`

@@ -34,7 +34,7 @@ module PlansFixture
     # @param prs [Array<Hash>] rows for `pull-requests.md`
     # @return [String] absolute path to the folder
     def plan(ordinal, status, slug, files: {}, prs: nil)
-      resolved = SpecPlanBuild.status(status) or raise ArgumentError, "unknown status: #{status}"
+      resolved = Agentilda.status(status) or raise ArgumentError, "unknown status: #{status}"
       path = File.join(root, "#{ordinal}-#{resolved.emoji}-#{slug}")
       FileUtils.mkdir_p(path)
 
@@ -95,7 +95,7 @@ module PlansFixture
     # @return [String]
     def pull_requests_table(rows)
       body = rows.map { |r|
-        "| #{r[:number]} | [#{SpecPlanBuild::PullRequests.escape(r[:title])}](#{r[:url]}) | #{r[:state]} |"
+        "| #{r[:number]} | [#{Agentilda::PullRequests.escape(r[:title])}](#{r[:url]}) | #{r[:state]} |"
       }
       <<~MARKDOWN
         # Pull Requests

@@ -8,7 +8,7 @@ invocations, then counting by name.
 > This is usage data from **this machine only** — whatever session history
 > happens to still be on disk. It undercounts: it doesn't see skills invoked
 > from other machines, sessions already rotated out of local history, or use
-> through a slash command in `src/commands/` (those back `spec-plan-build`
+> through a slash command in `src/commands/` (those back `agentilda`
 > directly and aren't `Skill` tool calls at all).
 
 | Count | Skill | Source |

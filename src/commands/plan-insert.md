@@ -2,7 +2,7 @@
 description: "Create a plan folder slotted in after an existing number"
 argument-hint: "<NNN[.MM]> <two to five words describing the feature>"
 allowed-tools:
-  - Bash(spec-plan-build:*)
+  - Bash(agentilda:*)
 ---
 
 # Insert a plan folder after an existing one
@@ -11,8 +11,8 @@ allowed-tools:
 
 ```bash
 export LANG="${LANG:-en_US.UTF-8}" LC_ALL="${LC_ALL:-en_US.UTF-8}"
-command -v spec-plan-build >/dev/null || export PATH="$HOME/.rbenv/shims:$HOME/.agents/scripts:$PATH"
-spec-plan-build create --after $ARGUMENTS
+command -v agentilda >/dev/null || export PATH="$HOME/.rbenv/shims:$HOME/.agents/scripts:$PATH"
+agentilda create --after $ARGUMENTS
 ```
 
 You give only the number that comes *before* the new folder; the tool works out the rest. `--after 002` yields `002.01`, opening at ⬜️ rather than ⚪️ — that is the retroactive state, for work that shipped without a specification.

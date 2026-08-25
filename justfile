@@ -1,7 +1,7 @@
 # Tell 'just' to run bash so recipes can use bashisms and `set -euo pipefail`.
 set shell := ["bash", "-c"]
 
-version := `grep 'VERSION *=' workflow/lib/spec_plan_build.rb | head -1 | awk -F'"' '{print $2}' | tr -d '\n'`
+version := `grep 'VERSION *=' workflow/lib/agentilda.rb | head -1 | awk -F'"' '{print $2}' | tr -d '\n'`
 
 # The `-` matters: `rbenv init bash` prints human instructions ("skipping
 # ~/.bash_login: already configured"), which eval then tries to run, and the
@@ -23,7 +23,7 @@ in_workflow := rbenv + 'cd workflow && bundle exec '
 # No `bundle exec`: the executable resolves BUNDLE_GEMFILE from its own
 # location, so it works the same run from here, from PATH, or from another
 # project's root. Paths it is given stay relative to this directory.
-spb := rbenv + 'workflow/exe/spec-plan-build'
+tilda := rbenv + 'workflow/exe/agentilda'
 
 [no-exit-message]
 recipes:
@@ -89,53 +89,53 @@ lefthook:
 version:
     @echo "{{ version }}"
 
-# ---------------------------------------------------------------- spec-plan-build
+# ---------------------------------------------------------------- agentilda
 
 # Create the next numbered plan folder: `just spec-create tax rule dsl`
 spec-create *words:
-    {{ spb }} create {{ words }}
+    {{ tilda }} create {{ words }}
 
 # Create a retroactive plan in the gap after NNN: `just spec-retro 002 schedule k1`
 spec-retro after *words:
-    {{ spb }} create --after {{ after }} {{ words }}
+    {{ tilda }} create --after {{ after }} {{ words }}
 
 # The status table: every plan, its state, and its pull requests
 spec-status *args:
-    {{ spb }} list-plans {{ args }}
+    {{ tilda }} list-plans {{ args }}
 
 # Write .plans/INDEX.md — every plan, its goal, PRs and documents
 spec-index *args:
-    {{ spb }} index {{ args }}
+    {{ tilda }} index {{ args }}
 
 # Show which folder emojis disagree with their contents
 resync-dirs-check:
-    {{ spb }} resync dirs
+    {{ tilda }} resync dirs
 
 # Rename folders so their emoji matches their contents
 resync-dirs:
-    {{ spb }} resync dirs --commit
+    {{ tilda }} resync dirs --commit
 
 # Show which pull request titles are missing an [NNN.MM] prefix
 resync-prs-check:
-    {{ spb }} resync prs
+    {{ tilda }} resync prs
 
 # Add the missing [NNN.MM] prefixes to pull request titles
 resync-prs:
-    {{ spb }} resync prs --commit
+    {{ tilda }} resync prs --commit
 
 # Show what would be created in Linear: `just linear-check TAX`
 linear-check prefix *args:
-    {{ spb }} linear import --prefix {{ prefix }} {{ args }}
+    {{ tilda }} linear import --prefix {{ prefix }} {{ args }}
 
 # Create the Linear projects and issues: `just linear-import TAX`
 linear-import prefix *args:
-    {{ spb }} linear import --prefix {{ prefix }} --commit {{ args }}
+    {{ tilda }} linear import --prefix {{ prefix }} --commit {{ args }}
 
 # Emit the same import as JSON, for the Linear MCP transport
 linear-json prefix *args:
-    {{ spb }} linear import --prefix {{ prefix }} --format json {{ args }}
+    {{ tilda }} linear import --prefix {{ prefix }} --format json {{ args }}
 
-# Regenerate context/feature-building/spec-plan-build.md from the state machine
+# Regenerate context/feature-building/agentilda.md from the state machine
 docs: bundle
-    {{ spb }} docs --output context/feature-building/spec-plan-build.md
-    mdformat --wrap no context/feature-building/spec-plan-build.md
+    {{ tilda }} docs --output context/feature-building/agentilda.md
+    mdformat --wrap no context/feature-building/agentilda.md
