@@ -170,7 +170,7 @@ sources:
     type: skills
     repo: https://github.com/rampstackco/claude-skills.git
     path: skills
-    include_skills: /\Asecurity-baseline\z/
+    include_skills: /\A(security-baseline|design-system)\z/
 
   # ---- from the Claude plugin list this repo used to keep as shell commands --
   #
