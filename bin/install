@@ -1,22 +1,31 @@
 #!/usr/bin/env bash
 #
-# install — copy this checkout into ~/.agents, then link ~/.agents into ~/.claude.
+# install — build, copy this checkout into ~/.agents, then link it into ~/.claude.
 #
-#   bin/install                copy what is missing, never overwrite
-#   bin/install --force        replace what is already there
-#   bin/install --dry-run      say what it would copy, touch nothing
-#   bin/install --no-setup     copy only, skip the linking step
+#   bin/install                build, copy what is missing, never overwrite
+#   bin/install --force        replace what is already in ~/.agents
+#   bin/install --dry-run      say what it would do, touch nothing
+#   bin/install --no-sources   skip the build; copy what is already there
+#   bin/install --no-setup     stop after the copy, skip the linking step
 #
-# Step one of two, and the one that did not exist before. The checkout is a
-# build directory: `scripts/install-sources` assembles skills/ and plugins/ in
-# it from configuration.yml, and this copies the result into ~/.agents with
-# every symlink resolved. So ~/.agents holds real files, and the checkout can
-# be moved, renamed or deleted afterwards without anything dangling.
+# Three steps, and the checkout is none of them.
 #
-# Step two is bin/setup, unchanged, which links ~/.agents into ~/.claude. It
-# needs no table of its own: the copy below is what turns src/commands into
-# commands and workflow/agents into agents, so what setup walks is the flat
-# tree it has always walked.
+#   1. scripts/install-sources assembles skills/ and plugins/ in the checkout
+#      from configuration.yml. They are generated: nothing under either is
+#      committed, so on a fresh clone neither exists until this has run.
+#   2. this copies the result into ~/.agents with every symlink resolved, so
+#      ~/.agents holds real files and the checkout can then be moved, renamed
+#      or deleted without anything dangling.
+#   3. bin/setup links ~/.agents into ~/.claude, unchanged. It needs no table
+#      of its own: the copy below is what turns src/commands into commands and
+#      workflow/agents into agents, so what setup walks is the flat tree it
+#      has always walked.
+#
+# Step 1 is not optional, and not silent. skills/ missing after it has run
+# means it did not get far enough to build one — most often because
+# configuration.yml was only just seeded and is waiting to be read. Copying
+# anyway would install a tree with no skills in it and report success, so it
+# stops instead. --no-sources is for the case where you built already.
 #
 # The trade this makes, deliberately: editing src/skills/foo no longer shows
 # up in ~/.claude until this is run again. An installed tree that keeps
@@ -44,9 +53,20 @@ COPY=(
   "plugins-disabled:plugins-disabled"
 )
 
+# Built by install-sources rather than committed, so "not in this checkout"
+# means something different for these: not that they are absent by choice,
+# but that step 1 has not produced them.
+GENERATED=(skills plugins)
+
+# An installed tree with no skills in it is not a smaller installation, it is
+# a broken one, so its absence stops the run rather than being counted.
+# plugins/ can be legitimately empty, if nothing configured installs a bundle.
+REQUIRED=(skills)
+
 DRY_RUN=0
 FORCE=0
 RUN_SETUP=1
+RUN_SOURCES=1
 
 copied=0
 skipped=0
@@ -67,8 +87,15 @@ note() { printf '  %s·%s %s\n' "$c_dim" "$c_reset" "$*" >&2; }
 warn() { printf '  %s!%s %s\n' "$c_yellow" "$c_reset" "$*" >&2; }
 bad()  { printf '  %s✗%s %s\n' "$c_red" "$c_reset" "$*" >&2; }
 
+in_list() {
+  local needle="$1"; shift
+  local item
+  for item in "$@"; do [[ "$item" == "$needle" ]] && return 0; done
+  return 1
+}
+
 usage() {
-  sed -n '3,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '3,31p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   exit 64
 }
 
@@ -76,13 +103,52 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -n|--dry-run)  DRY_RUN=1;   shift ;;
     -f|--force)    FORCE=1;     shift ;;
-    --no-setup)    RUN_SETUP=0; shift ;;
+    --no-setup)    RUN_SETUP=0;   shift ;;
+--no-sources)  RUN_SOURCES=0; shift ;;
     -h|--help)     usage ;;
     *) printf 'install: unknown argument: %s\n\n' "$1" >&2; usage ;;
   esac
 done
 
 # --------------------------------------------------------------------- run --
+
+if [[ $RUN_SOURCES -eq 1 ]]; then
+  say ""
+  say "${c_bold}Assembling skills and plugins${c_reset}"
+  sources_args=()
+  [[ $DRY_RUN -eq 1 ]] && sources_args+=(--dry-run)
+  # --force is deliberately not passed on. Here it means "replace what is in
+  # ~/.agents"; to install-sources it means "wipe .sources and re-clone every
+  # source from scratch", which is a much bigger thing to do by implication.
+  # Run `scripts/install-sources -f` yourself when that is what you want.
+  if ! "$REPO_ROOT/scripts/install-sources" "${sources_args[@]+"${sources_args[@]}"}"; then
+    say ""
+    bad "install-sources failed — nothing copied"
+    exit 70
+  fi
+fi
+
+# A zero exit from install-sources does not mean it built anything: seeding a
+# configuration.yml and stopping so somebody can read it is a success too.
+# What settles it is whether the directory is there.
+if [[ $DRY_RUN -eq 0 ]]; then
+  for name in "${REQUIRED[@]}"; do
+    [[ -d "$REPO_ROOT/$name" ]] && continue
+    say ""
+    bad "no $name/ to copy"
+    say ""
+    say "  ${c_yellow}$name/ is generated from configuration.yml, not committed, so a${c_reset}"
+    say "  ${c_yellow}fresh clone has none until scripts/install-sources builds it.${c_reset}"
+    if [[ ! -f "$REPO_ROOT/configuration.yml" ]]; then
+      say "  ${c_yellow}There is no configuration.yml yet either — install-sources seeds${c_reset}"
+      say "  ${c_yellow}one from configuration.example.yml and stops so you can read it.${c_reset}"
+    fi
+    say "  ${c_yellow}Copying without it would install a tree with no $name in it and${c_reset}"
+    say "  ${c_yellow}call that success, so this stops here instead.${c_reset}"
+    say ""
+    exit 70
+  done
+fi
 
 say ""
 say "${c_bold}Copying ${REPO_ROOT} into ${AGENTS_DIR}${c_reset}"
@@ -114,7 +180,13 @@ for entry in "${COPY[@]}"; do
   label="${entry##*:}"
 
   if [[ ! -e "$from" ]]; then
-    skipped=$((skipped + 1)); note "$label ${c_dim}not in this checkout${c_reset}"; continue
+    skipped=$((skipped + 1))
+    if in_list "${entry%%:*}" "${GENERATED[@]}"; then
+      warn "$label ${c_dim}not built — nothing in this checkout installs one${c_reset}"
+    else
+      note "$label ${c_dim}not in this checkout${c_reset}"
+    fi
+    continue
   fi
 
   if [[ -e "$to" && $FORCE -eq 0 ]]; then

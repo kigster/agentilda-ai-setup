@@ -10,30 +10,50 @@ require "tmpdir"
 RSpec.describe "bin/install" do
   let(:repo_bin) { File.expand_path("../../bin", __dir__) }
 
-  # A checkout with one of everything the copy table names, including a skill
-  # that is a symlink into a sibling directory — which is the shape
-  # install-sources leaves behind, and the reason the copy resolves links.
+  # A checkout with one of everything the copy table names.
   #
+  # @param builds [Boolean] whether the stand-in install-sources produces a
+  #   skills/ directory, or succeeds having built nothing — which is what the
+  #   real one does when it has only just seeded a configuration.yml
+  # @param installer [Symbol] :succeeds or :fails
   # @return [String] the checkout's path
-  def checkout
+  def checkout(builds: true, installer: :succeeds)
     root = File.join(tmp, "checkout")
     FileUtils.mkdir_p(File.join(root, "bin"))
     %w[install setup].each do |name|
       FileUtils.cp(File.join(repo_bin, name), File.join(root, "bin", name))
       FileUtils.chmod(0o755, File.join(root, "bin", name))
     end
+    stub_install_sources(root, builds:, installer:)
 
     write(root, "config/AGENTS.md", "# instructions\n")
     write(root, "src/commands/plan-run.md", "# a command\n")
     write(root, "workflow/agents/yoda-writer.md", "# a specialist\n")
     write(root, "context/about.md", "# reference\n")
-
-    # The real skill lives outside skills/, and skills/ holds a link to it.
     write(root, "src/skills/create-plan/SKILL.md", "---\nname: create-plan\n---\n")
-    FileUtils.mkdir_p(File.join(root, "skills"))
-    FileUtils.ln_s(File.join(root, "src", "skills", "create-plan"),
-      File.join(root, "skills", "create-plan"))
     root
+  end
+
+  # Stands in for scripts/install-sources, which bin/install runs before it
+  # copies anything. It builds skills/ as a link into src/skills, which is what
+  # the real one does and the reason the copy resolves links.
+  def stub_install_sources(root, builds:, installer:)
+    path = File.join(root, "scripts", "install-sources")
+    FileUtils.mkdir_p(File.dirname(path))
+    body = +"#!/usr/bin/env bash\necho 'stand-in install-sources ran' >&2\n"
+    body << "exit 3\n" if installer == :fails
+    body << build_commands(root) if builds
+    File.write(path, body)
+    FileUtils.chmod(0o755, path)
+  end
+
+  # @return [String] shell that leaves behind what a real build would
+  def build_commands(root)
+    <<~SH
+      mkdir -p "#{root}/skills" "#{root}/plugins/a-bundle"
+      ln -sfn "#{root}/src/skills/create-plan" "#{root}/skills/create-plan"
+      echo '{}' > "#{root}/plugins/a-bundle/plugin.json"
+    SH
   end
 
   def write(root, path, body)
@@ -117,7 +137,7 @@ RSpec.describe "bin/install" do
       output, _status = install(root:)
 
       aggregate_failures do
-        expect(output).to include("already there").and include("conflicts 5")
+        expect(output).to include("already there").and include("conflicts 6")
         expect(File.read(File.join(agents_dir, "context", "about.md"))).to eq("edited by hand\n")
       end
     end
@@ -203,6 +223,71 @@ RSpec.describe "bin/install" do
         expect(written).not_to be_empty
         expect(written.grep(%r{\A/})).to be_empty
         expect(written.grep(/#{Regexp.escape(Dir.home)}/)).to be_empty
+      end
+    end
+  end
+  # skills/ and plugins/ are generated from configuration.yml and nothing under
+  # either is committed, so on a fresh clone neither exists until the build has
+  # run. Copying regardless is how you get an installed tree with no skills in
+  # it and a run that says it worked.
+  describe "the build it runs first" do
+    it "installs what the build produced, plugins included" do
+      install
+
+      aggregate_failures do
+        expect(File.directory?(File.join(agents_dir, "skills", "create-plan"))).to be(true)
+        expect(File.file?(File.join(agents_dir, "plugins", "a-bundle", "plugin.json"))).to be(true)
+        expect(File.readlink(File.join(claude_dir, "plugins"))).to eq("../.agents/plugins")
+      end
+    end
+
+    it "refuses to copy when the build produced no skills, and says why" do
+      output, status = install(root: checkout(builds: false))
+
+      aggregate_failures do
+        expect(status.exitstatus).to eq(70)
+        expect(output).to include("no skills/ to copy").and include("generated from configuration.yml")
+        expect(File.exist?(agents_dir)).to be(false)
+        expect(File.exist?(claude_dir)).to be(false)
+      end
+    end
+
+    it "stops when the build itself fails, rather than copying what was there" do
+      output, status = install(root: checkout(installer: :fails))
+
+      aggregate_failures do
+        expect(status.exitstatus).to eq(70)
+        expect(output).to include("install-sources failed")
+        expect(File.exist?(agents_dir)).to be(false)
+      end
+    end
+
+    it "skips the build under --no-sources, for a checkout already built" do
+      root = checkout
+      install(root:)                      # builds, so skills/ is there afterwards
+      FileUtils.rm_rf(agents_dir)
+      FileUtils.rm_rf(claude_dir)
+
+      output, status = install("--no-sources", root:)
+
+      aggregate_failures do
+        expect(status).to be_success
+        expect(output).not_to include("stand-in install-sources ran")
+        expect(File.directory?(File.join(agents_dir, "skills", "create-plan"))).to be(true)
+      end
+    end
+
+    it "warns about a generated directory that is missing, rather than shrugging" do
+      root = checkout
+      install(root:)
+      FileUtils.rm_rf(File.join(root, "plugins"))
+      FileUtils.rm_rf(agents_dir)
+
+      output, _status = install("--no-sources", root:)
+
+      aggregate_failures do
+        expect(output).to include("plugins").and include("not built")
+        expect(output).not_to include("plugins not in this checkout")
       end
     end
   end

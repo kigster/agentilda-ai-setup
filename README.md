@@ -11,21 +11,31 @@ git clone <this repo> ~/github/you/agentilda   # anywhere; this is not the insta
 cd ~/github/you/agentilda
 direnv allow .              # puts bin/, scripts/ and workflow/exe on PATH
 
-scripts/install-sources     # assemble skills/ and plugins/ from configuration.yml
-bin/install                 # copy the result to ~/.agents, then link ~/.claude
+bin/install
 ```
 
-Two steps, and the checkout is neither of them. `install-sources` builds
-`skills/` and `plugins/` in the checkout; `bin/install` copies what it built
-into `~/.agents` with every symlink resolved, and then `bin/setup` links
-`~/.agents` into `~/.claude` the way it always has. What that buys is a
-`~/.agents` made of real files, so the checkout can be moved, renamed or
-deleted afterwards and nothing dangles. What it costs is that an edit to
-`src/skills/foo` reaches `~/.claude` only when you run it again.
+Three steps, and the checkout is none of them:
 
-`bin/install --dry-run` previews both steps. `--force` is required to
-replace anything already installed, and to replace a `~/.agents` that is
-still a symlink to a checkout from the old arrangement.
+1. `scripts/install-sources` assembles `skills/` and `plugins/` in the
+   checkout from `configuration.yml`. Both are **generated** — nothing under
+   either is committed, so a fresh clone has neither until this has run.
+2. `bin/install` copies the result into `~/.agents` with every symlink
+   resolved, so it holds real files and the checkout can afterwards be moved,
+   renamed or deleted with nothing left dangling.
+3. `bin/setup` links `~/.agents` into `~/.claude`, the way it always has.
+
+`bin/install` runs all three. The first is not optional and not silent: if
+`skills/` is missing after the build, it stops rather than installing a tree
+with no skills in it and reporting success. That usually means
+`configuration.yml` was only just seeded and is waiting to be read.
+`--no-sources` skips the build for a checkout you have already built.
+
+`bin/install --dry-run` previews the lot. `--force` is required to replace
+anything already installed, and to replace a `~/.agents` that is still a
+symlink to a checkout from the old arrangement.
+
+The trade, deliberately: an edit to `src/skills/foo` reaches `~/.claude` only
+when you run it again.
 
 ______________________________________________________________________
 
