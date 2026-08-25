@@ -35,10 +35,10 @@ require "parallel"
 # emitted by `agentilda docs`. Three hand-maintained copies of that table
 # have already drifted apart, which is why there is now exactly one.
 #
+require_relative "agentilda/version"
+
 # © 2026 Konstantin Gredeskoul
 module Agentilda
-  VERSION = "1.0.1"
-
   # The folder every project keeps its plans in.
   PLANS_DIR = ".plans"
 

@@ -1,7 +1,7 @@
 # Tell 'just' to run bash so recipes can use bashisms and `set -euo pipefail`.
 set shell := ["bash", "-c"]
 
-version := `grep 'VERSION *=' workflow/lib/agentilda.rb | head -1 | awk -F'"' '{print $2}' | tr -d '\n'`
+version := `grep 'VERSION *=' workflow/lib/agentilda/version.rb | head -1 | awk -F'"' '{print $2}' | tr -d '\n'`
 
 # The `-` matters: `rbenv init bash` prints human instructions ("skipping
 # ~/.bash_login: already configured"), which eval then tries to run, and the

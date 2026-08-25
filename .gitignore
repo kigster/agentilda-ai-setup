@@ -21,3 +21,6 @@ tmp/
 
 # Bundler installs here when BUNDLE_PATH is set locally. Never committed.
 vendor/bundle/
+
+# Built by `gem build`. The gem is assembled from the checkout, not stored in it.
+*.gem

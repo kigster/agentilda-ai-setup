@@ -1,3 +1,24 @@
+PATH
+  remote: .
+  specs:
+    agentilda (1.0.1)
+      aasm
+      concurrent-ruby
+      dry-cli
+      dry-cli-autocomplete
+      dry-inflector
+      dry-monads
+      fuzzy-string-match
+      parallel
+      pastel
+      strings
+      tty-box
+      tty-command
+      tty-progressbar
+      tty-screen
+      tty-spinner
+      unicode-display_width
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -142,35 +163,21 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  aasm
+  agentilda!
   colored2
-  concurrent-ruby
   coverage-badge
-  dry-cli
-  dry-cli-autocomplete
-  dry-inflector
-  dry-monads
-  fuzzy-string-match
   irb
-  parallel
-  pastel
   rspec
   rspec-its
   rspec_junit_formatter
   simplecov
   standard
-  strings
-  tty-box
-  tty-command
-  tty-progressbar
-  tty-screen
-  tty-spinner
-  unicode-display_width
 
 CHECKSUMS
   RubyInline (3.14.4) sha256=75aec9bb7626a56a6c443922d1d299e1f062795f1d7b7195b0b863ca3776d9ab
   ZenTest (4.12.2) sha256=814e7478a28f631df8f802aee40bd1faa2a53df1fb50e086eb8655f9ee5d60b9
   aasm (6.0.0) sha256=c96ce60ea9574eb194e33f29d801be430b8cade2f31c8a5d137a9870ee39d404
+  agentilda (1.0.1)
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
   bundler (4.0.19) sha256=b48056e4c77fb3853cc47775b5447ede44aaa4f53c32f168014ab4fe86587d47
   colored2 (4.0.3) sha256=63e1038183976287efc43034f5cca17fb180b4deef207da8ba78d051cbce2b37
