@@ -23,9 +23,13 @@ ENV["BUNDLE_GEMFILE"] ||= File.expand_path("../Gemfile", __dir__)
 begin
   require "bundler/setup"
 rescue LoadError, StandardError => e
-  warn "spec-plan-build: could not load the bundle from #{ENV.fetch("BUNDLE_GEMFILE", nil)}"
-  warn "  #{e.class}: #{e.message.lines.first.to_s.strip}"
-  warn "  Run `bundle install` in #{File.dirname(ENV.fetch("BUNDLE_GEMFILE", nil))}"
+  # standard:disable Style/StderrPuts -- Kernel#warn is a no-op under
+  # RUBYOPT=-W0, which agent harnesses and CI both set. This is the only
+  # thing a caller gets before exit 69, so it has to reach them regardless.
+  $stderr.puts "spec-plan-build: could not load the bundle from #{ENV.fetch("BUNDLE_GEMFILE", nil)}"
+  $stderr.puts "  #{e.class}: #{e.message.lines.first.to_s.strip}"
+  $stderr.puts "  Run `bundle install` in #{File.dirname(ENV.fetch("BUNDLE_GEMFILE", nil))}"
+  # standard:enable Style/StderrPuts
   exit 69
 end
 

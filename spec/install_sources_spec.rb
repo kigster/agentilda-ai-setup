@@ -39,9 +39,15 @@ RSpec.describe "scripts/install-sources" do
     File.write(File.join(root, "config", "sources.yml"), YAML.dump("sources" => sources))
   end
 
+  # Runs under RUBYOPT=-W0 deliberately. That silences Kernel#warn, so a script
+  # reporting through it says nothing at all, and every expectation on what a
+  # run printed then passes or fails on whatever the ambient RUBYOPT happened
+  # to be. Pinning it here makes the suite assert the reporting survives.
+  #
   # @return [Array(String, Process::Status)] stderr and the exit status
   def install(*)
-    out, err, status = Open3.capture3({"INSTALL_SOURCES_ROOT" => root, "NO_COLOR" => "1"}, script, *)
+    env = {"INSTALL_SOURCES_ROOT" => root, "NO_COLOR" => "1", "RUBYOPT" => "-W0"}
+    out, err, status = Open3.capture3(env, script, *)
     [out + err, status]
   end
 
@@ -72,7 +78,7 @@ RSpec.describe "scripts/install-sources" do
       require "fileutils"
       File.write(#{tally.inspect}, "x", mode: "a") if #{tally.inspect}
       if #{fail_with.inspect}
-        warn "the registry said no"
+        $stderr.puts "the registry said no"
         exit #{fail_with.inspect}
       end
       #{skills.inspect}.each do |skill|

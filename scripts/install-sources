@@ -65,7 +65,7 @@ def paint(text, code) = COLOR ? "\e[#{code}m#{text}\e[0m" : text.to_s
 
 # standard:disable Style/StderrPuts -- Kernel#warn is a no-op under RUBYOPT=-W0,
 # which is common in CI and agent harnesses; writing $stderr directly is not.
-def out(msg) = warn(msg)
+def out(msg) = $stderr.puts(msg)
 # standard:enable Style/StderrPuts
 def ok(msg) = out("  #{paint("✓", 32)} #{msg}")
 def note(msg) = out("  #{paint("·", 2)} #{msg}")
