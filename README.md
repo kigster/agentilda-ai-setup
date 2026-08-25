@@ -4,38 +4,60 @@
 
 # Konstantin Gredeskoul's AI setup
 
-A vendor-neutral home for the instructions, context, skills and tooling that several different AI coding agents share, plus **spec-plan-build**: a small Ruby system that keeps a project's specifications, plans and pull requests joined up, and can drive specialist agents over them in parallel.
+A vendor-neutral home for the instructions, context, skills and tooling that several different AI coding agents share, plus **agentilda**: a small Ruby system that keeps a project's specifications, plans and pull requests joined up, and can drive specialist agents over them in parallel.
 
 ```bash
-git clone <this repo> ~/.agents
-cd ~/.agents
-bundle install
-bin/setup            # symlinks into ~/.claude; --dry-run to preview
-direnv allow .       # puts bin/ and scripts/ on PATH
+git clone <this repo> ~/github/you/agentilda   # anywhere; this is not the install
+cd ~/github/you/agentilda
+direnv allow .              # puts bin/, scripts/ and workflow/exe on PATH
+
+bin/install
 ```
+
+Three steps, and the checkout is none of them:
+
+1. `scripts/install-sources` assembles `skills/` and `plugins/` in the
+   checkout from `configuration.yml`. Both are **generated** — nothing under
+   either is committed, so a fresh clone has neither until this has run.
+2. `bin/install` copies the result into `~/.agents` with every symlink
+   resolved, so it holds real files and the checkout can afterwards be moved,
+   renamed or deleted with nothing left dangling.
+3. `bin/setup` links `~/.agents` into `~/.claude`, the way it always has.
+
+`bin/install` runs all three. The first is not optional and not silent: if
+`skills/` is missing after the build, it stops rather than installing a tree
+with no skills in it and reporting success. That usually means
+`configuration.yml` was only just seeded and is waiting to be read.
+`--no-sources` skips the build for a checkout you have already built.
+
+`bin/install --dry-run` previews the lot. `--force` is required to replace
+anything already installed, and to replace a `~/.agents` that is still a
+symlink to a checkout from the old arrangement.
+
+The trade, deliberately: an edit to `src/skills/foo` reaches `~/.claude` only
+when you run it again.
 
 ______________________________________________________________________
 
 ## What is in here
 
-| Path                   | What it is                                                                                 |
-| :--------------------- | :----------------------------------------------------------------------------------------- |
-| `config/AGENTS.md`     | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md`   |
-| `context/`             | Durable reference an agent loads on demand: languages, databases, conventions              |
-| `agents/`              | Specialist definitions for the multi-agent harness                                         |
-| `commands/`            | Slash commands that wrap `spec-plan-build` with the right guardrails baked in              |
-| `skills/`              | Claude skills, **generated**, one directory per skill, symlinked into `~/.claude/skills/`  |
-| `skills-mine/`         | Skills authored in this repo (committed); folded into `skills/` by `install-sources`       |
-| `plugins/`             | External plugin bundles (e.g. `pstack`), also generated, not committed                     |
-| `config/sources.yml`   | The declarative list `scripts/install-sources` pulls `skills/` and `plugins/` from         |
-| `bin/`                 | **Bash** executables. `setup` is a pure symlink reconciler                                 |
-| `scripts/`             | **Ruby** executables: `spec-plan-build` and `install-sources`                              |
-| `lib/spec_plan_build/` | The library behind `spec-plan-build`                                                       |
-| `spec/`                | RSpec suite                                                                                |
+| Path                        | What it is                                                                                                                         |
+| :-------------------------- | :--------------------------------------------------------------------------------------------------------------------------------- |
+| `config/AGENTS.md`          | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md`                                           |
+| `context/`                  | What every agent gets regardless: who Konstantin is, and the generated lifecycle doc                                               |
+| `src/skills/`               | Skills authored in this repo (committed); folded into `skills/` by `install-sources`                                               |
+| `src/commands/`             | Slash commands that wrap `agentilda` with the right guardrails baked in                                                            |
+| `skills/`                   | Claude skills, **generated**, one directory per skill, symlinked into `~/.claude/skills/`                                          |
+| `plugins/`                  | External plugin bundles (e.g. `pstack`), also generated, not committed                                                             |
+| `configuration.example.yml` | Committed template for the git-ignored `configuration.yml`, the list `scripts/install-sources` pulls `skills/` and `plugins/` from |
+| `bin/`                      | **Bash** executables. `setup` is a pure symlink reconciler                                                                         |
+| `scripts/`                  | **Ruby**: `install-sources`, which runs before there is a bundle to run it in                                                      |
+| `docs/`                     | Documentation for people rather than context for agents: runbooks, the coverage badge, usage notes                                 |
+| `workflow/`                 | The `agentilda` gem: `exe/`, `lib/`, `agents/`, `spec/`, and its own Gemfile                                                       |
 
 `bin` holds shell and `scripts` holds Ruby deliberately: `standardrb` then has a directory it must lint and one it can ignore entirely, and neither has to be configured around the other. `.envrc` puts both on `PATH`.
 
-`skills/` and `plugins/` are **not committed**. Both are entirely regenerable from `config/sources.yml` plus `skills-mine/` (which is committed, since it's this repo's own work). A skill that went stale with no way to tell where it came from was the exact problem `install-sources` exists to solve:
+`skills/` and `plugins/` are **not committed**. Both are entirely regenerable from `configuration.yml` plus `skills-mine/` (which is committed, since it's this repo's own work). A skill that went stale with no way to tell where it came from was the exact problem `install-sources` exists to solve:
 
 ```bash
 scripts/install-sources          # clone what's missing, update the rest
@@ -43,7 +65,7 @@ scripts/install-sources -f       # wipe and re-clone every source fresh
 scripts/install-sources list     # what's configured, and what's installed from where
 ```
 
-Add a repo to `config/sources.yml` instead of installing something by hand. `type: skills` treats every `SKILL.md`-rooted directory found (at any depth) as its own skill; `type: plugin` installs the whole thing into `plugins/<name>` and, if it carries its own `skills/`, fans those out individually too.
+Add a repo to `configuration.yml` instead of installing something by hand. `type: skills` treats every `SKILL.md`-rooted directory found (at any depth) as its own skill; `type: plugin` installs the whole thing into `plugins/<name>` and, if it carries its own `skills/`, fans those out individually too.
 
 A source that carries more than you want narrows itself with one regular expression, matched against the name each skill installs as:
 
@@ -55,7 +77,7 @@ A source that carries more than you want narrows itself with one regular express
     include_skills: /\A(architect|unslop|why)\z/   # or exclude_skills, never both
 ```
 
-Tightening a filter takes skills back as well as adding them: the next run unlinks whatever it installed last time and no longer installs, so `skills/` converges on what `sources.yml` says. `bin/setup` then sweeps the matching dangling links out of `~/.claude/skills`.
+Tightening a filter takes skills back as well as adding them: the next run unlinks whatever it installed last time and no longer installs, so `skills/` converges on what `configuration.yml` says. `bin/setup` then sweeps the matching dangling links out of `~/.claude/skills`.
 
 ### Vendor neutrality
 
@@ -90,32 +112,32 @@ A folder may not claim a phase whose file is missing. That is not a convention a
 
 A feature moves through five specialists, one state at a time, never two at once, and never further than its own documents currently justify:
 
-1. **⚪️ New.** `spec-plan-build create tax rule dsl` mints `.plans/003.00-⚪️-tax-rule-dsl/`. For a genuinely new feature it also scaffolds `spec.md` with a title and four fixed headings (*What we are trying to achieve*, *Why it matters*, *What already exists*, *What research needs to settle*), makes a best-effort attempt at them from what the project already has on disk, and opens it. You finish the brief by hand.
+1. **⚪️ New.** `agentilda create tax rule dsl` mints `.plans/003.00-⚪️-tax-rule-dsl/`. For a genuinely new feature it also scaffolds `spec.md` with a title and four fixed headings (*What we are trying to achieve*, *Why it matters*, *What already exists*, *What research needs to settle*), makes a best-effort attempt at them from what the project already has on disk, and opens it. You finish the brief by hand.
 1. **🔎 Researched.** `leah-researcher` fans work out across parallel sub-agents and appends spec.md's `## Research` chapter: themes, findings, licensing, a closing `### Findings, Conclusion & References`. Nobody else may write that heading. It *is* the state transition, so an empty one seeds a lie.
 1. **⭐️ Planned.** `yoda-writer` turns the brief plus the research into a complete specification: Goal, Non-Goals, In/Out of scope, Open questions, Conclusion. Or it writes `blocked.md` instead, when a question is a human's to answer, not a guess. `palpatine-planner` then decomposes the finished spec into `plan.md`'s non-overlapping work units, sized for independent sub-agents.
 1. **🟡 Building → 🟢 Ready for Review.** `luke-implementer` builds one work unit at a time (source and tests, no commits) and opens a pull request titled `[003.00] …` as each lands.
 1. **👀 In Review → 🔴 Changes Requested, or ✅ Approved & Merged.** `hansolo-reviewer` reads the diff against the plan and either requests changes (back to 🟢 once addressed) or approves. Nothing merges automatically: approving is reversible and attributable, merging changes a branch everyone else builds on, and that line is enforced in code, not just in the prompt.
 
-Off to the side, at any point: ⭕️/🅱️ **Blocked** (an engineering or product decision only a human can make) and ☢️ **Deferred** or ❌ **Discarded**. Blocked plans are never assigned to an agent by the loop; one that could move them would make the states meaningless. `spec-plan-build states` draws the whole machine, every legal transition included.
+Off to the side, at any point: ⭕️/🅱️ **Blocked** (an engineering or product decision only a human can make) and ☢️ **Deferred** or ❌ **Discarded**. Blocked plans are never assigned to an agent by the loop; one that could move them would make the states meaningless. `agentilda states` draws the whole machine, every legal transition included.
 
-Blocks drain by hand, and in pieces. Answers are written into `blocked.md` as they arrive, and `spec-plan-build unblock 003 --commit` hands the folder to `lando-broker`, which folds each answered question into the document it was stopping (`spec.md` for what and why, `plan.md` for how and in what order), deletes it, and deletes the file once nothing is left. `blocked.md` holds open questions and nothing else, so the pass that empties it is the pass that lets the folder out of ⭕️. Three answers out of four is a normal run: the plan stays blocked on the fourth, which is the truth.
+Blocks drain by hand, and in pieces. Answers are written into `blocked.md` as they arrive, and `agentilda unblock 003 --commit` hands the folder to `lando-broker`, which folds each answered question into the document it was stopping (`spec.md` for what and why, `plan.md` for how and in what order), deletes it, and deletes the file once nothing is left. `blocked.md` holds open questions and nothing else, so the pass that empties it is the pass that lets the folder out of ⭕️. Three answers out of four is a normal run: the plan stays blocked on the fourth, which is the truth.
 
 ### How you invoke it
 
-Both paths end up running the same `scripts/spec-plan-build` binary. The question is just who's driving.
+Both paths end up running the same `workflow/exe/agentilda` binary, which `tilda` is a symlink to. The question is just who's driving.
 
-- **Directly, from a terminal or a script**: `spec-plan-build create …`, `spec-plan-build run --commit`, etc. (see "Day to day" below). This is the whole tool; nothing about it requires Claude.
-- **As a Claude Code slash command**, via `commands/*.md` (`/plan-create`, `/plan-research`, `/plan-run`, `/plan-status`, `/plan-resync-dirs`, `/plan-resync-prs`, `/plan-docs`, `/plan-insert`, `/plan-linear-import`). Each one is a thin wrapper around the same binary, plus the guardrails that erode if left to memory. `/plan-create` won't seed a `## Research` heading or write Goals ahead of the research. `/plan-run` insists you confirm scope, `--commit`, and parallelism before it runs anything.
+- **Directly, from a terminal or a script**: `agentilda create …`, `agentilda run --commit`, etc. (see "Day to day" below). This is the whole tool; nothing about it requires Claude.
+- **As a Claude Code slash command**, via `src/commands/*.md` (`/plan-create`, `/plan-research`, `/plan-run`, `/plan-status`, `/plan-resync-dirs`, `/plan-resync-prs`, `/plan-docs`, `/plan-insert`, `/plan-linear-import`). Each one is a thin wrapper around the same binary, plus the guardrails that erode if left to memory. `/plan-create` won't seed a `## Research` heading or write Goals ahead of the research. `/plan-run` insists you confirm scope, `--commit`, and parallelism before it runs anything.
 
-Use the slash commands inside a Claude Code session, since they carry the constraints. Use the binary directly for scripting, CI, or any other agent. `skills/` and `agents/*.md` are a separate concern: those are Claude's general skill/specialist library, not part of invoking `spec-plan-build` itself.
+Use the slash commands inside a Claude Code session, since they carry the constraints. Use the binary directly for scripting, CI, or any other agent. `skills/` and `workflow/agents/*.md` are a separate concern: those are Claude's general skill/specialist library, not part of invoking `agentilda` itself.
 
 **The full conventions are generated, never hand-written:**
 
 ```bash
-spec-plan-build docs -o context/feature-building/spec-plan-build.md
+agentilda docs -o context/feature-building/agentilda.md
 ```
 
-The status vocabulary and transition table live in `lib/spec_plan_build/status.rb` and `state_machine.rb`, the numbering rules in `ordinal.rb`, and the document is derived from all three. This system previously had three hand-maintained copies of that table and they disagreed — the folder-creation script could mint statuses the reader did not recognise, and could not mint six that it required.
+The status vocabulary and transition table live in `workflow/lib/agentilda/status.rb` and `state_machine.rb`, the numbering rules in `ordinal.rb`, and the document is derived from all three. This system previously had three hand-maintained copies of that table and they disagreed — the folder-creation script could mint statuses the reader did not recognise, and could not mint six that it required.
 
 ### The number is an identity
 
@@ -130,15 +152,15 @@ ______________________________________________________________________
 ## Day to day
 
 ```bash
-spec-plan-build create tax rule dsl          # 003.00-⚪️-tax-rule-dsl
-spec-plan-build create --after 002 k1 sync   # 002.01-⬜️-k1-sync (retroactive)
-spec-plan-build list-plans                       # the table; exits 1 if a name lies
-spec-plan-build resync dirs                  # folder emoji vs folder contents
-spec-plan-build resync prs                   # [NNN.MM] prefixes on PR titles
-spec-plan-build linear import --prefix TAX   # the plans, as Linear projects and issues
-spec-plan-build docs                         # regenerate the conventions
-spec-plan-build states                       # the state machine, as a diagram
-spec-plan-build run --commit --plan 003      # hand specific plans to the agents
+agentilda create tax rule dsl          # 003.00-⚪️-tax-rule-dsl
+agentilda create --after 002 k1 sync   # 002.01-⬜️-k1-sync (retroactive)
+agentilda list-plans                       # the table; exits 1 if a name lies
+agentilda resync dirs                  # folder emoji vs folder contents
+agentilda resync prs                   # [NNN.MM] prefixes on PR titles
+agentilda linear import --prefix TAX   # the plans, as Linear projects and issues
+agentilda docs                         # regenerate the conventions
+agentilda states                       # the state machine, as a diagram
+agentilda run --commit --plan 003      # hand specific plans to the agents
 ```
 
 **Everything that writes is a dry run until `--commit`.** Folder names and pull request titles are things other people join on; changing one silently is how work ends up filed under a plan that did not do it.
@@ -166,8 +188,8 @@ The whole decision is made from disk, which is what makes the dry run worth read
 Two transports apply the same plan:
 
 ```bash
-spec-plan-build linear import --prefix TAX --commit        # needs LINEAR_API_KEY
-spec-plan-build linear import --prefix TAX --format json   # for /plan-linear-import, over MCP
+agentilda linear import --prefix TAX --commit        # needs LINEAR_API_KEY
+agentilda linear import --prefix TAX --format json   # for /plan-linear-import, over MCP
 ```
 
 The JSON is shaped as the Linear MCP server's own `save_project` and `save_issue` arguments, so both transports read one contract and cannot drift apart.
@@ -180,7 +202,7 @@ ______________________________________________________________________
 
 ## The multi-agent harness
 
-Specialists are defined in `agents/*.md`. The frontmatter routes them (`handles:`/`advances_to:` are exactly what `spec-plan-build run` reads to decide who takes a plan); the body is the prompt.
+Specialists are defined in `workflow/agents/*.md`. The frontmatter routes them (`handles:`/`advances_to:` are exactly what `agentilda run` reads to decide who takes a plan); the body is the prompt.
 
 | Agent               | Handles | Advances to | Does                                                                |
 | :------------------ | :------ | :---------- | :------------------------------------------------------------------ |
@@ -192,19 +214,19 @@ Specialists are defined in `agents/*.md`. The frontmatter routes them (`handles:
 | `lando-broker`      | ⭕️, 🅱️  | ⭐️          | folds answered blocks into spec.md/plan.md; never invoked by the loop |
 
 ```bash
-spec-plan-build run                              # dry run: who would take what
-spec-plan-build run --commit                     # one git worktree per plan, in parallel
-spec-plan-build run --commit -j 4                # …four at a time
-spec-plan-build run --isolation shared           # one tree, serial; no git needed
-spec-plan-build run --commit --plan 003,005.01   # only these plans, see below
-spec-plan-build unblock 003                      # what 003 is still waiting on a human for
-spec-plan-build unblock 003 --commit             # fold in whatever has been answered
-spec-plan-build states                           # the whole machine, as a diagram
+agentilda run                              # dry run: who would take what
+agentilda run --commit                     # one git worktree per plan, in parallel
+agentilda run --commit -j 4                # …four at a time
+agentilda run --isolation shared           # one tree, serial; no git needed
+agentilda run --commit --plan 003,005.01   # only these plans, see below
+agentilda unblock 003                      # what 003 is still waiting on a human for
+agentilda unblock 003 --commit             # fold in whatever has been answered
+agentilda states                           # the whole machine, as a diagram
 ```
 
 ### Handing off several plans at once with `--plan`
 
-`run` with no `--plan` loops the **whole tree**. That is exactly wrong right after a batch step creates several plans at once: a bare `run` per `create` starts N overlapping whole-tree loops, each claiming worktrees for plans the others are also touching. `--plan NNN,NNN.MM,...` scopes a round to just the plans named, refusing up front if one doesn't exist rather than silently running everything, and it scopes pushing along with it. The shape that works: create every plan, verify each with `status`, then one `run --commit --plan ...` handoff at the end. Full constraints for that shape (the four headings, what a brief must never write, when to block instead of guess) live in `commands/plan-create.md`.
+`run` with no `--plan` loops the **whole tree**. That is exactly wrong right after a batch step creates several plans at once: a bare `run` per `create` starts N overlapping whole-tree loops, each claiming worktrees for plans the others are also touching. `--plan NNN,NNN.MM,...` scopes a round to just the plans named, refusing up front if one doesn't exist rather than silently running everything, and it scopes pushing along with it. The shape that works: create every plan, verify each with `status`, then one `run --commit --plan ...` handoff at the end. Full constraints for that shape (the four headings, what a brief must never write, when to block instead of guess) live in `src/commands/plan-create.md`.
 
 ### Isolation, and why it is the default
 
@@ -240,7 +262,7 @@ just test         # rspec
 just lint         # standardrb (reports; never rewrites)
 just format       # standardrb --fix, then mdformat
 just ci           # lint + coverage
-just doctor       # what bin/setup would link, touching nothing
+just doctor       # what bin/install would copy and link, touching nothing
 ```
 
 CircleCI runs the suite and the linter, and asserts `bin/setup` reaches a fixed point by running it twice and diffing — the bug it exists to prevent is drift going unnoticed, not a first run failing.

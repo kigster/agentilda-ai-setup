@@ -8,14 +8,15 @@
 #   scripts/install-sources -f           # wipe .sources and re-clone everything fresh
 #   scripts/install-sources list         # what's configured, and what's installed
 #
-# Reads config/sources.yml. Each source is cloned into `.sources/<name>`
+# Reads configuration.yml, which a first run seeds from the committed
+# configuration.example.yml beside it. Each source is cloned into `.sources/<name>`
 # (gitignored — kept only so a plain `install-sources` can `git pull` instead
 # of re-cloning) and installed into `skills/` or `plugins/` — both also
-# gitignored, both fully regenerable from sources.yml plus `skills-mine/`,
+# gitignored, both fully regenerable from configuration.yml plus `src/skills/`,
 # which this script always symlinks in too.
 #
 # A source that carries more skills than you want can narrow itself with
-# `include_skills: /re/` or `exclude_skills: /re/` in sources.yml, one or the
+# `include_skills: /re/` or `exclude_skills: /re/` in configuration.yml, one or the
 # other, never both. Either is matched against the name each skill would
 # install as, so what you filter on is what you see in `skills/`.
 #
@@ -46,17 +47,25 @@ require "shellwords"
 # ~/.agents is itself a link to wherever the checkout lives. Two runs that
 # disagreed about the spelling would each read the other's links as stale.
 ROOT = File.realpath(ENV.fetch("INSTALL_SOURCES_ROOT") { File.expand_path("..", __dir__) })
-SOURCES_FILE = File.join(ROOT, "config", "sources.yml")
+# What the installer reads, and the committed file it is seeded from. The
+# read one is per-machine and git-ignored: which skills and which agents a
+# machine should have is a property of that machine, not of this repo.
+CONFIG_FILE = File.join(ROOT, "configuration.yml")
+EXAMPLE_FILE = File.join(ROOT, "configuration.example.yml")
 STAGING_DIR = File.join(ROOT, ".sources")
 SKILLS_DIR = File.join(ROOT, "skills")
 PLUGINS_DIR = File.join(ROOT, "plugins")
-SKILLS_MINE_DIR = File.join(ROOT, "skills-mine")
+SRC_SKILLS_DIR = File.join(ROOT, "src", "skills")
 MANIFEST_FILE = File.join(STAGING_DIR, "manifest.json")
 
 # Every dest this run installs, owner by owner, filled in by `link` before it
 # has done any writing so that a dry run previews the same prune a real one
 # would perform.
 INSTALLED = {}
+
+# The same dest, and what it was pointed at, so that two things trying to
+# install under one name can be told apart from one thing installed twice.
+CLAIMED = {}
 
 # ---------------------------------------------------------------- output --
 
@@ -65,7 +74,7 @@ def paint(text, code) = COLOR ? "\e[#{code}m#{text}\e[0m" : text.to_s
 
 # standard:disable Style/StderrPuts -- Kernel#warn is a no-op under RUBYOPT=-W0,
 # which is common in CI and agent harnesses; writing $stderr directly is not.
-def out(msg) = warn(msg)
+def out(msg) = $stderr.puts(msg)
 # standard:enable Style/StderrPuts
 def ok(msg) = out("  #{paint("✓", 32)} #{msg}")
 def note(msg) = out("  #{paint("·", 2)} #{msg}")
@@ -75,7 +84,7 @@ def say(msg) = out(msg)
 
 # ----------------------------------------------------------------- source --
 
-# A sources.yml this script will not guess its way past: two filters on one
+# A configuration.yml this script will not guess its way past: two filters on one
 # source, or a regular expression that does not compile. Both are typos whose
 # quiet outcome, nothing installed or everything installed, looks enough like
 # success to go unnoticed, so they stop the run instead of degrading it.
@@ -103,13 +112,19 @@ ADOPTERS = %w[command plugin].freeze
 # that does something else.
 COMMAND_ROOT = ".claude"
 
-# One entry from config/sources.yml.
+# One entry from configuration.yml.
 #
 # `include_skills` and `exclude_skills` narrow which of the skills a source
 # carries actually reach `skills/`. At most one of the two: a source that both
 # allows and denies is a question with no defensible answer.
+#
+# `agents` and `exclude_agents` say which coding agents a source is for, and
+# follow the same one-or-the-other rule for the same reason. Absent means
+# portable, which is the common case and this repo's whole premise; the
+# vendor-locked source is the exception that has to say so.
 Source = Struct.new(:name, :type, :repo, :path, :install, :adopt,
-  :include_skills, :exclude_skills, :include_plugins, :exclude_plugins) do
+  :include_skills, :exclude_skills, :include_plugins, :exclude_plugins,
+  :agents, :exclude_agents) do
   def self.from_yaml(hash)
     name = hash.fetch("name")
     type = hash.fetch("type")
@@ -121,10 +136,13 @@ Source = Struct.new(:name, :type, :repo, :path, :install, :adopt,
                          "which installs no plugin bundles"
     end
 
+    targeting = names(hash, name, "agents")
+
     new(name:, type:, repo: origin(hash, name, type), path: hash["path"],
       install: command_for(hash, name, type), adopt: adoption(hash["adopt"], name, type),
       include_skills: skills[:include], exclude_skills: skills[:exclude],
-      include_plugins: plugins[:include], exclude_plugins: plugins[:exclude])
+      include_plugins: plugins[:include], exclude_plugins: plugins[:exclude],
+      agents: targeting[:include], exclude_agents: targeting[:exclude])
   end
 
   # One `include_<kind>`/`exclude_<kind>` pair, compiled and checked.
@@ -148,6 +166,62 @@ Source = Struct.new(:name, :type, :repo, :path, :install, :adopt,
     filters = {include: include_re, exclude: exclude_re}
     filters.define_singleton_method(:any?) { values.any? }
     filters
+  end
+
+  # `agents:` and `exclude_agents:` as lists of names, checked the same way
+  # the regular-expression pairs are.
+  #
+  # A list rather than a pattern because these are names from a fixed, short,
+  # declared set, and a typo in one should be caught by the run that reads it
+  # rather than quietly matching nothing.
+  #
+  # @param hash [Hash] the raw YAML entry
+  # @param name [String]
+  # @param key [String] "agents"
+  # @return [Hash{Symbol => Array<String>, nil}]
+  def self.names(hash, name, key)
+    include_list = list(hash[key], name, key)
+    exclude_list = list(hash["exclude_#{key}"], name, "exclude_#{key}")
+
+    if include_list && exclude_list
+      raise ConfigError, "#{name}: #{key} and exclude_#{key} are both set; " \
+                         "a source may use one or the other"
+    end
+
+    {include: include_list, exclude: exclude_list}
+  end
+
+  # @return [Array<String>, nil]
+  def self.list(value, name, key)
+    return nil if value.nil?
+    raise ConfigError, "#{name}: #{key} must be a list of names, got #{value.inspect}" unless value.is_a?(Array)
+
+    value.map do |entry|
+      raise ConfigError, "#{name}: #{key} must be a list of names, got #{entry.inspect}" unless entry.is_a?(String)
+      raise ConfigError, "#{name}: #{key} has an empty name in it" if entry.strip.empty?
+
+      entry.strip
+    end.tap { |l| raise ConfigError, "#{name}: #{key} is empty — leave it out to mean every agent" if l.empty? }
+  end
+
+  # Whether anything on this machine would ever read what this source
+  # installs.
+  #
+  # @param known [Array<String>] agents installed, or listed to be
+  # @return [Boolean]
+  def for_any?(known)
+    return agents.intersect?(known) if agents
+    return (known - exclude_agents).any? if exclude_agents
+
+    true
+  end
+
+  # @return [String, nil] why it was skipped, for the log
+  def targeting_note
+    return "for #{agents.join(", ")}, none of which this machine has" if agents
+    return "excluded from #{exclude_agents.join(", ")}, which is every agent here" if exclude_agents
+
+    nil
   end
 
   # A source is fetched by cloning a repository or by running a command, and
@@ -293,10 +367,47 @@ Source = Struct.new(:name, :type, :repo, :path, :install, :adopt,
   end
 end
 
-def load_sources
-  return [] unless File.file?(SOURCES_FILE)
+def config = File.file?(CONFIG_FILE) ? (YAML.safe_load_file(CONFIG_FILE) || {}) : {}
 
-  (YAML.safe_load_file(SOURCES_FILE)["sources"] || []).map { |h| Source.from_yaml(h) }
+def load_sources = (config["sources"] || []).map { |h| Source.from_yaml(h) }
+
+# A first run has nothing to read. Seeding the example across is the easy
+# half; the hard half is that a configuration nobody has looked at should
+# not silently become what a machine installs. So the copy always happens
+# and the install only continues if somebody said it should.
+#
+# Without a terminal there is nobody to ask, and guessing "yes" would
+# install a stranger's list of skills unattended. The seed is reported and
+# the run stops, which a second run turns into an ordinary install.
+#
+# @return [Boolean] whether the caller should go on and install
+def ensure_configuration
+  return true if File.file?(CONFIG_FILE)
+
+  unless File.file?(EXAMPLE_FILE)
+    bad("no configuration.yml, and no configuration.example.yml to seed one from")
+    exit 78
+  end
+
+  FileUtils.cp(EXAMPLE_FILE, CONFIG_FILE)
+  ok("seeded configuration.yml from configuration.example.yml")
+
+  unless $stdin.tty?
+    note("nobody here to ask, so nothing installed — read it, then run again")
+    return false
+  end
+
+  $stderr.print "  install what it lists, as it stands? [y/N] "
+  return true if %w[y yes].include?($stdin.gets.to_s.strip.downcase)
+
+  editor = ENV["EDITOR"] || ENV["VISUAL"]
+  if editor
+    note("opening it in #{editor} — run again when you are happy with it")
+    system(*Shellwords.split(editor), CONFIG_FILE)
+  else
+    note("edit #{CONFIG_FILE.sub("#{ROOT}/", "")} and run again")
+  end
+  false
 end
 
 def load_manifest
@@ -358,7 +469,7 @@ end
 # is the whole reason this stays inside the model the rest of the script is
 # built on. `npx skills add … -g` would write into `~/.claude/skills` instead,
 # where there is no manifest entry to record it, no filter to narrow it and no
-# prune to take it back when you delete the line from sources.yml.
+# prune to take it back when you delete the line from configuration.yml.
 #
 # @param source [Source]
 # @param dry_run [Boolean]
@@ -456,6 +567,23 @@ def link(source, dest, owner:, manifest:, dry_run:, force: false)
     return false
   end
 
+  # Two different things installing under one name is not something to pick a
+  # winner for. Left alone, the second overwrites the first and the run
+  # reports both as installed, so what you read afterwards says you have six
+  # skills when the directory holds one. Name the clash and keep the first.
+  #
+  # This is what a repository filing its skills as `<thing>/skills/SKILL.md`
+  # rather than `<thing>/skills/<name>/SKILL.md` does to a fan-out: every one
+  # of them wants to be called `skills`.
+  if (prior = CLAIMED[dest]) && prior[:source] != source
+    kept = prior[:source].sub("#{ROOT}/", "")
+    lost = source.sub("#{ROOT}/", "")
+    who = (prior[:owner] == owner) ? owner : "#{owner} and #{prior[:owner]}"
+    bad("#{File.basename(dest)}: #{who} would install both #{kept} and #{lost} here — kept the first")
+    return false
+  end
+  CLAIMED[dest] = {owner:, source:}
+
   INSTALLED[dest] = owner
   return true if dry_run
 
@@ -469,23 +597,23 @@ def link(source, dest, owner:, manifest:, dry_run:, force: false)
 end
 
 # Skills authored directly in this repo. Always linked, never copied — an
-# edit to skills-mine/foo should not need a re-run to show up.
+# edit to src/skills/foo should not need a re-run to show up.
 #
 # @param manifest [Hash]
 # @param dry_run [Boolean]
 # @return [void]
 def install_mine(manifest, dry_run:, force:)
-  return unless File.directory?(SKILLS_MINE_DIR)
+  return unless File.directory?(SRC_SKILLS_DIR)
 
-  Dir.children(SKILLS_MINE_DIR).sort.each do |name|
+  Dir.children(SRC_SKILLS_DIR).sort.each do |name|
     next if name.start_with?(".")
 
-    src = File.join(SKILLS_MINE_DIR, name)
+    src = File.join(SRC_SKILLS_DIR, name)
     next unless File.directory?(src)
 
     dest = File.join(SKILLS_DIR, name)
-    if link(src, dest, owner: "skills-mine", manifest:, dry_run:, force:)
-      ok("skills/#{name} -> skills-mine/#{name}")
+    if link(src, dest, owner: "src/skills", manifest:, dry_run:, force:)
+      ok("skills/#{name} -> src/skills/#{name}")
     end
   end
 end
@@ -541,7 +669,7 @@ def install_skills_source(source, manifest, dry_run:, force:)
     if dry_run
       note("#{source.name}: not cloned yet — would install its skills after cloning")
     else
-      bad("#{source.name}: #{source.content_dir.sub("#{ROOT}/", "")} does not exist — check `path` in sources.yml")
+      bad("#{source.name}: #{source.content_dir.sub("#{ROOT}/", "")} does not exist — check `path` in configuration.yml")
     end
     return false
   end
@@ -595,7 +723,7 @@ def install_plugin_source(source, manifest, dry_run:, force:)
     if dry_run
       note("#{source.name}: not cloned yet — would install as plugins/#{source.name} after cloning")
     else
-      bad("#{source.name}: #{source.content_dir.sub("#{ROOT}/", "")} does not exist — check `path` in sources.yml")
+      bad("#{source.name}: #{source.content_dir.sub("#{ROOT}/", "")} does not exist — check `path` in configuration.yml")
     end
     return false
   end
@@ -747,7 +875,7 @@ def cmd_list
 
   say(paint("Configured sources", 1))
   if sources.empty?
-    note("none — add one to #{SOURCES_FILE.sub("#{ROOT}/", "")}")
+    note("none — add one to #{CONFIG_FILE.sub("#{ROOT}/", "")}")
   else
     sources.each do |s|
       say("  #{s.name.ljust(14)} #{s.type.ljust(7)} #{origin_of(s)}  [#{state_of(s)}]")
@@ -767,7 +895,7 @@ def cmd_list
 end
 
 def cmd_install(force:, dry_run:)
-  # Read the config before anything is written. A sources.yml this script
+  # Read the config before anything is written. A configuration.yml this script
   # refuses should not first cost you a `.sources` wipe or an empty `skills/`.
   sources = load_sources
 
@@ -788,13 +916,25 @@ def cmd_install(force:, dry_run:)
   FileUtils.mkdir_p(SKILLS_DIR) unless dry_run
   FileUtils.mkdir_p(PLUGINS_DIR) unless dry_run
 
-  say(paint("skills-mine", 1))
+  say(paint("src/skills", 1))
   install_mine(manifest, dry_run:, force:)
-  reconciled = File.directory?(SKILLS_MINE_DIR) ? ["skills-mine"] : []
+  reconciled = File.directory?(SRC_SKILLS_DIR) ? ["src/skills"] : []
 
   sources.each do |source|
     say("")
     say(paint(source.name, 1))
+
+    if known_agents.any? && !source.for_any?(known_agents)
+      note(source.targeting_note)
+      # Counted as reconciled, so whatever it installed last time is pruned.
+      # Being for nobody here is a decision, and skills/ converges on what the
+      # configuration says. A source that simply could not be fetched takes the
+      # `next` below instead and keeps its links, because a network that was
+      # down is not an instruction to uninstall anything.
+      reconciled << source.name
+      next
+    end
+
     next unless fetch(source, dry_run:)
 
     enumerated = case source.type
@@ -814,6 +954,107 @@ def cmd_install(force:, dry_run:)
   say(paint("Done.", 1) + " `scripts/install-sources list` to see what's installed from where.")
 end
 
+# ---------------------------------------------------------------- agents --
+
+# A coding agent this machine should have, and the vendor's own line for
+# getting it. `installer` is optional: an agent can be listed purely to say
+# "this machine has one of these", which is all a source's `agents:` needs in
+# order to decide whether its skills have a reader.
+Agent = Struct.new(:name, :installer) do
+  # Looked up on PATH rather than with `which`, so the answer does not depend
+  # on a shell being present or on how it was configured.
+  #
+  # @return [String, nil] the executable found, or nil
+  def on_path
+    ENV.fetch("PATH", "").split(File::PATH_SEPARATOR).each do |dir|
+      candidate = File.join(dir, name)
+      return candidate if File.file?(candidate) && File.executable?(candidate)
+    end
+    nil
+  end
+
+  def installed? = !on_path.nil?
+end
+
+# @return [Array<Agent>]
+def load_agents
+  (config["agents"] || []).map do |h|
+    raise ConfigError, "an entry under agents: has no name" if h["name"].to_s.strip.empty?
+
+    # Absent is fine; present and not a usable command line is not.
+    installer = h["installer"]
+    usable = installer.nil? || (installer.is_a?(String) && !installer.strip.empty?)
+    raise ConfigError, "#{h["name"]}: installer: must be a command line, got #{installer.inspect}" unless usable
+
+    Agent.new(h["name"].to_s, installer)
+  end
+end
+
+# Every agent named anywhere this run will consider a reader: installed on
+# this machine, or listed in the configuration as one this machine should
+# have. A source aimed at anything outside this set has nobody to install for.
+#
+# @return [Array<String>]
+# Memoised: every source consults it, and it is a property of the run.
+#
+# Empty means the configuration has no `agents:` block at all, and targeting
+# is then inert rather than exclusive — a file written before this existed
+# should not suddenly install nothing.
+def known_agents = @known_agents ||= load_agents.map(&:name)
+
+def cmd_agents(args, dry_run:)
+  agents = load_agents
+  if agents.empty?
+    say("")
+    note("no agents: block in #{CONFIG_FILE.sub("#{ROOT}/", "")}")
+    return
+  end
+
+  installing = args.first == "install"
+  wanted = args.drop(1)
+  unless wanted.empty?
+    unknown = wanted - agents.map(&:name)
+    raise ConfigError, "not listed under agents: #{unknown.join(", ")}" unless unknown.empty?
+  end
+
+  say("")
+  say(paint("agents", 1))
+  agents.each do |agent|
+    next unless wanted.empty? || wanted.include?(agent.name)
+
+    if agent.installed?
+      ok("#{agent.name} #{paint(agent.on_path, 2)}")
+      next
+    end
+
+    unless agent.installer
+      note("#{agent.name} not installed, and no installer: to run")
+      next
+    end
+
+    unless installing
+      note("#{agent.name} not installed — `agents install #{agent.name}` runs: #{agent.installer}")
+      next
+    end
+
+    if dry_run
+      note("#{agent.name} would run: #{agent.installer}")
+      next
+    end
+
+    # Through a shell, unlike a source's `install:`. A vendor's install line
+    # is a pipeline and is meant to be one; what makes that acceptable here
+    # and not there is that this runs only when somebody asked for this agent
+    # by name, never as part of a routine sync.
+    say("  #{paint("·", 2)} #{agent.name}: #{agent.installer}")
+    if system(agent.installer)
+      ok("#{agent.name} installed")
+    else
+      bad("#{agent.name}: installer exited #{$?.exitstatus}")
+    end
+  end
+end
+
 # ------------------------------------------------------------------- cli --
 
 def usage
@@ -824,8 +1065,10 @@ def usage
       scripts/install-sources --dry-run    say what it would do, touch nothing
       scripts/install-sources -f           wipe .sources and re-clone everything
       scripts/install-sources list         what's configured, and what's installed
+      scripts/install-sources agents       which coding agents are configured, and installed
+      scripts/install-sources agents install [name...]   install the ones that are missing
 
-    A source in config/sources.yml may narrow itself with `include_skills: /re/`
+    A source in configuration.yml may narrow itself with `include_skills: /re/`
     or `exclude_skills: /re/`, one or the other, matched against the name each
     skill would install as.
 
@@ -847,14 +1090,15 @@ verb = args.shift || "install"
 
 begin
   case verb
-  when "install" then cmd_install(force:, dry_run:)
-  when "list" then cmd_list
+  when "install" then cmd_install(force:, dry_run:) if ensure_configuration
+  when "list" then cmd_list if ensure_configuration
+  when "agents" then cmd_agents(args, dry_run:) if ensure_configuration
   else
     out("install-sources: unknown command #{verb.inspect}\n")
     usage
     exit 64
   end
 rescue ConfigError => e
-  bad("config/sources.yml: #{e.message}")
+  bad("configuration.yml: #{e.message}")
   exit 78
 end

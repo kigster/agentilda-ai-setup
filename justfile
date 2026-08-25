@@ -1,37 +1,50 @@
 # Tell 'just' to run bash so recipes can use bashisms and `set -euo pipefail`.
 set shell := ["bash", "-c"]
 
-version := `grep 'VERSION *=' lib/spec_plan_build.rb | head -1 | awk -F'"' '{print $2}' | tr -d '\n'`
+version := `grep 'VERSION *=' workflow/lib/agentilda/version.rb | head -1 | awk -F'"' '{print $2}' | tr -d '\n'`
 
 # The `-` matters: `rbenv init bash` prints human instructions ("skipping
 # ~/.bash_login: already configured"), which eval then tries to run, and the
 # recipe dies with "skipping: command not found". `rbenv init - bash` prints
 # the shell code that is meant to be eval'd.
-rbenv := 'eval "$(rbenv init - bash 2>/dev/null || true)"; bundle exec '
+rbenv := 'eval "$(rbenv init - bash 2>/dev/null || true)"; '
 
+# The gem lives in workflow/ and the installer stays at the root, so the two
+# halves are reached differently. Lint runs from here, where it sees scripts/
+# and workflow/ alike, with bundler pointed at the gem's Gemfile. The suite
+# runs from workflow/, where .rspec and spec/ are, and where SimpleCov's
+# `cover "lib/**/*.rb"` means the right lib.
+#
 # This repo is linted with `standard`, not rubocop: the Gemfile says so, and
 # standard is rubocop with the arguing removed.
-spb := 'bundle exec scripts/spec-plan-build'
+bundle := rbenv + 'BUNDLE_GEMFILE=workflow/Gemfile bundle exec '
+in_workflow := rbenv + 'cd workflow && bundle exec '
+
+# No `bundle exec`: the executable resolves BUNDLE_GEMFILE from its own
+# location, so it works the same run from here, from PATH, or from another
+# project's root. Paths it is given stay relative to this directory.
+tilda := rbenv + 'workflow/exe/agentilda'
 
 [no-exit-message]
 recipes:
     just --choose
 
-# Install gems and wire ~/.agents into ~/.claude
-install: bundle setup
+# Copy this checkout into ~/.agents, then link ~/.agents into ~/.claude
+install *args:
+    bin/install {{ args }}
 
 # Install gem dependencies only
 bundle:
-    {{ rbenv }} --version >/dev/null 2>&1 || gem install bundler
-    bundle install
+    {{ rbenv }} bundle --version >/dev/null 2>&1 || gem install bundler
+    cd workflow && bundle install
 
-# Symlink AGENTS.md and the shared folders into ~/.claude
+# The linking step on its own. `just install` runs it for you
 setup:
     bin/setup
 
-# Show what `just setup` would link, without touching anything
+# Show what `just install` would copy and link, without touching anything
 doctor:
-    bin/setup --dry-run
+    bin/install --dry-run
 
 # Repoint symlinks that aim somewhere else (never touches real files)
 relink:
@@ -41,21 +54,21 @@ build: install
 
 # Lint
 lint:
-    {{ rbenv }} standardrb
+    {{ bundle }} standardrb
 
 # Lint and reformat, then reformat markdown — pass --fix or paths as arguments
 format *args:
-    {{ rbenv }} standardrb --fix {{ args }}
+    {{ bundle }} standardrb --fix {{ args }}
     /usr/bin/find . -name '*.md' -not -path './coverage/*' -not -path './.git/*' \
         -exec mdformat --wrap no {} \; -print
 
 # Run the specs
 test *args:
-    {{ rbenv }} rspec {{ args }}
+    {{ in_workflow }} rspec {{ args }}
 
 # Run the specs with a coverage report
 test-coverage *args:
-    export COVERAGE=true; {{ rbenv }} rspec {{ args }}
+    export COVERAGE=true; {{ in_workflow }} rspec {{ args }}
     @echo "open coverage/index.html"
 
 ci: lint test-coverage
@@ -71,59 +84,59 @@ clean:
 
 # Run all lefthook pre-commit hooks
 lefthook:
-    {{ rbenv }} lefthook run pre-commit --all-files
+    {{ bundle }} lefthook run pre-commit --all-files
 
 # Print the current version
 version:
     @echo "{{ version }}"
 
-# ---------------------------------------------------------------- spec-plan-build
+# ---------------------------------------------------------------- agentilda
 
 # Create the next numbered plan folder: `just spec-create tax rule dsl`
 spec-create *words:
-    {{ spb }} create {{ words }}
+    {{ tilda }} create {{ words }}
 
 # Create a retroactive plan in the gap after NNN: `just spec-retro 002 schedule k1`
 spec-retro after *words:
-    {{ spb }} create --after {{ after }} {{ words }}
+    {{ tilda }} create --after {{ after }} {{ words }}
 
 # The status table: every plan, its state, and its pull requests
 spec-status *args:
-    {{ spb }} list-plans {{ args }}
+    {{ tilda }} list-plans {{ args }}
 
 # Write .plans/INDEX.md — every plan, its goal, PRs and documents
 spec-index *args:
-    {{ spb }} index {{ args }}
+    {{ tilda }} index {{ args }}
 
 # Show which folder emojis disagree with their contents
 resync-dirs-check:
-    {{ spb }} resync dirs
+    {{ tilda }} resync dirs
 
 # Rename folders so their emoji matches their contents
 resync-dirs:
-    {{ spb }} resync dirs --commit
+    {{ tilda }} resync dirs --commit
 
 # Show which pull request titles are missing an [NNN.MM] prefix
 resync-prs-check:
-    {{ spb }} resync prs
+    {{ tilda }} resync prs
 
 # Add the missing [NNN.MM] prefixes to pull request titles
 resync-prs:
-    {{ spb }} resync prs --commit
+    {{ tilda }} resync prs --commit
 
 # Show what would be created in Linear: `just linear-check TAX`
 linear-check prefix *args:
-    {{ spb }} linear import --prefix {{ prefix }} {{ args }}
+    {{ tilda }} linear import --prefix {{ prefix }} {{ args }}
 
 # Create the Linear projects and issues: `just linear-import TAX`
 linear-import prefix *args:
-    {{ spb }} linear import --prefix {{ prefix }} --commit {{ args }}
+    {{ tilda }} linear import --prefix {{ prefix }} --commit {{ args }}
 
 # Emit the same import as JSON, for the Linear MCP transport
 linear-json prefix *args:
-    {{ spb }} linear import --prefix {{ prefix }} --format json {{ args }}
+    {{ tilda }} linear import --prefix {{ prefix }} --format json {{ args }}
 
-# Regenerate context/feature-building/spec-plan-build.md from the state machine
+# Regenerate context/feature-building/agentilda.md from the state machine
 docs: bundle
-    {{ spb }} docs --output context/feature-building/spec-plan-build.md
-    mdformat --wrap no context/feature-building/spec-plan-build.md
+    {{ tilda }} docs --output context/feature-building/agentilda.md
+    mdformat --wrap no context/feature-building/agentilda.md

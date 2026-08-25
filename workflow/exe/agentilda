@@ -1,0 +1,106 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# agentilda — spec → plan → build.
+#
+#   agentilda create tax rule dsl      # the next numbered plan folder
+#   agentilda create --after 002 …     # a plan written after the fact
+#   agentilda list-plans               # every plan, its state, its PRs
+#   agentilda resync dirs              # folder emoji vs folder contents
+#   agentilda resync prs               # [NNN.MM] prefixes on PR titles
+#   agentilda docs -o context/SPEC-PLAN-BUILD.md
+#
+# Deliverables go to STDOUT; progress goes to STDERR. Anything that writes to
+# disk or to GitHub is a dry run until you pass --commit.
+#
+# © 2026 Konstantin Gredeskoul
+
+# Resolve the bundle from this repository rather than from wherever the caller
+# happens to be standing: this is installed on PATH and run from other projects'
+# roots, where the local Gemfile knows nothing about dry-cli or finite_machine.
+ENV["BUNDLE_GEMFILE"] ||= File.expand_path("../Gemfile", __dir__)
+
+begin
+  require "bundler/setup"
+rescue LoadError, StandardError => e
+  # standard:disable Style/StderrPuts -- Kernel#warn is a no-op under
+  # RUBYOPT=-W0, which agent harnesses and CI both set. This is the only
+  # thing a caller gets before exit 69, so it has to reach them regardless.
+  $stderr.puts "agentilda: could not load the bundle from #{ENV.fetch("BUNDLE_GEMFILE", nil)}"
+  $stderr.puts "  #{e.class}: #{e.message.lines.first.to_s.strip}"
+  $stderr.puts "  Run `bundle install` in #{File.dirname(ENV.fetch("BUNDLE_GEMFILE", nil))}"
+  # standard:enable Style/StderrPuts
+  exit 69
+end
+
+require_relative "../lib/agentilda"
+
+# Names dry-cli can resolve, so a leading word that is not one of these is a
+# typo and must fail rather than quietly run something else.
+KNOWN = %w[create new c list-plans status st resync docs version --version -v -h --help].freeze
+
+# Bare `agentilda` prints its help. It used to print the plan table, which
+# meant the one command that reads a tree was also the one you got by accident.
+argv = ARGV.dup
+argv = ["-h"] if argv.empty?
+
+# `run --push-pr` takes an OPTIONAL part letter: bare means "continue this
+# plan's sequence", `--push-pr C` means "use C". dry-cli has no optional-value
+# option, so the bare form is filled in here rather than made to look like a
+# mistake.
+#
+# Scoped to `run`, and to the long spelling when it is not. This rewrote every
+# `-p` in every command for a while, which quietly turned
+# `linear import TAX -p "Some Project"` into `-p auto "Some Project"` — the
+# option took "auto" and the project name became a stray argument. A global
+# rewrite of a one-letter flag will collide with the next command that wants
+# it; this one collided within the week.
+if argv.first == "run"
+  argv = argv.each_with_object([]) do |token, out|
+    out << token
+    next unless ["--push-pr", "-p"].include?(token)
+
+    following = argv[argv.index(token) + 1]
+    out << "auto" unless following&.match?(/\A[A-Z]\z/)
+  end
+end
+
+module ProgramBanner
+  extend Dry::CLI::Banner::ColorMethods
+
+  def self.banner
+    puts %(
+      #{yellow.bold("agentilda")}
+        #{blue("Agentic Specification-Driven Development")} #{green("v#{Agentilda::VERSION}")}
+
+        This is the key executable that facilitates Agentic Flow:
+
+        #{green.bold("spec → plan → build → review → tune/fix → approve")}
+
+        For now the final merge and deploy is manual. It also provides sync
+        of the .plans folders with Github PRs and Linear Issues.
+
+      #{yellow.bold("GLOBAL FLAGS")}
+        -h, --help        Show this help message and exit
+        -C, --no-color    Disable color output
+
+    ).gsub(/^ {6}/, "").strip
+    puts
+  end
+end
+
+no_color = %w[--no-color -C].intersect?(argv)
+Dry::CLI::Banner.disable_color! if no_color
+# # dry-cli prints the command list for an unresolved command and exits 1, and
+# it treats a bare `--help` as exactly that. Asking for help is not a failure,
+# so the status is forced back to 0 for the help forms only.
+help = %w[-h --help help].intersect?(argv) && argv.first[0] == "-"
+ProgramBanner.banner if help
+
+begin
+  Dry::CLI.new(Agentilda::CLI).call(arguments: help ? [] : argv) || 0
+rescue SystemExit => e
+  exit(help ? 0 : e.status)
+end
+
+exit 0
