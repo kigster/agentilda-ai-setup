@@ -709,4 +709,29 @@ RSpec.describe "scripts/install-sources" do
       end
     end
   end
+  # A repository that files its skills as `<thing>/skills/SKILL.md` rather than
+  # `<thing>/skills/<name>/SKILL.md` gives every one of them the same basename,
+  # and the fan-out names a skill after its directory. Real repositories do
+  # this; ahmedasmar/devops-claude-skills has six.
+  describe "two skills that would install under one name" do
+    it "keeps the first, names both directories, and does not claim it installed both" do
+      dir = File.join(tmp, "up")
+      %w[alpha beta].each do |group|
+        FileUtils.mkdir_p(File.join(dir, group, "skills"))
+        File.write(File.join(dir, group, "skills", "SKILL.md"), "---\nname: #{group}\n---\n")
+      end
+      git(dir, "init", "-q", "-b", "main")
+      git(dir, "add", "-A")
+      git(dir, "-c", "user.email=alan.turing@manchester.edu", "-c", "user.name=Alan Turing",
+        "commit", "-qm", "seed")
+      write_config([{"name" => "up", "type" => "skills", "repo" => dir}])
+
+      output, status = install
+      aggregate_failures do
+        expect(status).to be_success
+        expect(installed_skills).to eq(%w[skills])
+        expect(output).to include("would install both").and include("alpha/skills").and include("beta/skills")
+      end
+    end
+  end
 end

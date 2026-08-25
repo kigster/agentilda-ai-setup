@@ -63,6 +63,10 @@ MANIFEST_FILE = File.join(STAGING_DIR, "manifest.json")
 # would perform.
 INSTALLED = {}
 
+# The same dest, and what it was pointed at, so that two things trying to
+# install under one name can be told apart from one thing installed twice.
+CLAIMED = {}
+
 # ---------------------------------------------------------------- output --
 
 COLOR = $stderr.tty? && !ENV.key?("NO_COLOR")
@@ -562,6 +566,23 @@ def link(source, dest, owner:, manifest:, dry_run:, force: false)
     warn_("#{File.basename(dest)} already exists and was not put there by install-sources — left alone (pass -f to reclaim it)")
     return false
   end
+
+  # Two different things installing under one name is not something to pick a
+  # winner for. Left alone, the second overwrites the first and the run
+  # reports both as installed, so what you read afterwards says you have six
+  # skills when the directory holds one. Name the clash and keep the first.
+  #
+  # This is what a repository filing its skills as `<thing>/skills/SKILL.md`
+  # rather than `<thing>/skills/<name>/SKILL.md` does to a fan-out: every one
+  # of them wants to be called `skills`.
+  if (prior = CLAIMED[dest]) && prior[:source] != source
+    kept = prior[:source].sub("#{ROOT}/", "")
+    lost = source.sub("#{ROOT}/", "")
+    who = (prior[:owner] == owner) ? owner : "#{owner} and #{prior[:owner]}"
+    bad("#{File.basename(dest)}: #{who} would install both #{kept} and #{lost} here — kept the first")
+    return false
+  end
+  CLAIMED[dest] = {owner:, source:}
 
   INSTALLED[dest] = owner
   return true if dry_run
