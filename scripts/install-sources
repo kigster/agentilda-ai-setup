@@ -11,7 +11,7 @@
 # Reads config/sources.yml. Each source is cloned into `.sources/<name>`
 # (gitignored — kept only so a plain `install-sources` can `git pull` instead
 # of re-cloning) and installed into `skills/` or `plugins/` — both also
-# gitignored, both fully regenerable from sources.yml plus `skills-mine/`,
+# gitignored, both fully regenerable from sources.yml plus `src/skills/`,
 # which this script always symlinks in too.
 #
 # A source that carries more skills than you want can narrow itself with
@@ -50,7 +50,7 @@ SOURCES_FILE = File.join(ROOT, "config", "sources.yml")
 STAGING_DIR = File.join(ROOT, ".sources")
 SKILLS_DIR = File.join(ROOT, "skills")
 PLUGINS_DIR = File.join(ROOT, "plugins")
-SKILLS_MINE_DIR = File.join(ROOT, "skills-mine")
+SRC_SKILLS_DIR = File.join(ROOT, "src", "skills")
 MANIFEST_FILE = File.join(STAGING_DIR, "manifest.json")
 
 # Every dest this run installs, owner by owner, filled in by `link` before it
@@ -469,23 +469,23 @@ def link(source, dest, owner:, manifest:, dry_run:, force: false)
 end
 
 # Skills authored directly in this repo. Always linked, never copied — an
-# edit to skills-mine/foo should not need a re-run to show up.
+# edit to src/skills/foo should not need a re-run to show up.
 #
 # @param manifest [Hash]
 # @param dry_run [Boolean]
 # @return [void]
 def install_mine(manifest, dry_run:, force:)
-  return unless File.directory?(SKILLS_MINE_DIR)
+  return unless File.directory?(SRC_SKILLS_DIR)
 
-  Dir.children(SKILLS_MINE_DIR).sort.each do |name|
+  Dir.children(SRC_SKILLS_DIR).sort.each do |name|
     next if name.start_with?(".")
 
-    src = File.join(SKILLS_MINE_DIR, name)
+    src = File.join(SRC_SKILLS_DIR, name)
     next unless File.directory?(src)
 
     dest = File.join(SKILLS_DIR, name)
-    if link(src, dest, owner: "skills-mine", manifest:, dry_run:, force:)
-      ok("skills/#{name} -> skills-mine/#{name}")
+    if link(src, dest, owner: "src/skills", manifest:, dry_run:, force:)
+      ok("skills/#{name} -> src/skills/#{name}")
     end
   end
 end
@@ -788,9 +788,9 @@ def cmd_install(force:, dry_run:)
   FileUtils.mkdir_p(SKILLS_DIR) unless dry_run
   FileUtils.mkdir_p(PLUGINS_DIR) unless dry_run
 
-  say(paint("skills-mine", 1))
+  say(paint("src/skills", 1))
   install_mine(manifest, dry_run:, force:)
-  reconciled = File.directory?(SKILLS_MINE_DIR) ? ["skills-mine"] : []
+  reconciled = File.directory?(SRC_SKILLS_DIR) ? ["src/skills"] : []
 
   sources.each do |source|
     say("")

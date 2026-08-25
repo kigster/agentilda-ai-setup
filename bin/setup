@@ -56,10 +56,10 @@ CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
 
 # Folders that belong to the Ruby project rather than to any agent, and have no
 # business in ~/.claude. `config` holds AGENTS.md, linked explicitly above, not
-# as a shared folder. `skills-mine` and `skills-temporary` are inputs to
-# `scripts/install-sources`, which folds them into `skills/` — that is what
-# gets linked out, not the sources themselves.
-SKIP_DIRS=(bin scripts lib spec coverage docs tmp vendor node_modules config skills-mine skills-temporary)
+# as a shared folder. `src` holds what this repo writes itself, and reaches an
+# agent only after `install-sources` folds it into `skills/` — that is what
+# gets linked out, not the source it was built from.
+SKIP_DIRS=(bin scripts lib spec coverage docs tmp vendor node_modules config src skills-temporary)
 
 # Folders that exist as real directories in ~/.claude and hold one link per
 # child rather than a single link for the whole folder.

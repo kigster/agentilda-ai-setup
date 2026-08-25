@@ -4,7 +4,7 @@
 # clones it into `.sources/<name>` (gitignored, kept for `git pull` reuse and
 # for recording exactly which commit is installed) and installs its content
 # into `skills/` or `plugins/` — both also gitignored, both fully regenerable
-# from this file plus `skills-mine/`. `-f` wipes `.sources` and re-clones
+# from this file plus `src/skills/`. `-f` wipes `.sources` and re-clones
 # everything fresh, which is the whole answer to "these skills went stale and
 # I can't even tell where they came from."
 #
