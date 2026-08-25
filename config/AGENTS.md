@@ -20,11 +20,9 @@ R3. DO NOT PERFORM ANY OPERATION WITHOUT A CONFIRMATION THAT MAY RESULT IN A LOS
 
 R4. DO NOT EVER DO ANYTHING ILLEGAL, SUCH AS HACKING INTO SERVERS ON A LOCAL NETWORK, REMOTE SERVERS, OR USING UNAUTHORIZED USERNAME AND PASSWORD or and API TOKEN. THE ONLY EXCEPTION TO THE HACKING RULE IS IF I ASK FOR YOU TO PERFORM A SECURITY SCAN OR AUDIT OF MY LOCAL HOME NETWORK. IN WHICH CASE YOUR JOB IS TO REPORT ANY VULNERABILITIES, NOT EXPLOIT THEM.
 
-## Instructions Specifically For CLAUDE AI
+## Plugins and skills
 
-If you are claude AI install the plugins defined in the file:
-
-[`~/.claude/plugins/PLUGINS.md`](/Users/kig/.claude/plugins/PLUGINS.md)
+Do not install any by hand. They are declared in `configuration.yml` at the root of the agentilda checkout, and `scripts/install-sources` is what installs them. A source there says which agents it is for, so the Claude-only ones install for Claude and nothing else goes looking for them. Anything installed outside that path has no record of where it came from, which is the problem that file exists to solve.
 
 ## Instructions for this project specifically
 
@@ -139,19 +137,15 @@ Connect to any running MCP servers that are pre-configured locally, as well as L
 
 ## **Languages**
 
-Please load dynamically the instructions for the language in use by the project from the folder `~/.agents/context/LANGUAGE.md` for instance:
-
-- `~/.agents/context/languages/ruby.md`
-- `~/.agents/context/languages/python.md`
-- `~/.agents/context/languages/markdown.md`
+Per-language conventions are skills now, not files to be told about: `ruby-conventions`, `python-conventions` and `markdown-conventions`. Each one's description says when it applies, so the right one loads when you are about to write that language rather than when someone remembered to name it.
 
 ## **About Me**
 
-If you need to learn more about me, my style, and my preferences, please load the info from [~/.agents/context/about.md](/Users/kig/.agents/context/about.md)
+If you need to learn more about me, my style, and my preferences, please load the info from [`~/.agents/context/about.md`](about.md)
 
 ## General Principles of Software Development with Konstantin
 
-- For each project, maintain a folder `.plans` and please read [`~/.agents/context/feature-building/plan-spec-build.md`](/Users/kig/.agents/context/feature-building/plan-spec-build.md) for the details.
+- For each project, maintain a folder `.plans` and please read [`~/.agents/context/feature-building/agentilda.md`](feature-building/agentilda.md) for the details.
 
 - General tooling. On MacOS and Linux use `brew` from `https://brew.sh` to install required tooling. The following is the typical `Brewfile` that's used with `brew` like so: `brew bundle --no-upgrade` installs packages defined in that file:
 
@@ -236,7 +230,7 @@ When your context reaches 40% run compaction via /compact.
 
 ## Database Development
 
-Please reference the file [~/.agents/context/postgresql.md](/Users/kig/.agents/context/postgresql.md) for best practices on DB schema design, conventions, indexes, and so on.
+The `postgres-schema` skill carries the conventions, and its references carry the detail: schema design, naming, indexes, migrations, money, locking, connection pooling, autovacuum and transaction ID wraparound. Its description says when it applies, so it loads itself.
 
 ## Concurrent Agents — Claim Before You Write
 

@@ -1,0 +1,217 @@
+# What this machine should have: which coding agents, and which skills and
+# plugins to give them. Copy to configuration.yml, which is git-ignored and
+# is the file `scripts/install-sources` actually reads. A first run does the
+# copy for you, then stops so you can read it before it installs anything.
+#
+# Add a repo here instead of installing it by hand: `scripts/install-sources`
+# clones it into `.sources/<name>` (gitignored, kept for `git pull` reuse and
+# for recording exactly which commit is installed) and installs its content
+# into `skills/` or `plugins/` — both also gitignored, both fully regenerable
+# from this file plus `src/skills/`. `-f` wipes `.sources` and re-clones
+# everything fresh, which is the whole answer to "these skills went stale and
+# I can't even tell where they came from."
+#
+#   type: skills — every subdirectory under `path` (repo root if omitted)
+#                  becomes its own skills/<dir-name>
+#   type: plugin — `path` becomes plugins/<name>, one bundle. If that bundle
+#                  has its own skills/ subdirectory, each child is *also*
+#                  symlinked individually into skills/<dir-name> — a plugin's
+#                  skills are still just skills.
+#   type: command — no repository at all. Runs `install:` with its working
+#                  directory inside `.sources/<name>`, then installs the
+#                  skills and plugin bundles that turned up there.
+#
+# A command source, in full:
+#
+#   - name: quota-axi
+#     type: command
+#     install: npx skills add kunchenguid/quota-axi --skill quota-axi --yes
+#     adopt: [skills, plugins]   # the default; name one to take only that half
+#
+# The command line is split into words and run directly, never handed to a
+# shell, so it does what it looks like it does and a stray quote or `$HOME`
+# means nothing. Pipes and redirects are therefore out; if you need them, put
+# them in a script and call the script.
+#
+# Do not pass a global flag. `npx skills add … -g` writes into
+# ~/.claude/skills, outside this repo, where nothing records where it came
+# from, no filter narrows it, and tightening one never takes it back. Dropping
+# `-g` makes the same command write `.claude/skills/<name>` inside
+# `.sources/<name>`, which is an ordinary source tree that everything below
+# applies to. That is the whole trick.
+#
+# It runs once. `npx` re-downloads on every invocation and this script gets
+# run several times a day, so a command whose output is already in `.sources`
+# is left alone. `-f` wipes `.sources`, which is how you run it again.
+#
+# Narrowing a source that carries more than you want:
+#
+#   include_skills:  /re/   install only the skills whose name matches
+#   exclude_skills:  /re/   install every skill except those whose name matches
+#   include_plugins: /re/   the same two, for plugin bundles, on a
+#   exclude_plugins: /re/   `type: plugin` or `type: command` source
+#
+# One or the other per kind, never both on the same source; a source that both
+# allows and denies is a question with no defensible answer, so the run stops.
+# All four are matched against the name the thing installs as — the
+# `skills/<name>` or `plugins/<name>` you go looking for — and not against its
+# path inside the source, because a category tree is that repo's filing
+# decision rather than yours. The slashes are optional and only there so the
+# value reads as a regular expression; `/re/i` and the `m`/`x` flags work too.
+# Anchor with `\A`/`\z` when you mean a whole name, since a bare `tdd` matches
+# `tdd-helper` as well.
+#
+# Tightening a filter also takes skills back: the next run unlinks whatever it
+# installed last time and no longer installs, so `skills/` converges on what
+# this file says rather than accumulating.
+#
+# Saying which agents a source is for:
+#
+#   agents:         [claude]   only for these
+#   exclude_agents: [claude]   for every agent named above except these
+#
+# One or the other, like the pairs above, and for the same reason. Leaving
+# both out means portable, which is what most sources are and what this repo
+# is for; the vendor-locked one is the exception, so it is the one that says
+# so. A name here is matched against the `agents:` block at the top, and a
+# source no agent there would read is skipped, and said so, rather than
+# installing skills that nothing on this machine can load. It prunes when
+# skipped, the same as a tightened filter, since being for nobody here is a
+# decision rather than a failure.
+#
+# `include_skills`/`exclude_skills` govern the fan-out into `skills/`, and
+# `include_plugins`/`exclude_plugins` govern which bundles get copied. Neither
+# reaches inside a bundle: it stays whole because it is one unit with its own
+# manifest, and half a plugin is not a smaller plugin. On a one-bundle
+# `type: plugin` source, `exclude_plugins` and `adopt: skills` say the same
+# thing, which is take its skills and leave the bundle.
+# The coding agents themselves. Each `installer:` is a vendor's own line,
+# verbatim from their install page, so unlike a source's `install:` it does
+# go through a shell — that is what a `curl … | sh` is. The difference is
+# deliberate: a source's command runs on every sync, for anyone who clones
+# this repo, while an agent installer runs only when somebody asks for it by
+# name, and never as part of a routine sync.
+#
+# An agent already on PATH is left alone.
+#
+#   scripts/install-sources agents            # what is configured, and what is installed
+#   scripts/install-sources agents install    # install the ones that are missing
+#
+# This list is also what `agents:` on a source below is matched against: a
+# source for an agent that is neither installed nor listed here is skipped,
+# and said so, rather than installing skills nothing will ever read.
+agents:
+  - name: claude
+    installer: curl -fsSL https://claude.ai/install.sh | bash
+  - name: pi
+    installer: curl -fsSL https://pi.dev/install.sh | sh
+  - name: grok
+    installer: curl -fsSL https://x.ai/cli/install.sh | bash
+  - name: codex
+    installer: curl -fsSL https://chatgpt.com/codex/install.sh | sh
+  - name: kiro
+    installer: curl -fsSL https://cli.kiro.dev/install | bash
+  - name: opencode
+    installer: curl -fsSL https://opencode.ai/install | bash
+  - name: cursor
+    installer: curl https://cursor.com/install -fsS | bash
+
+sources:
+  - name: mattpocock
+    type: skills
+    repo: git@github.com:mattpocock/skills.git
+    path: skills
+    exclude_skills: /\A(wizard|grilling)\z/
+
+  - name: pstack
+    type: plugin
+    repo: git@github.com:cursor/plugins.git
+    path: pstack
+    include_skills: /\A(architect|unslop|why|how|technical-writing)\z/
+
+  - name: superpowers
+    type: plugin
+    repo: git@github.com:obra/superpowers.git
+
+  - name: quota-axi
+    type: command
+    install: npx skills add kunchenguid/quota-axi --skill quota-axi --yes
+
+  # ---- from the Claude plugin list this repo used to keep as shell commands --
+  #
+  # Each of these was a `claude plugin install` line in a markdown file. What
+  # follows was checked against the actual repository trees, which corrected
+  # four things the list got wrong: `ruby-lsp` is in a different marketplace
+  # than it claimed and ships no skills at all, `rspec` was listed twice,
+  # `github.com/anthropics/claude-code-plugins` does not exist, and
+  # `npx claude-plugins` is third-party software resolving through a
+  # third-party registry into ~/.claude, which is the one thing this file is
+  # for avoiding.
+
+  # Three SKILL.md directories, plain markdown. The bundle around them has a
+  # Claude SessionStart hook; taking the skills alone leaves it behind, which
+  # is why this is type: skills rather than type: plugin.
+  - name: ruby-skills
+    type: skills
+    repo: https://github.com/st0012/ruby-skills.git
+    path: plugins/ruby-skills/skills
+
+  # One clone for both, since they are two plugins in one marketplace. The
+  # filter is what leaves dragonruby, draper, mcp and ratatui behind.
+  - name: ruby-marketplace
+    type: skills
+    repo: https://github.com/hoblin/claude-ruby-marketplace.git
+    path: plugins
+    include_skills: /\A(rspec|activerecord)\z/
+
+  - name: justfile
+    type: skills
+    repo: https://github.com/motlin/claude-code-plugins.git
+    path: plugins/justfile/skills
+
+  - name: frontend-design
+    type: skills
+    repo: https://github.com/anthropics/claude-plugins-official.git
+    path: plugins/frontend-design/skills
+
+  # devops-claude-skills files every skill as `<plugin>/skills/SKILL.md` with
+  # no directory of its own, so all six want to be called `skills`. Taking the
+  # bundle whole sidesteps a name none of them can have. Ask for the skills
+  # instead and the run tells you exactly that, at length.
+  - name: iac-terraform
+    type: plugin
+    repo: https://github.com/ahmedasmar/devops-claude-skills.git
+    path: iac-terraform
+    adopt: [plugins]
+    agents: [claude]
+
+  - name: ci-cd
+    type: plugin
+    repo: https://github.com/ahmedasmar/devops-claude-skills.git
+    path: ci-cd
+    adopt: [plugins]
+    agents: [claude]
+
+  # Claude-only, and not arguably: six subagent definitions and a slash
+  # command, no SKILL.md anywhere in it.
+  - name: pr-review-toolkit
+    type: plugin
+    repo: https://github.com/anthropics/claude-plugins-official.git
+    path: plugins/pr-review-toolkit
+    adopt: [plugins]
+    agents: [claude]
+
+  # Also Claude-only: eleven Python files wired into SessionStart,
+  # UserPromptSubmit and PostToolUse through ${CLAUDE_PLUGIN_ROOT}.
+  - name: security-guidance
+    type: plugin
+    repo: https://github.com/anthropics/claude-plugins-official.git
+    path: plugins/security-guidance
+    adopt: [plugins]
+    agents: [claude]
+
+  # Deliberately absent: ruby-lsp. It is `ruby-lsp@claude-ruby-marketplace`,
+  # not `@ruby-skills`, and it is three files — a plugin manifest, a README and
+  # a 20-line .lsp.json pointing at Shopify's ruby-lsp binary. There is no
+  # portable content to install. Install the gem and configure the LSP per
+  # agent instead.
