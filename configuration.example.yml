@@ -137,4 +137,81 @@ sources:
     type: command
     install: npx skills add kunchenguid/quota-axi --skill quota-axi --yes
 
+  # ---- from the Claude plugin list this repo used to keep as shell commands --
+  #
+  # Each of these was a `claude plugin install` line in a markdown file. What
+  # follows was checked against the actual repository trees, which corrected
+  # four things the list got wrong: `ruby-lsp` is in a different marketplace
+  # than it claimed and ships no skills at all, `rspec` was listed twice,
+  # `github.com/anthropics/claude-code-plugins` does not exist, and
+  # `npx claude-plugins` is third-party software resolving through a
+  # third-party registry into ~/.claude, which is the one thing this file is
+  # for avoiding.
 
+  # Three SKILL.md directories, plain markdown. The bundle around them has a
+  # Claude SessionStart hook; taking the skills alone leaves it behind, which
+  # is why this is type: skills rather than type: plugin.
+  - name: ruby-skills
+    type: skills
+    repo: https://github.com/st0012/ruby-skills.git
+    path: plugins/ruby-skills/skills
+
+  # One clone for both, since they are two plugins in one marketplace. The
+  # filter is what leaves dragonruby, draper, mcp and ratatui behind.
+  - name: ruby-marketplace
+    type: skills
+    repo: https://github.com/hoblin/claude-ruby-marketplace.git
+    path: plugins
+    include_skills: /\A(rspec|activerecord)\z/
+
+  - name: justfile
+    type: skills
+    repo: https://github.com/motlin/claude-code-plugins.git
+    path: plugins/justfile/skills
+
+  - name: frontend-design
+    type: skills
+    repo: https://github.com/anthropics/claude-plugins-official.git
+    path: plugins/frontend-design/skills
+
+  # devops-claude-skills files every skill as `<plugin>/skills/SKILL.md` with
+  # no directory of its own, so all six want to be called `skills`. Taking the
+  # bundle whole sidesteps a name none of them can have. Ask for the skills
+  # instead and the run tells you exactly that, at length.
+  - name: iac-terraform
+    type: plugin
+    repo: https://github.com/ahmedasmar/devops-claude-skills.git
+    path: iac-terraform
+    adopt: [plugins]
+    agents: [claude]
+
+  - name: ci-cd
+    type: plugin
+    repo: https://github.com/ahmedasmar/devops-claude-skills.git
+    path: ci-cd
+    adopt: [plugins]
+    agents: [claude]
+
+  # Claude-only, and not arguably: six subagent definitions and a slash
+  # command, no SKILL.md anywhere in it.
+  - name: pr-review-toolkit
+    type: plugin
+    repo: https://github.com/anthropics/claude-plugins-official.git
+    path: plugins/pr-review-toolkit
+    adopt: [plugins]
+    agents: [claude]
+
+  # Also Claude-only: eleven Python files wired into SessionStart,
+  # UserPromptSubmit and PostToolUse through ${CLAUDE_PLUGIN_ROOT}.
+  - name: security-guidance
+    type: plugin
+    repo: https://github.com/anthropics/claude-plugins-official.git
+    path: plugins/security-guidance
+    adopt: [plugins]
+    agents: [claude]
+
+  # Deliberately absent: ruby-lsp. It is `ruby-lsp@claude-ruby-marketplace`,
+  # not `@ruby-skills`, and it is three files — a plugin manifest, a README and
+  # a 20-line .lsp.json pointing at Shopify's ruby-lsp binary. There is no
+  # portable content to install. Install the gem and configure the LSP per
+  # agent instead.
