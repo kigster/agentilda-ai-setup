@@ -137,6 +137,19 @@ sources:
     type: command
     install: npx skills add kunchenguid/quota-axi --skill quota-axi --yes
 
+  # Braintrust ships its skill through its own CLI rather than a repository.
+  # `bt setup skills` is the narrow subcommand: bare `bt setup` is a wizard that
+  # also instruments the repo and runs a coding agent, which is not a thing to
+  # do on a sync. --no-input keeps it from prompting, --no-workflow skips a docs
+  # download, and --local writes into the working tree rather than ~/.claude.
+  #
+  # It writes .agents/skills/, not .claude/skills/, even when told
+  # --agent claude. Both roots are searched, so either lands.
+  - name: braintrust
+    type: command
+    install: bt setup skills --local --agent claude --no-input --no-workflow
+    adopt: [skills]
+
   # ---- from the Claude plugin list this repo used to keep as shell commands --
   #
   # Each of these was a `claude plugin install` line in a markdown file. What
