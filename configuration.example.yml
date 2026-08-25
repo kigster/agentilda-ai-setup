@@ -150,6 +150,28 @@ sources:
     install: bt setup skills --local --agent claude --no-input --no-workflow
     adopt: [skills]
 
+  # ---- recovered from the skills that used to be committed under skills/ ----
+  #
+  # Both were found by their own provenance records rather than by memory:
+  # nginx-configuration carries a .skillfish.json naming the repo, path and
+  # commit it came from, and security-baseline has an entry in .skill-lock.json.
+  # Neither was written here, so neither belongs in src/skills.
+  #
+  # Filtered to the one skill each that was actually in use. Widen or drop the
+  # filter to take more: karchtho's infra bundle has seven, rampstackco has 103.
+
+  - name: karchtho-infra
+    type: skills
+    repo: https://github.com/karchtho/my-claude-marketplace.git
+    path: bundles/infra-bundle/skills
+    include_skills: /\Anginx-configuration\z/
+
+  - name: rampstack
+    type: skills
+    repo: https://github.com/rampstackco/claude-skills.git
+    path: skills
+    include_skills: /\Asecurity-baseline\z/
+
   # ---- from the Claude plugin list this repo used to keep as shell commands --
   #
   # Each of these was a `claude plugin install` line in a markdown file. What
