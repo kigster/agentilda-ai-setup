@@ -8,7 +8,7 @@ invocations, then counting by name.
 > This is usage data from **this machine only** — whatever session history
 > happens to still be on disk. It undercounts: it doesn't see skills invoked
 > from other machines, sessions already rotated out of local history, or use
-> through a slash command in `commands/` (those back `spec-plan-build`
+> through a slash command in `src/commands/` (those back `spec-plan-build`
 > directly and aren't `Skill` tool calls at all).
 
 | Count | Skill | Source |
@@ -19,7 +19,7 @@ invocations, then counting by name.
 | 4 | `grilling` | this repo — `skills/grilling` |
 | 4 | `resolving-merge-conflicts` | this repo — `skills/resolving-merge-conflicts` |
 | 3 | `github:create-pull-request` | plugin `github` |
-| 2 | `create-plan` | **`skills-mine/create-plan`** |
+| 2 | `create-plan` | **`src/skills/create-plan`** |
 | 2 | `frontend:clerk-cli` | plugin `frontend` |
 | 2 | `resend` | this repo — `skills/resend` |
 | 1 | `artifact-design` | this repo — `skills/artifact-design` |
@@ -29,7 +29,7 @@ invocations, then counting by name.
 | 1 | `landing-page-copy` | this repo — `skills/landing-page-copy` |
 | 1 | `marketing-skills:marketing-ideas` | plugin `marketing-skills` |
 | 1 | `mermaid-diagrams` | this repo — `skills/mermaid-diagrams` |
-| 1 | `postgres-schema` | **`skills-mine/postgres-schema`** |
+| 1 | `postgres-schema` | **`src/skills/postgres-schema`** |
 | 1 | `stripe:stripe-best-practices` | plugin `stripe` |
 
 18 distinct skills invoked at least once. Both `skills-mine/` skills

@@ -23,7 +23,7 @@ ______________________________________________________________________
 | `config/AGENTS.md`     | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md`   |
 | `context/`             | Durable reference an agent loads on demand: languages, databases, conventions              |
 | `agents/`              | Specialist definitions for the multi-agent harness                                         |
-| `commands/`            | Slash commands that wrap `spec-plan-build` with the right guardrails baked in              |
+| `src/commands/`        | Slash commands that wrap `spec-plan-build` with the right guardrails baked in              |
 | `skills/`              | Claude skills, **generated**, one directory per skill, symlinked into `~/.claude/skills/`  |
 | `skills-mine/`         | Skills authored in this repo (committed); folded into `skills/` by `install-sources`       |
 | `plugins/`             | External plugin bundles (e.g. `pstack`), also generated, not committed                     |
@@ -105,7 +105,7 @@ Blocks drain by hand, and in pieces. Answers are written into `blocked.md` as th
 Both paths end up running the same `scripts/spec-plan-build` binary. The question is just who's driving.
 
 - **Directly, from a terminal or a script**: `spec-plan-build create …`, `spec-plan-build run --commit`, etc. (see "Day to day" below). This is the whole tool; nothing about it requires Claude.
-- **As a Claude Code slash command**, via `commands/*.md` (`/plan-create`, `/plan-research`, `/plan-run`, `/plan-status`, `/plan-resync-dirs`, `/plan-resync-prs`, `/plan-docs`, `/plan-insert`, `/plan-linear-import`). Each one is a thin wrapper around the same binary, plus the guardrails that erode if left to memory. `/plan-create` won't seed a `## Research` heading or write Goals ahead of the research. `/plan-run` insists you confirm scope, `--commit`, and parallelism before it runs anything.
+- **As a Claude Code slash command**, via `src/commands/*.md` (`/plan-create`, `/plan-research`, `/plan-run`, `/plan-status`, `/plan-resync-dirs`, `/plan-resync-prs`, `/plan-docs`, `/plan-insert`, `/plan-linear-import`). Each one is a thin wrapper around the same binary, plus the guardrails that erode if left to memory. `/plan-create` won't seed a `## Research` heading or write Goals ahead of the research. `/plan-run` insists you confirm scope, `--commit`, and parallelism before it runs anything.
 
 Use the slash commands inside a Claude Code session, since they carry the constraints. Use the binary directly for scripting, CI, or any other agent. `skills/` and `agents/*.md` are a separate concern: those are Claude's general skill/specialist library, not part of invoking `spec-plan-build` itself.
 
@@ -204,7 +204,7 @@ spec-plan-build states                           # the whole machine, as a diagr
 
 ### Handing off several plans at once with `--plan`
 
-`run` with no `--plan` loops the **whole tree**. That is exactly wrong right after a batch step creates several plans at once: a bare `run` per `create` starts N overlapping whole-tree loops, each claiming worktrees for plans the others are also touching. `--plan NNN,NNN.MM,...` scopes a round to just the plans named, refusing up front if one doesn't exist rather than silently running everything, and it scopes pushing along with it. The shape that works: create every plan, verify each with `status`, then one `run --commit --plan ...` handoff at the end. Full constraints for that shape (the four headings, what a brief must never write, when to block instead of guess) live in `commands/plan-create.md`.
+`run` with no `--plan` loops the **whole tree**. That is exactly wrong right after a batch step creates several plans at once: a bare `run` per `create` starts N overlapping whole-tree loops, each claiming worktrees for plans the others are also touching. `--plan NNN,NNN.MM,...` scopes a round to just the plans named, refusing up front if one doesn't exist rather than silently running everything, and it scopes pushing along with it. The shape that works: create every plan, verify each with `status`, then one `run --commit --plan ...` handoff at the end. Full constraints for that shape (the four headings, what a brief must never write, when to block instead of guess) live in `src/commands/plan-create.md`.
 
 ### Isolation, and why it is the default
 
