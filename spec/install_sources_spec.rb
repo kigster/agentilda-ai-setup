@@ -48,6 +48,48 @@ RSpec.describe "scripts/install-sources" do
   # @return [Array<String>] what ended up linked into skills/
   def installed_skills = Dir.children(File.join(root, "skills")).sort
 
+  # @return [Array<String>] what ended up copied into plugins/
+  def installed_plugins
+    dir = File.join(root, "plugins")
+    File.directory?(dir) ? Dir.children(dir).sort : []
+  end
+
+  # A `type: command` source runs a real command, so the suite needs one. This
+  # writes what `npx skills add` writes, without npm and without the network:
+  # skills under `.claude/skills/<name>` and bundles under
+  # `.claude/plugins/<name>`, both relative to whatever directory it runs in.
+  #
+  # @param name [String] the executable's filename, so two sources can differ
+  # @param skills [Array<String>]
+  # @param plugins [Array<String>] each bundle gets one skill of its own inside
+  # @param tally [String, nil] a file to append a byte to per invocation
+  # @param fail_with [Integer, nil] exit non-zero instead of writing anything
+  # @return [String] the command line to put in `install:`
+  def installer(name: "fake-installer", skills: [], plugins: [], tally: nil, fail_with: nil)
+    script = File.join(tmp, name)
+    File.write(script, <<~SH)
+      #!/usr/bin/env ruby
+      require "fileutils"
+      File.write(#{tally.inspect}, "x", mode: "a") if #{tally.inspect}
+      if #{fail_with.inspect}
+        warn "the registry said no"
+        exit #{fail_with.inspect}
+      end
+      #{skills.inspect}.each do |skill|
+        FileUtils.mkdir_p(File.join(".claude", "skills", skill))
+        File.write(File.join(".claude", "skills", skill, "SKILL.md"), "---\nname: \#{skill}\n---\n")
+      end
+      #{plugins.inspect}.each do |plugin|
+        inner = File.join(".claude", "plugins", plugin, "skills", "\#{plugin}-skill")
+        FileUtils.mkdir_p(inner)
+        File.write(File.join(inner, "SKILL.md"), "---\nname: \#{plugin}-skill\n---\n")
+        File.write(File.join(".claude", "plugins", plugin, "plugin.json"), "{}")
+      end
+    SH
+    File.chmod(0o755, script)
+    script
+  end
+
   around do |example|
     Dir.mktmpdir("install-sources") do |tmp|
       @tmp = tmp
@@ -205,6 +247,243 @@ RSpec.describe "scripts/install-sources" do
       output, status = install("list")
       expect(status).to be_success
       expect(output).to include("exclude_skills /\\Aalpha\\z/")
+    end
+  end
+  # `npx skills add …` and friends install a skill without a repository to
+  # clone. Running the command inside `.sources/<name>` rather than letting it
+  # write to ~/.claude/skills is what keeps its output inside the manifest,
+  # the filters and the prune that every other source type relies on.
+  describe "a command source" do
+    it "installs the skills the command wrote" do
+      write_config([{"name" => "cmd", "type" => "command",
+                     "install" => installer(skills: %w[alpha beta])}])
+
+      _output, status = install
+      expect(status).to be_success
+      expect(installed_skills).to eq(%w[alpha beta])
+    end
+
+    it "installs the plugin bundles the command wrote, and their skills with them" do
+      write_config([{"name" => "cmd", "type" => "command",
+                     "install" => installer(plugins: %w[quota])}])
+
+      install
+      aggregate_failures do
+        expect(installed_plugins).to eq(%w[quota])
+        expect(installed_skills).to eq(%w[quota-skill])
+        expect(File).to exist(File.join(root, "plugins", "quota", "plugin.json"))
+      end
+    end
+
+    # npx re-downloads its package every time, and install-sources is run
+    # several times a day.
+    it "runs the command once and leaves it alone on the next run" do
+      tally = File.join(tmp, "runs")
+      write_config([{"name" => "cmd", "type" => "command",
+                     "install" => installer(skills: %w[alpha], tally: tally)}])
+
+      2.times { install }
+
+      aggregate_failures do
+        expect(File.read(tally).size).to eq(1)
+        expect(installed_skills).to eq(%w[alpha])
+      end
+    end
+
+    it "runs it again under --force, which is what wipes .sources" do
+      tally = File.join(tmp, "runs")
+      write_config([{"name" => "cmd", "type" => "command",
+                     "install" => installer(skills: %w[alpha], tally: tally)}])
+
+      install
+      install("-f")
+
+      expect(File.read(tally).size).to eq(2)
+    end
+
+    it "reports a command that failed, and installs nothing" do
+      write_config([{"name" => "cmd", "type" => "command",
+                     "install" => installer(fail_with: 3)}])
+
+      output, status = install
+      aggregate_failures do
+        expect(output).to include("exited 3").and include("the registry said no")
+        expect(installed_skills).to be_empty
+        expect(status).to be_success
+      end
+    end
+
+    it "says so when the command is not on PATH rather than dying" do
+      write_config([{"name" => "cmd", "type" => "command", "install" => "definitely-not-a-command --yes"}])
+
+      output, status = install
+      aggregate_failures do
+        expect(output).to include("not on PATH")
+        expect(status).to be_success
+      end
+    end
+
+    it "takes filters like any other source" do
+      write_config([{"name" => "cmd", "type" => "command",
+                     "install" => installer(skills: %w[alpha beta gamma]),
+                     "include_skills" => "/\\A(alpha|gamma)\\z/"}])
+
+      install
+      expect(installed_skills).to eq(%w[alpha gamma])
+    end
+
+    # The whole reason the command runs inside .sources: what it wrote is an
+    # ordinary source tree, so tightening a filter takes a skill back.
+    it "unlinks what a tightened filter no longer admits" do
+      command = installer(skills: %w[alpha beta])
+      write_config([{"name" => "cmd", "type" => "command", "install" => command}])
+      install
+      expect(installed_skills).to eq(%w[alpha beta])
+
+      write_config([{"name" => "cmd", "type" => "command", "install" => command,
+                     "exclude_skills" => "/\\Abeta\\z/"}])
+      install
+
+      expect(installed_skills).to eq(%w[alpha])
+    end
+
+    it "lists the command it runs, and whether it has run" do
+      write_config([{"name" => "cmd", "type" => "command", "install" => installer(skills: %w[alpha])}])
+
+      before, = install("list")
+      install
+      after, = install("list")
+
+      aggregate_failures do
+        expect(before).to include("fake-installer").and include("not run")
+        expect(after).to include("installed")
+      end
+    end
+  end
+
+  # One command can write a bundle and some loose skills at once, and wanting
+  # only one half of that is a normal thing to want.
+  describe "adopt" do
+    let(:both) { installer(skills: %w[alpha], plugins: %w[quota]) }
+
+    it "takes both halves by default" do
+      write_config([{"name" => "cmd", "type" => "command", "install" => both}])
+
+      install
+      aggregate_failures do
+        expect(installed_plugins).to eq(%w[quota])
+        expect(installed_skills).to eq(%w[alpha quota-skill])
+      end
+    end
+
+    it "takes the skills and leaves the bundle" do
+      write_config([{"name" => "cmd", "type" => "command", "install" => both, "adopt" => ["skills"]}])
+
+      install
+      aggregate_failures do
+        expect(installed_plugins).to be_empty
+        expect(installed_skills).to eq(%w[alpha])
+      end
+    end
+
+    it "takes the bundle and leaves the skills, its own included" do
+      write_config([{"name" => "cmd", "type" => "command", "install" => both, "adopt" => ["plugins"]}])
+
+      install
+      aggregate_failures do
+        expect(installed_plugins).to eq(%w[quota])
+        expect(installed_skills).to be_empty
+      end
+    end
+  end
+
+  describe "include_plugins and exclude_plugins" do
+    it "installs only the bundles whose name matches" do
+      write_config([{"name" => "cmd", "type" => "command",
+                     "install" => installer(plugins: %w[quota ledger]),
+                     "include_plugins" => "/\\Aquota\\z/"}])
+
+      install
+      expect(installed_plugins).to eq(%w[quota])
+    end
+
+    it "installs every bundle except those whose name matches" do
+      write_config([{"name" => "cmd", "type" => "command",
+                     "install" => installer(plugins: %w[quota ledger]),
+                     "exclude_plugins" => "/\\Aquota\\z/"}])
+
+      install
+      expect(installed_plugins).to eq(%w[ledger])
+    end
+
+    it "skips the skills of a bundle it did not install" do
+      write_config([{"name" => "cmd", "type" => "command",
+                     "install" => installer(plugins: %w[quota ledger]),
+                     "exclude_plugins" => "/\\Aquota\\z/"}])
+
+      install
+      expect(installed_skills).to eq(%w[ledger-skill])
+    end
+
+    it "applies to a plain plugin source too" do
+      repo = upstream(File.join(tmp, "up"), %w[alpha], under: "pstack/skills")
+      write_config([{"name" => "pstack", "type" => "plugin", "repo" => repo, "path" => "pstack",
+                     "exclude_plugins" => "/\\Apstack\\z/"}])
+
+      install
+      aggregate_failures do
+        expect(installed_plugins).to be_empty
+        expect(installed_skills).to be_empty
+      end
+    end
+  end
+
+  # Every one of these is a typo whose quiet outcome looks enough like success
+  # to go unnoticed, so the run stops instead of degrading.
+  describe "a command source it will not guess past" do
+    def refuses(source, saying)
+      write_config([source])
+      output, status = install
+
+      aggregate_failures do
+        expect(status.exitstatus).to eq(78)
+        expect(output).to include(saying)
+      end
+    end
+
+    it "refuses a command source with nothing to run" do
+      refuses({"name" => "cmd", "type" => "command"}, "needs an `install:`")
+    end
+
+    it "refuses a command source that also names a repo" do
+      refuses({"name" => "cmd", "type" => "command", "install" => "true", "repo" => "git@example.com:x.git"},
+        "would be ignored")
+    end
+
+    it "refuses an install: on a source that clones" do
+      refuses({"name" => "up", "type" => "skills", "repo" => "git@example.com:x.git", "install" => "true"},
+        "only runs on a type: command source")
+    end
+
+    it "refuses adopt: on a source that has only skills to give" do
+      refuses({"name" => "up", "type" => "skills", "repo" => "git@example.com:x.git", "adopt" => ["plugins"]},
+        "means nothing on a type: skills source")
+    end
+
+    it "refuses an adopt: it does not recognise" do
+      refuses({"name" => "cmd", "type" => "command", "install" => "true", "adopt" => ["commands"]},
+        "expected skills or plugins")
+    end
+
+    it "refuses a plugin filter on a source that installs no bundles" do
+      refuses({"name" => "up", "type" => "skills", "repo" => "git@example.com:x.git",
+               "include_plugins" => "/x/"}, "installs no plugin bundles")
+    end
+
+    it "refuses a source that both allows and denies the same kind" do
+      refuses({"name" => "cmd", "type" => "command", "install" => "true",
+               "include_plugins" => "/x/", "exclude_plugins" => "/y/"},
+        "include_plugins and exclude_plugins are both set")
     end
   end
 end

@@ -37,7 +37,7 @@ require "parallel"
 #
 # © 2026 Konstantin Gredeskoul
 module SpecPlanBuild
-  VERSION = "1.0.0"
+  VERSION = "1.0.1"
 
   # The folder every project keeps its plans in.
   PLANS_DIR = ".plans"
