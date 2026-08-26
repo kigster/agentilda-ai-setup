@@ -1161,10 +1161,10 @@ module Agentilda
       desc "Print one specialist in full, prompt included"
 
       argument :name, required: false,
-        desc: "Which specialist, e.g. luke-implementer (default: every one)"
+        desc: "Which specialist, e.g. luke-backend (default: every one)"
 
       example [
-        "luke-implementer       # one agent, prompt and all",
+        "luke-backend       # one agent, prompt and all",
         "                       # every agent",
         "hansolo-reviewer | less -R"
       ]

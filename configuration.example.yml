@@ -170,7 +170,19 @@ sources:
     type: skills
     repo: https://github.com/rampstackco/claude-skills.git
     path: skills
-    include_skills: /\A(security-baseline|design-system)\z/
+    # The four design skills rey-frontend loads, plus security-baseline.
+    # theme-factory from anthropics/skills is deliberately absent: it themes
+    # slides, docs and landing-page artifacts, which is not what building an
+    # application's interface is.
+    include_skills: /\A(security-baseline|design-system|design-standards|frontend-component-build|accessibility-audit)\z/
+
+  # Web Interface Guidelines, in forty lines. Small, and the only one of these
+  # aimed at reviewing UI code rather than producing it.
+  - name: vercel-guidelines
+    type: skills
+    repo: https://github.com/vercel-labs/agent-skills.git
+    path: skills
+    include_skills: /\Aweb-design-guidelines\z/
 
   # ---- from the Claude plugin list this repo used to keep as shell commands --
   #

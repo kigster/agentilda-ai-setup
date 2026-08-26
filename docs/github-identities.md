@@ -16,10 +16,11 @@ The rule GitHub enforces is **author ≠ approver**. Nothing stops one identity 
 
 | Agent              | Acts as      | Needs its own identity                             |
 | :----------------- | :----------- | :------------------------------------------------- |
-| `luke-implementer` | the author   | **No** — pull requests open under your own account |
+| `luke-backend`     | the author   | **No** — pull requests open under your own account |
+| `rey-frontend`     | the author   | **No** — same account; it opens the pull request   |
 | `hansolo-reviewer` | the approver | **Yes**                                            |
 
-Giving Luke an identity too costs a second account and buys nothing: he is already distinct from Han Solo the moment Han Solo is distinct from you.
+Giving the implementers identities too costs an account each and buys nothing: both are already distinct from Han Solo the moment Han Solo is distinct from you. They are the authoring side, and the authoring side may be one account or ten.
 
 It also runs into GitHub's Terms of Service, which permit exactly one:
 

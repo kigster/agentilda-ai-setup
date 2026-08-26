@@ -30,18 +30,20 @@ module Agentilda
     # blocking, deferring, discarding — has to be named explicitly, which is
     # the entire reason for having a machine rather than a rename.
     #
-    # 🔴 rejoins at 🟢 rather than continuing: fixing review comments puts the
-    # work back in the queue, it does not skip the reviewer.
+    # 🔴 rejoins at 🎨 rather than continuing: fixing review comments puts the
+    # work back through both halves of building, it does not skip the reviewer
+    # and it does not assume the half nobody complained about still holds.
     SPINE = {
       retroactive: :planned,
       new: :researched,
       researched: :planned,
       planned: :building,
-      building: :ready_for_review,
+      building: :building_ui,
+      building_ui: :ready_for_review,
       ready_for_review: :in_review,
       in_review: :approved,
       approved: :deployed,
-      rejected: :ready_for_review,
+      rejected: :building_ui,
       rolled_back: :ready_for_review,
       shit: :planned
     }.freeze
@@ -124,8 +126,18 @@ module Agentilda
           to: :building
       end
 
+      # Building hands off rather than finishing. A plan with no interface work
+      # still passes through Building UI: `rey-frontend` says there is nothing
+      # to build and moves it on, which costs one cheap round and keeps the
+      # spine one shape instead of two. `rejected` re-enters here rather than
+      # going straight back to review, because a change request reopens the
+      # implementation and neither half can assume the other still holds.
+      event :build_ui, guard: :justified? do
+        transitions from: %i[building rejected], to: :building_ui
+      end
+
       event :submit, guard: :justified? do
-        transitions from: %i[building rejected rolled_back], to: :ready_for_review
+        transitions from: %i[building_ui rolled_back], to: :ready_for_review
       end
 
       event :review, guard: :justified? do

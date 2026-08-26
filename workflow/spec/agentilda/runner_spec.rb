@@ -34,12 +34,12 @@ RSpec.describe Agentilda::Runner, :tree do
       # 001.00 already has spec.md and plan.md when the round starts, so
       # `palpatine-planner` takes it once — and Building no longer waits on a
       # pull request to exist, so the very next round finds it already there
-      # and hands it straight to `luke-implementer`.
+      # and hands it straight to `luke-backend`.
       it "offers each plan to the agent that handles its state" do
         runner.call
 
         expect(calls.uniq).to contain_exactly(["leah-researcher", "000.00"],
-          ["yoda-writer", "000.01"], ["palpatine-planner", "001.00"], ["luke-implementer", "001.00"])
+          ["yoda-writer", "000.01"], ["palpatine-planner", "001.00"], ["luke-backend", "001.00"])
       end
 
       # The relay's whole point. Both used to declare `handles: [new]`, agents
@@ -216,11 +216,11 @@ RSpec.describe Agentilda::Runner, :tree do
       end
     end
 
-    # `luke-implementer` decides when a plan is ready for review — a plan with
+    # `luke-backend` decides when a plan is ready for review — a plan with
     # several work units is legitimately dirty long before the last one lands
     # — so it renames its own plan folder rather than leaving that guess to a
     # dirty checkout. This is the harness reacting to that rename, not causing
-    # it. See `agents/luke-implementer.md`.
+    # it. See `agents/luke-backend.md`.
     describe "publishing once the agent renames its own folder to ready for review" do
       subject(:runner) do
         described_class.new(tree:, executor:, agents:, max_rounds: 1, isolation: :worktree, worktree:, publisher:)
@@ -241,7 +241,7 @@ RSpec.describe Agentilda::Runner, :tree do
       end
       let(:publisher) { instance_double(Agentilda::Publisher, publish: publication) }
 
-      # Stands in for `luke-implementer` finishing its last work unit: the
+      # Stands in for `luke-backend` finishing its last work unit: the
       # rename is the agent's own act, done before the harness ever asks
       # whether the checkout is dirty.
       let(:executor) do
@@ -253,7 +253,9 @@ RSpec.describe Agentilda::Runner, :tree do
 
       let!(:built) do
         plans do |t|
-          t.plan "004.00", :building, "needs-a-reviewer", files: {"spec.md" => spec_body, "plan.md" => "# P"}
+          # 🎨, not 🟡: publishing is triggered by an agent whose advances_to is
+          # ready_for_review, and since building split in two that is rey-frontend.
+          t.plan "004.00", :building_ui, "needs-a-reviewer", files: {"spec.md" => spec_body, "plan.md" => "# P"}
         end
       end
 

@@ -115,7 +115,8 @@ A feature moves through five specialists, one state at a time, never two at once
 1. **⚪️ New.** `agentilda create tax rule dsl` mints `.plans/003.00-⚪️-tax-rule-dsl/`. For a genuinely new feature it also scaffolds `spec.md` with a title and four fixed headings (*What we are trying to achieve*, *Why it matters*, *What already exists*, *What research needs to settle*), makes a best-effort attempt at them from what the project already has on disk, and opens it. You finish the brief by hand.
 1. **🔎 Researched.** `leah-researcher` fans work out across parallel sub-agents and appends spec.md's `## Research` chapter: themes, findings, licensing, a closing `### Findings, Conclusion & References`. Nobody else may write that heading. It *is* the state transition, so an empty one seeds a lie.
 1. **⭐️ Planned.** `yoda-writer` turns the brief plus the research into a complete specification: Goal, Non-Goals, In/Out of scope, Open questions, Conclusion. Or it writes `blocked.md` instead, when a question is a human's to answer, not a guess. `palpatine-planner` then decomposes the finished spec into `plan.md`'s non-overlapping work units, sized for independent sub-agents.
-1. **🟡 Building → 🟢 Ready for Review.** `luke-implementer` builds one work unit at a time (source and tests, no commits) and opens a pull request titled `[003.00] …` as each lands.
+1. **🟡 Building → 🎨 Building UI.** `luke-backend` builds one back-end work unit at a time — schema, domain, the API an interface will call — source and tests, no commits. It hands off once no back-end unit is left.
+1. **🎨 Building UI → 🟢 Ready for Review.** `rey-frontend` builds the interface against the API that now exists rather than the one the spec imagined, loading the design skills as it goes. A plan with no front-end work says so and passes through. The pull request titled `[003.00] …` opens here, for what both halves built.
 1. **👀 In Review → 🔴 Changes Requested, or ✅ Approved & Merged.** `hansolo-reviewer` reads the diff against the plan and either requests changes (back to 🟢 once addressed) or approves. Nothing merges automatically: approving is reversible and attributable, merging changes a branch everyone else builds on, and that line is enforced in code, not just in the prompt.
 
 Off to the side, at any point: ⭕️/🅱️ **Blocked** (an engineering or product decision only a human can make) and ☢️ **Deferred** or ❌ **Discarded**. Blocked plans are never assigned to an agent by the loop; one that could move them would make the states meaningless. `agentilda states` draws the whole machine, every legal transition included.
@@ -209,7 +210,8 @@ Specialists are defined in `workflow/agents/*.md`. The frontmatter routes them (
 | `leah-researcher`   | ⚪️      | 🔎          | fans out parallel research, writes spec.md's `## Research` chapter  |
 | `yoda-writer`       | 🔎, 🕰️  | ⭐️          | writes Goal/Non-Goals/Conclusion, or blocks with numbered questions |
 | `palpatine-planner` | ⭐️      | 🟡          | decomposes the spec into `plan.md`'s concurrent work units          |
-| `luke-implementer`  | 🟡, 🔴  | 🟢          | builds one work unit, source and tests, no commits                  |
+| `luke-backend`      | 🟡, 🔴  | 🎨          | builds one back-end unit: data, domain, API. Source and tests, no commits |
+| `rey-frontend`      | 🎨      | 🟢          | builds the interface against Luke's API, loading the design skills   |
 | `hansolo-reviewer`  | 🟢, 👀  | ✅          | adversarial review; requests changes or approves, never merges      |
 | `lando-broker`      | ⭕️, 🅱️  | ⭐️          | folds answered blocks into spec.md/plan.md; never invoked by the loop |
 
