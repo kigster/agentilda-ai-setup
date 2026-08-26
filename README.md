@@ -1,41 +1,62 @@
-# agentilda
+# Agent~ (agentilda)
 
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/kigster/agentilda/tree/main.svg?style=svg&circle-token=CCIPRJ_DrNBun6pLLc988EVbduHJm_9ec6ada64b6bd9406d19ca4e1aa56a249c20087d)](https://dl.circleci.com/status-badge/redirect/gh/kigster/agentilda/tree/main)
 
-Konstantin Gredeskoul's AI setup.
 
-A vendor-neutral home for the instructions, context, skills and tooling that several different AI coding agents share, plus **agentilda**: a small Ruby system that keeps a project's specifications, plans and pull requests joined up, and can drive specialist agents over them in parallel.
+
+>  [!NOTE]
+>
+> A vendor-neutral home for the AI instructions, context, skills and tooling that several different AI coding agents share, plus **agentilda**: a small Ruby CLI gem that keeps projects specifications, plans and pull requests joined up, and can drive a team of dedicated agents from specification to completion of a given task, with review harness and proper planning.
+
+------
+
+## Customizing Configuration
+
+Before you proceed to install anything, it is strongly recommended that you:
 
 ```bash
-git clone <this repo> ~/github/you/agentilda   # anywhere; this is not the install
-cd ~/github/you/agentilda
-direnv allow .              # puts bin/, scripts/ and workflow/exe on PATH
+cp configuration.example.yml configuration.yml
+vim configuration.yml
+```
+
+Configuration file defines what skills and plugins and going to get installed in you two global directories:
+
+* `~/.agents` (receivies actual files — eg copies of skills, plugins, etc, does not depend on this repo checkout post install)
+* `~/.claude/` (receive symlinks into `~/.agents` to reduce duplication, although some claude-specific plugins are supported as well.)
+
+### Features
+
+* Installs plugins and skills from remote repositories ensuring latest versions
+* Can install partial skills from a given repo based on regular expression matching
+* Can install plugins by executing commands
+* Can install plugins targeting specific AI agent 
+* Comes with an executable `agentilda` which a CLI tool written in Ruby that drives a multi-agent workflow, manages `.plans` folders for project (where spec and plans live), syncs with Linear and much more.
+
+
+
+## Quick Install
+
+```bash
+git clone <this repo> agentilda   # anywhere; this is not the install
+cd agentilda
+direnv allow .                    # puts bin/, scripts/ & workflow/exe on PATH
 
 bin/install
 ```
 
-Three steps, and the checkout is none of them:
+There are three granular steps that you can run independently, or you can skip to the next section and insetall all at once.
 
-1. `scripts/install-sources` assembles `skills/` and `plugins/` in the
-   checkout from `configuration.yml`. Both are **generated** — nothing under
-   either is committed, so a fresh clone has neither until this has run.
-2. `bin/install` copies the result into `~/.agents` with every symlink
-   resolved, so it holds real files and the checkout can afterwards be moved,
-   renamed or deleted with nothing left dangling.
-3. `bin/setup` links `~/.agents` into `~/.claude`, the way it always has.
+1. `scripts/install-sources` assembles `skills/` and `plugins/` in the checkout from `configuration.yml`. Both are **generated** — nothing under either is committed, so a fresh clone has neither until this has run.
+1. `bin/install` copies the result into `~/.agents` with every symlink resolved, so it holds real files and the checkout can afterwards be moved, renamed or deleted with nothing left dangling.
+1. `bin/setup` links `~/.agents` into `~/.claude`, so that there is no duplication.
 
-`bin/install` runs all three. The first is not optional and not silent: if
-`skills/` is missing after the build, it stops rather than installing a tree
-with no skills in it and reporting success. That usually means
-`configuration.yml` was only just seeded and is waiting to be read.
-`--no-sources` skips the build for a checkout you have already built.
+## Aggregated Installer
 
-`bin/install --dry-run` previews the lot. `--force` is required to replace
-anything already installed, and to replace a `~/.agents` that is still a
-symlink to a checkout from the old arrangement.
+`bin/install` runs all three. The first is not optional and not silent: if `skills/` is missing after the build, it stops rather than installing a tree with no skills in it and reporting success. That usually means `configuration.yml` was only just seeded and is waiting to be read. `--no-sources` skips the build for a checkout you have already built.
 
-The trade, deliberately: an edit to `src/skills/foo` reaches `~/.claude` only
-when you run it again.
+`bin/install --dry-run` previews the lot. `--force` is required to replace anything already installed, and to replace a `~/.agents` that is still a symlink to a checkout from the old arrangement.
+
+The trade, deliberately: an edit to `src/skills/foo` reaches `~/.claude` only when you run it again.
 
 ### Configuring what gets installed
 
@@ -78,19 +99,19 @@ ______________________________________________________________________
 
 ## What is in here
 
-| Path                        | What it is                                                                                                                         |
-| :-------------------------- | :--------------------------------------------------------------------------------------------------------------------------------- |
-| `config/AGENTS.md`          | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md`                                           |
-| `context/`                  | What every agent gets regardless: who Konstantin is, and the generated lifecycle doc                                               |
-| `src/skills/`               | Skills authored in this repo (committed); folded into `skills/` by `install-sources`                                               |
-| `src/commands/`             | Slash commands that wrap `agentilda` with the right guardrails baked in                                                            |
-| `skills/`                   | Claude skills, **generated**, one directory per skill, symlinked into `~/.claude/skills/`                                          |
-| `plugins/`                  | External plugin bundles (e.g. `pstack`), also generated, not committed                                                             |
+| Path                        | What it is                                                   |
+| :-------------------------- | :----------------------------------------------------------- |
+| `config/AGENTS.md`          | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md` |
+| `context/`                  | What every agent gets regardless, including about.md which you should update to be about you. |
+| `src/skills/`               | Skills authored in this repo (committed); folded into `skills/` by `install-sources` |
+| `src/commands/`             | Slash commands that wrap `agentilda` with the right guardrails baked in |
+| `skills/`                   | Claude skills, **generated**, one directory per skill, symlinked into `~/.claude/skills/` |
+| `plugins/`                  | External plugin bundles (e.g. `pstack`), also generated, not committed |
 | `configuration.example.yml` | Committed template for the git-ignored `configuration.yml`, the list `scripts/install-sources` pulls `skills/` and `plugins/` from |
-| `bin/`                      | **Bash** executables. `setup` is a pure symlink reconciler                                                                         |
-| `scripts/`                  | **Ruby**: `install-sources`, which runs before there is a bundle to run it in                                                      |
-| `docs/`                     | Documentation for people rather than context for agents: runbooks, the coverage badge, usage notes                                 |
-| `workflow/`                 | The `agentilda` gem: `exe/`, `lib/`, `agents/`, `spec/`, and its own Gemfile                                                       |
+| `bin/`                      | **Bash** executables. `setup` is a pure symlink reconciler   |
+| `scripts/`                  | **Ruby**: `install-sources`, which runs before there is a bundle to run it in |
+| `docs/`                     | Documentation for people rather than context for agents: runbooks, the coverage badge, usage notes |
+| `workflow/`                 | The `agentilda` gem: `exe/`, `lib/`, `agents/`, `spec/`, and its own Gemfile |
 
 Executables sit in three places, by what each needs in order to run. `bin/` holds shell, `scripts/` holds the one Ruby executable that must work before a bundle exists, and `workflow/exe/` holds the gem's, which resolve `BUNDLE_GEMFILE` from their own location and so run the same from `PATH` as from another project's root. `.envrc` puts all three on `PATH`.
 
@@ -192,7 +213,7 @@ ______________________________________________________________________
 ```bash
 agentilda create tax rule dsl          # 003.00-⚪️-tax-rule-dsl
 agentilda create --after 002 k1 sync   # 002.01-⬜️-k1-sync (retroactive)
-agentilda list-plans                       # the table; exits 1 if a name lies
+agentilda list-plans                   # the table; exits 1 if a name lies
 agentilda resync dirs                  # folder emoji vs folder contents
 agentilda resync prs                   # [NNN.MM] prefixes on PR titles
 agentilda linear import --prefix TAX   # the plans, as Linear projects and issues
@@ -242,15 +263,15 @@ ______________________________________________________________________
 
 Specialists are defined in `workflow/agents/*.md`. The frontmatter routes them (`handles:`/`advances_to:` are exactly what `agentilda run` reads to decide who takes a plan); the body is the prompt.
 
-| Agent               | Handles | Advances to | Does                                                                |
-| :------------------ | :------ | :---------- | :------------------------------------------------------------------ |
-| `leah-researcher`   | ⚪️      | 🔎          | fans out parallel research, writes spec.md's `## Research` chapter  |
-| `yoda-writer`       | 🔎, 🕰️  | ⭐️          | writes Goal/Non-Goals/Conclusion, or blocks with numbered questions |
-| `palpatine-planner` | ⭐️      | 🟡          | decomposes the spec into `plan.md`'s concurrent work units          |
+| Agent               | Handles | Advances to | Does                                                                      |
+| :------------------ | :------ | :---------- | :------------------------------------------------------------------------ |
+| `leah-researcher`   | ⚪️      | 🔎          | fans out parallel research, writes spec.md's `## Research` chapter        |
+| `yoda-writer`       | 🔎, 🕰️  | ⭐️          | writes Goal/Non-Goals/Conclusion, or blocks with numbered questions       |
+| `palpatine-planner` | ⭐️      | 🟡          | decomposes the spec into `plan.md`'s concurrent work units                |
 | `luke-backend`      | 🟡, 🔴  | 🎨          | builds one back-end unit: data, domain, API. Source and tests, no commits |
-| `rey-frontend`      | 🎨      | 🟢          | builds the interface against Luke's API, loading the design skills   |
-| `hansolo-reviewer`  | 🟢, 👀  | ✅          | adversarial review; requests changes or approves, never merges      |
-| `lando-broker`      | ⭕️, 🅱️  | ⭐️          | folds answered blocks into spec.md/plan.md; never invoked by the loop |
+| `rey-frontend`      | 🎨      | 🟢          | builds the interface against Luke's API, loading the design skills        |
+| `hansolo-reviewer`  | 🟢, 👀  | ✅          | adversarial review; requests changes or approves, never merges            |
+| `lando-broker`      | ⭕️, 🅱️  | ⭐️          | folds answered blocks into spec.md/plan.md; never invoked by the loop     |
 
 ```bash
 agentilda run                              # dry run: who would take what
