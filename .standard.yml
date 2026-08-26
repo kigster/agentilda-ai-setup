@@ -7,10 +7,17 @@ format: progress        # default: Standard::Formatter
 ruby_version: 4.0       # default: RUBY_VERSION
 default_ignores: false  # default: true
 
+# Anchored with `**/` rather than at the root, because the directories these
+# name are no longer only at the root. Lint runs from here so that it sees
+# scripts/ and workflow/ alike, but the bundle installs into
+# workflow/vendor/bundle and the suite writes workflow/coverage, and
+# `vendor/**/*` matches neither. CI is where that shows: a developer with
+# gems in rbenv has no vendor/ at all, so it passes locally and then lints
+# sixty-odd installed gems on the runner.
 ignore:                 # default: []
-  - 'vendor/**/*'
-  - 'coverage/**/*'
-  - 'tmp/**/*'
+  - '**/vendor/**/*'
+  - '**/coverage/**/*'
+  - '**/tmp/**/*'
   - 'plugins/**/*'
   - 'plugins-disabled/**/*'
   - 'skills/**/*'
