@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kigster/agentilda/configuration.schema.json",
+  "title": "agentilda configuration",
+  "description": "What a machine should have: which coding agents, and which skills and plugins to give them. Read by scripts/install-sources from configuration.yml.",
+  "type": "object",
+  "properties": {
+    "agents": {
+      "type": "array",
+      "description": "The coding agents themselves. Also the set a source's `agents:` is matched against.",
+      "items": {
+        "$ref": "#/$defs/agent"
+      }
+    },
+    "sources": {
+      "type": "array",
+      "description": "Where skills and plugin bundles come from.",
+      "items": {
+        "$ref": "#/$defs/source"
+      }
+    }
+  },
+  "unevaluatedProperties": false,
+  "$defs": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^\\s/]+$",
+      "description": "Installs as skills/<name> or plugins/<name>, so it may not contain a slash or whitespace."
+    },
+    "regexp": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A regular expression, optionally slashed: /re/, /re/i, or a bare re. Matched against the name a thing installs as, never its path inside the source.",
+      "examples": [
+        "/\\Arspec\\z/",
+        "/^ruby-/i",
+        "tdd"
+      ]
+    },
+    "agent": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name",
+          "description": "The executable's name, looked up on PATH to decide whether it is installed."
+        },
+        "installer": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The vendor's own install line. Runs through a shell, unlike a source's `install:`, and only when asked for by name.",
+          "examples": [
+            "curl -fsSL https://claude.ai/install.sh | bash"
+          ]
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "unevaluatedProperties": false
+    },
+    "source": {
+      "type": "object",
+      "description": "One entry under `sources:`. The type decides how it is fetched; everything else narrows what it contributes.",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "type": {
+          "enum": [
+            "skills",
+            "plugin",
+            "command"
+          ],
+          "description": "skills: every SKILL.md-rooted directory under `path` becomes its own skill. plugin: `path` is one bundle. command: no repository, `install:` is run instead."
+        },
+        "path": {
+          "type": "string",
+          "description": "The directory inside the source to install from. Defaults to the repository root, or to whichever of .claude/ or .agents/ a command wrote to."
+        },
+        "adopt": {
+          "type": "array",
+          "description": "Which halves a source contributes. Both by default.",
+          "items": {
+            "enum": [
+              "skills",
+              "plugins"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "include_skills": {
+          "$ref": "#/$defs/regexp"
+        },
+        "exclude_skills": {
+          "$ref": "#/$defs/regexp"
+        },
+        "include_plugins": {
+          "$ref": "#/$defs/regexp"
+        },
+        "exclude_plugins": {
+          "$ref": "#/$defs/regexp"
+        },
+        "agents": {
+          "type": "array",
+          "description": "Which coding agents this source is for. Absent means portable, which is what most sources are.",
+          "items": {
+            "$ref": "#/$defs/name"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "exclude_agents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "allOf": [
+        {
+          "$ref": "#/$defs/oneFilterPerKind"
+        },
+        {
+          "$ref": "#/$defs/fetchedOneWay"
+        },
+        {
+          "$ref": "#/$defs/pluginFiltersNeedBundles"
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "oneFilterPerKind": {
+      "description": "A source that both allows and denies the same kind is a question with no defensible answer, so it is refused rather than resolved.",
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "include_skills",
+              "exclude_skills"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "include_plugins",
+              "exclude_plugins"
+            ]
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "agents",
+              "exclude_agents"
+            ]
+          }
+        }
+      ]
+    },
+    "fetchedOneWay": {
+      "description": "A source is cloned or it runs a command, never both. Each branch declares the key it permits, so the matching branch evaluates it and the source's unevaluatedProperties rejects the other. No `not` clause is needed: naming `install:` on a source that clones leaves it unevaluated, which is already the error.",
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "enum": [
+                "skills",
+                "plugin"
+              ]
+            },
+            "repo": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Cloned into .sources/<name>.",
+              "examples": [
+                "https://github.com/obra/superpowers.git"
+              ]
+            }
+          },
+          "required": [
+            "repo"
+          ]
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "command"
+            },
+            "install": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Split into words and run directly, never through a shell, with its working directory inside .sources/<name>.",
+              "examples": [
+                "npx skills add someone/thing --yes"
+              ]
+            }
+          },
+          "required": [
+            "install"
+          ]
+        }
+      ]
+    },
+    "pluginFiltersNeedBundles": {
+      "description": "include_plugins/exclude_plugins mean nothing on a type: skills source, which installs no bundles.",
+      "if": {
+        "properties": {
+          "type": {
+            "const": "skills"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "allOf": [
+          {
+            "not": {
+              "required": [
+                "include_plugins"
+              ]
+            }
+          },
+          {
+            "not": {
+              "required": [
+                "exclude_plugins"
+              ]
+            }
+          },
+          {
+            "not": {
+              "required": [
+                "adopt"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

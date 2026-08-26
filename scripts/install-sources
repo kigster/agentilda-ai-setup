@@ -115,6 +115,54 @@ ADOPTERS = %w[command plugin].freeze
 # it for a command that does something else again.
 COMMAND_ROOTS = %w[.claude .agents].freeze
 
+# Every key each kind of entry may carry. A key outside these lists is a typo,
+# and a typo silently ignored is the quiet failure this whole script is built
+# against: `include_skils` on a source does not narrow anything, and without
+# this the run installs everything and reports success.
+#
+# configuration.schema.json states the same rule for editors and for the
+# suite, as `unevaluatedProperties: false`. It cannot be used here — this
+# script has to run before there is a bundle to load a validator from — so
+# the two are kept honest by a spec that feeds the same bad configurations to
+# both and requires them to agree.
+TOP_LEVEL_KEYS = %w[agents sources].freeze
+TYPES = %w[skills plugin command].freeze
+AGENT_KEYS = %w[name installer].freeze
+SOURCE_KEYS = %w[name type repo path install adopt
+  include_skills exclude_skills include_plugins exclude_plugins
+  agents exclude_agents].freeze
+
+# @param hash [Hash] the entry as written
+# @param allowed [Array<String>] every key it may carry
+# @param what [String] how to name it in the refusal
+# @return [void]
+def reject_unknown_keys(hash, allowed, what)
+  unknown = hash.keys.map(&:to_s) - allowed
+  return if unknown.empty?
+
+  near = unknown.filter_map { |key|
+    match = allowed.min_by { |k| levenshtein(key, k) }
+    "#{key} (did you mean #{match}?)" if match && levenshtein(key, match) <= 3
+  }
+  named = near.empty? ? unknown.join(", ") : near.join(", ")
+  raise ConfigError, "#{what}: #{named}. Known keys: #{allowed.join(", ")}"
+end
+
+# Small enough to write out rather than depend on: this script loads nothing.
+#
+# @return [Integer]
+def levenshtein(a, b)
+  rows = (0..b.length).to_a
+  a.each_char.with_index do |ch, i|
+    previous = rows
+    rows = [i + 1]
+    b.each_char.with_index do |other, j|
+      rows << [rows[j] + 1, previous[j + 1] + 1, previous[j] + ((ch == other) ? 0 : 1)].min
+    end
+  end
+  rows.last
+end
+
 # One entry from configuration.yml.
 #
 # `include_skills` and `exclude_skills` narrow which of the skills a source
@@ -130,7 +178,9 @@ Source = Struct.new(:name, :type, :repo, :path, :install, :adopt,
   :agents, :exclude_agents) do
   def self.from_yaml(hash)
     name = hash.fetch("name")
+    reject_unknown_keys(hash, SOURCE_KEYS, "#{name}: keys nothing reads")
     type = hash.fetch("type")
+    raise ConfigError, "#{name}: type: #{type.inspect} — expected #{TYPES.join(", ")}" unless TYPES.include?(type)
     skills = pair(hash, name, "skills")
     plugins = pair(hash, name, "plugins")
 
@@ -374,7 +424,20 @@ Source = Struct.new(:name, :type, :repo, :path, :install, :adopt,
   end
 end
 
-def config = File.file?(CONFIG_FILE) ? (YAML.safe_load_file(CONFIG_FILE) || {}) : {}
+def config
+  return {} unless File.file?(CONFIG_FILE)
+
+  (YAML.safe_load_file(CONFIG_FILE) || {}).tap do |c|
+    reject_unknown_keys(c, TOP_LEVEL_KEYS, "keys nothing reads at the top level")
+
+    # Both blocks, whichever one this run is about. A misspelled key is wrong
+    # the moment it is written, and `list` reporting the sources cleanly while
+    # `agents` would have refused the same file is a way to believe a typo is
+    # fine.
+    Array(c["agents"]).each { |a| reject_unknown_keys(a, AGENT_KEYS, "#{a["name"]}: keys nothing reads") if a.is_a?(Hash) }
+    Array(c["sources"]).each { |x| reject_unknown_keys(x, SOURCE_KEYS, "#{x["name"]}: keys nothing reads") if x.is_a?(Hash) }
+  end
+end
 
 def load_sources = (config["sources"] || []).map { |h| Source.from_yaml(h) }
 
@@ -994,6 +1057,7 @@ end
 def load_agents
   (config["agents"] || []).map do |h|
     raise ConfigError, "an entry under agents: has no name" if h["name"].to_s.strip.empty?
+    reject_unknown_keys(h, AGENT_KEYS, "#{h["name"]}: keys nothing reads")
 
     # Absent is fine; present and not a usable command line is not.
     installer = h["installer"]
