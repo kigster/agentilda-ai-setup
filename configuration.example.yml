@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=./configuration.schema.json
 # What this machine should have: which coding agents, and which skills and
 # plugins to give them. Copy to configuration.yml, which is git-ignored and
 # is the file `scripts/install-sources` actually reads. A first run does the
