@@ -14,8 +14,8 @@ RSpec.describe Agentilda::Tally do
 
   let(:attempts) do
     [
-      attempt("luke-implementer", "003.00", up: 1_200_000, down: 18_400, seconds: 300.0),
-      attempt("luke-implementer", "004.00", up: 800_000, down: 12_000, seconds: 240.0, subagents: 3,
+      attempt("luke-backend", "003.00", up: 1_200_000, down: 18_400, seconds: 300.0),
+      attempt("luke-backend", "004.00", up: 800_000, down: 12_000, seconds: 240.0, subagents: 3,
         delegated: 68_000),
       attempt("hansolo-reviewer", "003.00", up: 300_000, down: 4_000, seconds: 90.0)
     ]
@@ -55,7 +55,7 @@ RSpec.describe Agentilda::Tally do
 
   describe "#by_agent" do
     it "gives one row per agent, dearest first" do
-      expect(tally.by_agent.map(&:name)).to eq(%w[luke-implementer hansolo-reviewer])
+      expect(tally.by_agent.map(&:name)).to eq(%w[luke-backend hansolo-reviewer])
     end
 
     it "adds an agent's rounds together rather than reporting the last one" do
@@ -66,7 +66,7 @@ RSpec.describe Agentilda::Tally do
 
   describe "#render" do
     it "names every agent, its sub-agents and what it spent" do
-      expect(tally.render).to match(/luke-implementer +2 +3 +2\.0M +30k/)
+      expect(tally.render).to match(/luke-backend +2 +3 +2\.0M +30k/)
     end
 
     # Sub-agent spend arrives as one number with no split between the

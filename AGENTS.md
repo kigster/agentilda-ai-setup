@@ -51,8 +51,8 @@ agentilda create --after 002 k1 sync                          # 002.01-🕰️-k
 agentilda list-plans                                          # every plan, state, PRs; exits 1 on a lie
 agentilda states                                              # the state machine, as a diagram
 agentilda agents list                                         # every specialist, what it handles, what it advances to
-agentilda agents describe luke-implementer                    # one specialist in full, prompt included
-agentilda describe luke-implementer                           # the same, without the `agents` in front
+agentilda agents describe luke-backend                    # one specialist in full, prompt included
+agentilda describe luke-backend                           # the same, without the `agents` in front
 agentilda resync dirs [--commit]                              # folder emoji vs folder contents
 agentilda resync prs [--commit]                               # [NNN.MM] prefixes on PR titles
 agentilda linear import --prefix TAX [--commit | --format json]
@@ -80,7 +80,8 @@ A feature moves through five specialists, one state at a time, never further tha
 | 1   | ⚪️ New                            | `agentilda create`                | Mints the plan folder. For a genuinely new feature (not `--after`/`--prs`), scaffolds `spec.md`'s four fixed headings (*What we are trying to achieve*, *Why it matters*, *What already exists*, *What research needs to settle*), attempts a best-effort first pass via `claude -p`, and opens it. A human finishes the brief. |
 | 2   | 🔎 Researched                     | `leah-researcher`                       | Fans work out across parallel sub-agents, appends spec.md's `## Research` chapter. That heading *is* the transition. Nobody else may write it, not even empty.                                                                                                                                                                 |
 | 3   | ⭐️ Planned                        | `yoda-writer`, then `palpatine-planner` | `yoda-writer` turns the brief + research into Goal/Non-Goals/In-Out-of-scope/Conclusion, or writes `blocked.md` when a question is a human's to answer. `palpatine-planner` then decomposes the finished spec into `plan.md`'s non-overlapping work units.                                                                      |
-| 4   | 🟡 Building → 🟢 Ready for Review | `luke-implementer`                      | Builds one work unit at a time: source and tests, no commits. Opens a `[NNN.MM] …` pull request as each lands.                                                                                                                                                                                                              |
+| 4   | 🟡 Building → 🎨 Building UI       | `luke-backend`                          | Builds one back-end work unit at a time — data, domain, the API — source and tests, no commits. Hands off once no back-end unit is left.                                                                                                                                                                                                              |
+| 4b  | 🎨 Building UI → 🟢 Ready for Review | `rey-frontend`                        | Builds the interface against the API Luke landed, loading the design skills as it goes. A plan with no front-end work passes straight through. Opens the `[NNN.MM] …` pull request for what both halves built.
 | 5   | 👀 In Review → 🔴 / ✅            | `hansolo-reviewer`                      | Reads the diff against the plan; requests changes (back to 🟢 once fixed) or approves. Never merges. That line is enforced in code (`Executor::UNGRANTABLE`), not just in the prompt.                                                                                                                                          |
 
 Off to the side, at any point: ⭕️/🅱️ **Blocked** (a decision only a human can make, never offered to an agent by the loop) and ☢️ **Deferred** or ❌ **Discarded**.

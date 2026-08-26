@@ -43,6 +43,10 @@ module Agentilda
       researched: Placement.new(type: "backlog", name: "Backlog", labels: %w[researched]),
       planned: Placement.new(type: "unstarted", name: "Todo", labels: []),
       building: Placement.new(type: "started", name: "In Progress", labels: []),
+      # Both halves of building are one column on a board. A reader there
+      # wants to know work is under way; which half is under way is this
+      # tool's business, and the label carries it for anyone who does care.
+      building_ui: Placement.new(type: "started", name: "In Progress", labels: %w[frontend]),
       ready_for_review: Placement.new(type: "started", name: "In Review", labels: []),
       in_review: Placement.new(type: "started", name: "In Review", labels: []),
       rejected: Placement.new(type: "started", name: "In Review", labels: %w[changes-requested]),

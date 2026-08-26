@@ -62,24 +62,25 @@ This is only for work that does not exist yet. `create --after <plan> --prs <n,.
 
 ## The states
 
-| Symbol | Meaning                | Key                | Files required                           | Description                                                                |
-| :----: | :--------------------- | :----------------- | :--------------------------------------- | :------------------------------------------------------------------------- |
-|   ⚪️   | **New**                | `new`              | `spec.md`                                | a specification exists; it has not been planned yet                        |
-|   🔎   | **Researched**         | `researched`       | `spec.md`                                | the topic has been researched; `spec.md` carries a `## Research` chapter   |
-|   ⭐️   | **Planned**            | `planned`          | `spec.md`, `plan.md`                     | specified and planned; nobody has started building                         |
-|   🟡   | **Building**           | `building`         | `spec.md`, `plan.md`                     | work is under way; pull requests are raised as each unit lands             |
-|   🟢   | **Ready for Review**   | `ready_for_review` | `spec.md`, `plan.md`, `pull-requests.md` | every pull request is green on CI and waiting for a reviewer               |
-|   👀   | **In Review**          | `in_review`        | `spec.md`, `plan.md`, `pull-requests.md` | a reviewer has picked it up and has not ruled yet                          |
-|   🔴   | **Changes Requested**  | `rejected`         | `spec.md`, `plan.md`, `pull-requests.md` | the review asked for fixes; resubmit once they are made                    |
-|   ✅   | **Approved & Merged**  | `approved`         | `pull-requests.md`                       | reviewed, approved, and every pull request merged                          |
-|   😎   | **Deployed**           | `deployed`         | `deployed.md`                            | live in production; `deployed.md` names the release, date and SHA          |
-|   😱   | **Rolled Back**        | `rolled_back`      | `rollback.md`                            | it shipped and was pulled; `rollback.md` names what broke                  |
-|   💩   | **Scrapped by Review** | `shit`             | `rewrite.md`                             | the review scrapped the work; the plan survives, the pull requests do not  |
-|   ⭕️   | **Technical Block**    | `blocked`          | `blocked.md`                             | cannot proceed; `blocked.md` names what an engineer or the CTO must decide |
-|   🅱️   | **Product Block**      | `product_blocked`  | `blocked.md`                             | cannot proceed; `blocked.md` names what a product manager must decide      |
-|   ☢️   | **Deferred**           | `deferred`         | `delayed.md`                             | could proceed and chose not to yet; `delayed.md` must name the trigger     |
-|   🕰️   | **Retroactive**        | `retroactive`      | —                                        | the feature is live, but has neither a specification nor a plan            |
-|   ❌   | **Discarded**          | `discarded`        | `discarded.md`                           | dropped for good; `discarded.md` says why. A terminal state                |
+| Symbol | Meaning                | Key                | Files required                           | Description                                                                 |
+| :----: | :--------------------- | :----------------- | :--------------------------------------- | :-------------------------------------------------------------------------- |
+|   ⚪️   | **New**                | `new`              | `spec.md`                                | a specification exists; it has not been planned yet                         |
+|   🔎   | **Researched**         | `researched`       | `spec.md`                                | the topic has been researched; `spec.md` carries a `## Research` chapter    |
+|   ⭐️   | **Planned**            | `planned`          | `spec.md`, `plan.md`                     | specified and planned; nobody has started building                          |
+|   🟡   | **Building**           | `building`         | `spec.md`, `plan.md`                     | the back end is under way: data, domain and the API the interface will call |
+|   🎨   | **Building UI**        | `building_ui`      | `spec.md`, `plan.md`                     | the back end holds; the interface is being built against it                 |
+|   🟢   | **Ready for Review**   | `ready_for_review` | `spec.md`, `plan.md`, `pull-requests.md` | every pull request is green on CI and waiting for a reviewer                |
+|   👀   | **In Review**          | `in_review`        | `spec.md`, `plan.md`, `pull-requests.md` | a reviewer has picked it up and has not ruled yet                           |
+|   🔴   | **Changes Requested**  | `rejected`         | `spec.md`, `plan.md`, `pull-requests.md` | the review asked for fixes; resubmit once they are made                     |
+|   ✅   | **Approved & Merged**  | `approved`         | `pull-requests.md`                       | reviewed, approved, and every pull request merged                           |
+|   😎   | **Deployed**           | `deployed`         | `deployed.md`                            | live in production; `deployed.md` names the release, date and SHA           |
+|   😱   | **Rolled Back**        | `rolled_back`      | `rollback.md`                            | it shipped and was pulled; `rollback.md` names what broke                   |
+|   💩   | **Scrapped by Review** | `shit`             | `rewrite.md`                             | the review scrapped the work; the plan survives, the pull requests do not   |
+|   ⭕️   | **Technical Block**    | `blocked`          | `blocked.md`                             | cannot proceed; `blocked.md` names what an engineer or the CTO must decide  |
+|   🅱️   | **Product Block**      | `product_blocked`  | `blocked.md`                             | cannot proceed; `blocked.md` names what a product manager must decide       |
+|   ☢️   | **Deferred**           | `deferred`         | `delayed.md`                             | could proceed and chose not to yet; `delayed.md` must name the trigger      |
+|   🕰️   | **Retroactive**        | `retroactive`      | —                                        | the feature is live, but has neither a specification nor a plan             |
+|   ❌   | **Discarded**          | `discarded`        | `discarded.md`                           | dropped for good; `discarded.md` says why. A terminal state                 |
 
 "Files required" is a **minimum**, not an exact match: a ⚪️ folder that has grown a `plan.md` still satisfies ⚪️, and is ⭐️ anyway. That is why `resync dirs` moves a folder to the furthest state its contents justify rather than only fixing outright lies.
 
@@ -111,10 +112,11 @@ An entry that names no decider, carries no date, or restates the options instead
 | ⚪️ New                | 🔎 ⭐️ ⭕️ 🅱️ ☢️ ❌ | 🔎 Researched        |
 | 🔎 Researched         | ⭐️ ❌             | ⭐️ Planned           |
 | ⭐️ Planned            | 🟡 ⭕️ 🅱️ ☢️ ❌    | 🟡 Building          |
-| 🟡 Building           | 🟢 ⭕️ 🅱️ ☢️ ❌    | 🟢 Ready for Review  |
+| 🟡 Building           | 🎨 ⭕️ 🅱️ ☢️ ❌    | 🎨 Building UI       |
+| 🎨 Building UI        | 🟢 ❌             | 🟢 Ready for Review  |
 | 🟢 Ready for Review   | 👀 ❌             | 👀 In Review         |
 | 👀 In Review          | ✅ 🔴 💩 ❌       | ✅ Approved & Merged |
-| 🔴 Changes Requested  | 🟢 ❌             | 🟢 Ready for Review  |
+| 🔴 Changes Requested  | 🎨 ❌             | 🎨 Building UI       |
 | ✅ Approved & Merged  | 🟡 😎 ❌          | 😎 Deployed          |
 | 😎 Deployed           | 😱 ❌             | —                    |
 | 😱 Rolled Back        | 🟡 🟢 ❌          | 🟢 Ready for Review  |
@@ -137,6 +139,7 @@ stateDiagram-v2
     researched : 🔎 Researched
     planned : ⭐️ Planned
     building : 🟡 Building
+    building_ui : 🎨 Building UI
     ready_for_review : 🟢 Ready for Review
     in_review : 👀 In Review
     rejected : 🔴 Changes Requested
@@ -174,8 +177,9 @@ stateDiagram-v2
     blocked --> building
     product_blocked --> building
     deferred --> building
-    building --> ready_for_review
-    rejected --> ready_for_review
+    building --> building_ui
+    rejected --> building_ui
+    building_ui --> ready_for_review
     rolled_back --> ready_for_review
     ready_for_review --> in_review
     in_review --> approved
@@ -199,6 +203,7 @@ stateDiagram-v2
     researched --> discarded
     planned --> discarded
     building --> discarded
+    building_ui --> discarded
     ready_for_review --> discarded
     in_review --> discarded
     rejected --> discarded
