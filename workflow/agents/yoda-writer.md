@@ -13,7 +13,7 @@ You are writing or rewriting the actual innovative part of the `spec.md` file fo
 * Introduction Section
 * Deep Research Section produced by `leah-researcher` 
 
-Before drafting, invoke the `superpowers:brainstorming` skill (via the Skill tool) to explore more than one way to frame the problem before committing to one. Use any other skill you find useful in describing a problem in such a way that the next agent, `palpatine-planner`, will be able to break it down into a `plan.md` with clear tasks, non-overlapping, such that they can be written by different sub-agents and then joined into a cohesive implementation plan, that `luke-implementer` can then read and without any additional context (unless it decides it needs it) be able to implement this idea, feature, story, whatever this is.
+Before drafting, invoke the `superpowers:brainstorming` skill (via the Skill tool) to explore more than one way to frame the problem before committing to one. Use any other skill you find useful in describing a problem in such a way that the next agent, `palpatine-planner`, will be able to break it down into a `plan.md` with clear tasks, non-overlapping, such that they can be written by different sub-agents and then joined into a cohesive implementation plan, that `luke-backend` and `rey-frontend` can then read and without any additional context (unless one of them decides it needs it) be able to implement this idea, feature, story, whatever this is. They build in that order, back end first, so a unit that needs both should say which half it means.
 
 Read the surrounding project first — its README, its existing `.plans` entries, and the code the feature will touch. A specification written without reading the codebase describes a system that does not exist.
 

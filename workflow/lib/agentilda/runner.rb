@@ -277,9 +277,10 @@ module Agentilda
     # its own — a `plan.md` and some pull requests look identical whether
     # nobody has looked yet or a reviewer just asked for changes, so guessing
     # between them would be a coin flip dressed up as a correction. Whether a
-    # plan is ready to leave Building is `luke-implementer`'s call, not the
-    # harness's: it renames the plan folder itself once there is no work unit
-    # left in `plan.md` (see `agents/luke-implementer.md`), and the resync
+    # plan is ready to leave a building state is the implementer's call, not
+    # the harness's: each renames the plan folder itself once there is no unit
+    # of its own left in `plan.md` — `luke-backend` to 🎨 and `rey-frontend`
+    # to 🟢 — and the resync
     # above leaves that rename standing — "the current name always wins"
     # inside a family — even though nothing has opened a pull request yet.
     # This is what reacts to it: publish, so the invariant that rename is

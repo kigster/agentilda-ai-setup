@@ -15,9 +15,9 @@ RSpec.describe Agentilda::Roster do
   around do |example|
     Dir.mktmpdir("agents") do |tmp|
       @dir = tmp
-      write(tmp, "luke-implementer", <<~MD)
+      write(tmp, "luke-backend", <<~MD)
         ---
-        name: luke-implementer
+        name: luke-backend
         description: Builds one work unit from a plan.
         handles: [building, rejected]
         advances_to: ready_for_review
@@ -47,7 +47,7 @@ RSpec.describe Agentilda::Roster do
     let(:table) { plain(roster.list) }
 
     it "names every agent, in name order" do
-      expect(table.scan(/^\s+(\S+-\S+)\s/).flatten).to eq(%w[hansolo-reviewer luke-implementer])
+      expect(table.scan(/^\s+(\S+-\S+)\s/).flatten).to eq(%w[hansolo-reviewer luke-backend])
     end
 
     # The states are written the way the folder names write them, so what an
@@ -72,11 +72,11 @@ RSpec.describe Agentilda::Roster do
 
   describe "#describe" do
     it "prints the prompt itself, because the prompt is the definition" do
-      expect(plain(roster.describe("luke-implementer"))).to include("You are implementing one work unit.")
+      expect(plain(roster.describe("luke-backend"))).to include("You are implementing one work unit.")
     end
 
     it "carries the frontmatter the loop actually routes on" do
-      text = plain(roster.describe("luke-implementer"))
+      text = plain(roster.describe("luke-backend"))
 
       aggregate_failures do
         expect(text).to include("🟡 Building", "🔴 Changes Requested")
@@ -95,7 +95,7 @@ RSpec.describe Agentilda::Roster do
     # always a typo for one of six, and the six are right there.
     it "names the agents it does know when asked for one it does not" do
       expect { roster.describe("nope") }
-        .to raise_error(Agentilda::Error, /No agent called nope.*luke-implementer/m)
+        .to raise_error(Agentilda::Error, /No agent called nope.*luke-backend/m)
     end
   end
 end

@@ -105,12 +105,15 @@ ADOPTABLE = %w[skills plugins].freeze
 # nothing but skills to give.
 ADOPTERS = %w[command plugin].freeze
 
-# Where a command's output is looked for, relative to the directory it ran in.
-# `npx skills add` without `-g` writes `./.claude/skills/<name>`, and a plugin
-# installer writes alongside it under `.claude/plugins/`, so this is the
-# convention rather than one tool's quirk. `path:` overrides it for a command
-# that does something else.
-COMMAND_ROOT = ".claude"
+# Where a command's output is looked for, relative to the directory it ran in,
+# in the order they are tried.
+#
+# `npx skills add` without `-g` writes `./.claude/skills/<name>`; Braintrust's
+# `bt setup skills` writes `./.agents/skills/<name>` even when told
+# `--agent claude`. Two installers, two roots, so this is a list rather than
+# the one convention an earlier comment here claimed it was. `path:` overrides
+# it for a command that does something else again.
+COMMAND_ROOTS = %w[.claude .agents].freeze
 
 # One entry from configuration.yml.
 #
@@ -313,8 +316,12 @@ Source = Struct.new(:name, :type, :repo, :path, :install, :adopt,
   # @return [String] the directory inside the clone this source actually installs from
   def content_dir
     return File.join(staging_dir, path) if path
+    return staging_dir unless command?
 
-    command? ? File.join(staging_dir, COMMAND_ROOT) : staging_dir
+    # Whichever root the command actually wrote to. The first is the fallback
+    # when it wrote neither, so a message about what is missing names something.
+    candidates = COMMAND_ROOTS.map { |root| File.join(staging_dir, root) }
+    candidates.find { |dir| File.directory?(dir) } || candidates.first
   end
 
   # @return [String] where this source's loose skills are
@@ -490,6 +497,13 @@ def run_install(source, dry_run:)
   end
 
   FileUtils.mkdir_p(source.staging_dir)
+  # An installer with a --local flag finds "the current repo" by walking up for
+  # a .git, and from inside .sources/<name> the first one it meets is this
+  # checkout. Making the staging directory a repository of its own stops the
+  # walk where the containment does. It costs an empty .git in a directory that
+  # is already ignored, and it is why `bt setup skills --local` lands here
+  # rather than in the root of whatever clone you happen to be standing in.
+  Open3.capture3("git", "init", "-q", source.staging_dir) unless File.directory?(File.join(source.staging_dir, ".git"))
   stdout, stderr, status = Open3.capture3(*argv, chdir: source.staging_dir)
   return true if status.success?
 

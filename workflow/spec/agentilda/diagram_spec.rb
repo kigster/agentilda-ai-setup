@@ -152,7 +152,12 @@ RSpec.describe Agentilda::Diagram do
 
   # @param line [String]
   # @return [Symbol, nil] the state whose label appears in the line, if any
-  def label_in(line) = Agentilda::STATUSES.find { |s| line.include?(s.label) }&.key
+  # Longest label first, because one label can be a prefix of another:
+  # "Building" appears inside "Building UI", and taking the first match would
+  # read every 🎨 segment as a 🟡 one.
+  def label_in(line)
+    Agentilda::STATUSES.select { |s| line.include?(s.label) }.max_by { |s| s.label.length }&.key
+  end
 
   # @param line [String]
   # @return [Array<Symbol>] every state label on the line, in reading order

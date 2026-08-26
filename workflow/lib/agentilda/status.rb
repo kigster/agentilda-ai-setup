@@ -152,17 +152,28 @@ module Agentilda
       note: "specified and planned; nobody has started building",
       invariant: nil
     ),
-    # `pull-requests.md` is deliberately absent from `requires` here, though
-    # it names the file this state is about. That file is written by opening
-    # a pull request, and the only agent that opens one — `luke-implementer`
-    # — `handles:` this very state: requiring the file to *enter* Building
-    # would mean nothing could ever justify entering it, and `palpatine-
-    # planner` finishing `plan.md` would loop forever between itself and a
-    # state it can never actually reach. Ready for Review is where the file
-    # becomes a real requirement, once something has had the chance to write it.
+    # `pull-requests.md` is deliberately absent from `requires` on both of the
+    # building states, though it names the file they are about. That file is
+    # written by opening a pull request, which happens once, when the last
+    # implementer advances the plan to Ready for Review. Requiring the file to
+    # *enter* Building would mean nothing could ever justify entering it, and
+    # `palpatine-planner` finishing `plan.md` would loop forever between itself
+    # and a state it can never actually reach. Ready for Review is where the
+    # file becomes a real requirement, once something has had the chance to
+    # write it.
     Status.new(
       key: :building, emoji: "🟡", label: "Building", requires: %w[spec.md plan.md],
-      note: "work is under way; pull requests are raised as each unit lands",
+      note: "the back end is under way: data, domain and the API the interface will call",
+      invariant: nil
+    ),
+    # Two building states rather than one, because the order is not a
+    # preference: an interface is written against an API that already answers.
+    # Splitting them lets each half be built by someone who only has to be good
+    # at that half, and gives the second a working system to build on rather
+    # than a description of one.
+    Status.new(
+      key: :building_ui, emoji: "🎨", label: "Building UI", requires: %w[spec.md plan.md],
+      note: "the back end holds; the interface is being built against it",
       invariant: nil
     ),
     Status.new(

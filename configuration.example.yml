@@ -137,6 +137,53 @@ sources:
     type: command
     install: npx skills add kunchenguid/quota-axi --skill quota-axi --yes
 
+  # Braintrust ships its skill through its own CLI rather than a repository.
+  # `bt setup skills` is the narrow subcommand: bare `bt setup` is a wizard that
+  # also instruments the repo and runs a coding agent, which is not a thing to
+  # do on a sync. --no-input keeps it from prompting, --no-workflow skips a docs
+  # download, and --local writes into the working tree rather than ~/.claude.
+  #
+  # It writes .agents/skills/, not .claude/skills/, even when told
+  # --agent claude. Both roots are searched, so either lands.
+  - name: braintrust
+    type: command
+    install: bt setup skills --local --agent claude --no-input --no-workflow
+    adopt: [skills]
+
+  # ---- recovered from the skills that used to be committed under skills/ ----
+  #
+  # Both were found by their own provenance records rather than by memory:
+  # nginx-configuration carries a .skillfish.json naming the repo, path and
+  # commit it came from, and security-baseline has an entry in .skill-lock.json.
+  # Neither was written here, so neither belongs in src/skills.
+  #
+  # Filtered to the one skill each that was actually in use. Widen or drop the
+  # filter to take more: karchtho's infra bundle has seven, rampstackco has 103.
+
+  - name: karchtho-infra
+    type: skills
+    repo: https://github.com/karchtho/my-claude-marketplace.git
+    path: bundles/infra-bundle/skills
+    include_skills: /\Anginx-configuration\z/
+
+  - name: rampstack
+    type: skills
+    repo: https://github.com/rampstackco/claude-skills.git
+    path: skills
+    # The four design skills rey-frontend loads, plus security-baseline.
+    # theme-factory from anthropics/skills is deliberately absent: it themes
+    # slides, docs and landing-page artifacts, which is not what building an
+    # application's interface is.
+    include_skills: /\A(security-baseline|design-system|design-standards|frontend-component-build|accessibility-audit)\z/
+
+  # Web Interface Guidelines, in forty lines. Small, and the only one of these
+  # aimed at reviewing UI code rather than producing it.
+  - name: vercel-guidelines
+    type: skills
+    repo: https://github.com/vercel-labs/agent-skills.git
+    path: skills
+    include_skills: /\Aweb-design-guidelines\z/
+
   # ---- from the Claude plugin list this repo used to keep as shell commands --
   #
   # Each of these was a `claude plugin install` line in a markdown file. What

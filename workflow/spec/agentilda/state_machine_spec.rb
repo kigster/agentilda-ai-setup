@@ -202,10 +202,13 @@ RSpec.describe Agentilda::StateMachine do
         .to raise_error(described_class::Refused, /terminal/)
     end
 
-    it "walks 🔴 back to 🟢 rather than skipping the reviewer" do
+    # Not straight to 🟢. Building is two halves, and a change request reopens
+    # both: the fix goes back through 🎨 so neither half is assumed to still
+    # hold just because nobody complained about it.
+    it "walks 🔴 back through 🎨 rather than skipping the reviewer" do
       subject = built(:rejected, prs: ["Open 🟡"])
 
-      expect(described_class.new(subject).promote!.key).to eq(:ready_for_review)
+      expect(described_class.new(subject).promote!.key).to eq(:building_ui)
     end
 
     it "sends a review that found slop to 💩, keeping the plan and dropping the work" do
@@ -219,9 +222,9 @@ RSpec.describe Agentilda::StateMachine do
     it "walks spec → plan → build → review → merge → ship" do
       expected = {
         retroactive: :planned, new: :researched, researched: :planned,
-        planned: :building, building: :ready_for_review,
+        planned: :building, building: :building_ui, building_ui: :ready_for_review,
         ready_for_review: :in_review, in_review: :approved, approved: :deployed,
-        rejected: :ready_for_review, rolled_back: :ready_for_review, shit: :planned,
+        rejected: :building_ui, rolled_back: :ready_for_review, shit: :planned,
         discarded: nil, blocked: nil, deployed: nil
       }
 
@@ -245,9 +248,9 @@ RSpec.describe Agentilda::StateMachine do
     end
 
     # If Building required a pull request to be entered, nothing could ever
-    # justify entering it: the only agent that opens one (`luke-implementer`)
-    # is the one this state hands work to, and it never gets a turn without
-    # the folder already being here.
+    # justify entering it. A pull request is opened once, when the second
+    # implementer advances the plan out of 🎨, and neither implementer gets
+    # a turn without the folder already being in a building state.
     it "does not require a pull request to arrive at Building" do
       machine = machine_for(:building, files: {"spec.md" => "x", "plan.md" => "y"})
 

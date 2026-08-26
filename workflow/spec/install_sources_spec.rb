@@ -79,25 +79,29 @@ RSpec.describe "scripts/install-sources" do
   # @param tally [String, nil] a file to append a byte to per invocation
   # @param fail_with [Integer, nil] exit non-zero instead of writing anything
   # @return [String] the command line to put in `install:`
-  def installer(name: "fake-installer", skills: [], plugins: [], tally: nil, fail_with: nil)
+  def installer(name: "fake-installer", skills: [], plugins: [], tally: nil, fail_with: nil,
+    root: ".claude", at_git_root: false)
     script = File.join(tmp, name)
     File.write(script, <<~SH)
       #!/usr/bin/env ruby
       require "fileutils"
+      # Stands in for an installer with a --local flag, which finds "the current
+      # repo" by walking up for a .git and writes at whatever it lands on.
+      Dir.chdir(`git rev-parse --show-toplevel`.strip) if #{at_git_root.inspect}
       File.write(#{tally.inspect}, "x", mode: "a") if #{tally.inspect}
       if #{fail_with.inspect}
         $stderr.puts "the registry said no"
         exit #{fail_with.inspect}
       end
       #{skills.inspect}.each do |skill|
-        FileUtils.mkdir_p(File.join(".claude", "skills", skill))
-        File.write(File.join(".claude", "skills", skill, "SKILL.md"), "---\nname: \#{skill}\n---\n")
+        FileUtils.mkdir_p(File.join(#{root.inspect}, "skills", skill))
+        File.write(File.join(#{root.inspect}, "skills", skill, "SKILL.md"), "---\nname: \#{skill}\n---\n")
       end
       #{plugins.inspect}.each do |plugin|
-        inner = File.join(".claude", "plugins", plugin, "skills", "\#{plugin}-skill")
+        inner = File.join(#{root.inspect}, "plugins", plugin, "skills", "\#{plugin}-skill")
         FileUtils.mkdir_p(inner)
         File.write(File.join(inner, "SKILL.md"), "---\nname: \#{plugin}-skill\n---\n")
-        File.write(File.join(".claude", "plugins", plugin, "plugin.json"), "{}")
+        File.write(File.join(#{root.inspect}, "plugins", plugin, "plugin.json"), "{}")
       end
     SH
     File.chmod(0o755, script)
@@ -731,6 +735,42 @@ RSpec.describe "scripts/install-sources" do
         expect(status).to be_success
         expect(installed_skills).to eq(%w[skills])
         expect(output).to include("would install both").and include("alpha/skills").and include("beta/skills")
+      end
+    end
+  end
+  # `npx skills add` writes .claude/; Braintrust's `bt setup skills` writes
+  # .agents/ even when told --agent claude. Both are real, so both are looked
+  # for, and a command source is not required to know which convention its
+  # installer follows.
+  describe "a command that writes somewhere other than .claude" do
+    it "adopts what it left under .agents" do
+      write_config([{"name" => "cmd", "type" => "command",
+                     "install" => installer(skills: %w[alpha], root: ".agents")}])
+
+      install
+      expect(installed_skills).to eq(%w[alpha])
+    end
+  end
+
+  # An installer told to configure "the current repo" walks up for a .git, and
+  # from inside .sources/<name> the first one it meets is the tree this script
+  # is installing into. Staging is a repository of its own so the walk stops
+  # where the containment does.
+  describe "an installer that writes at the git root it finds" do
+    it "finds the staging directory rather than the tree above it" do
+      # The tree being installed into is itself a repository, which is the
+      # normal case: this script lives in one. Without staging being a
+      # repository of its own, the installer walks up and lands here.
+      git(root, "init", "-q", "-b", "main")
+
+      write_config([{"name" => "cmd", "type" => "command",
+                     "install" => installer(skills: %w[alpha], at_git_root: true)}])
+
+      install
+      aggregate_failures do
+        expect(installed_skills).to eq(%w[alpha])
+        expect(File.directory?(File.join(root, ".sources", "cmd", ".claude", "skills", "alpha"))).to be(true)
+        expect(File.exist?(File.join(root, ".claude"))).to be(false)
       end
     end
   end
