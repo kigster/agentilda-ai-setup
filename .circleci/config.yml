@@ -24,7 +24,7 @@ commands:
   bundle_deps:
     description: >-
       Replaces `bundler-cache: true`. Same idea, spelled out: restore, install,
-      save, keyed on workflow/Gemfile.lock — the gem's bundle is the only one
+      save, keyed on Gemfile.lock — the gem's bundle is the only one
       this repo has, and it does not sit at the root.
     steps:
       # INQUIREX_PATH is deliberately ABSENT here, as on GitHub. It is the
@@ -33,7 +33,7 @@ commands:
       # single test runs. CI must always resolve the published gems.
       - restore_cache:
           keys:
-            - v1-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-{{ checksum "workflow/Gemfile.lock" }}
+            - v1-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-{{ checksum "Gemfile.lock" }}
             - v1-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-
       - run:
           name: Install Ruby dependencies
@@ -43,9 +43,9 @@ commands:
             bundle install --jobs=4 --retry=3
             bundle clean --force
       - save_cache:
-          key: v1-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-{{ checksum "workflow/Gemfile.lock" }}
+          key: v1-bundle-{{ arch }}-{{ checksum ".ruby-version" }}-{{ checksum "Gemfile.lock" }}
           paths:
-            - workflow/vendor/bundle
+            - vendor/bundle
 
 jobs:
   linter:
@@ -58,7 +58,7 @@ jobs:
       # nothing to CircleCI's log renderer. Plain output; the offences are
       # identical.
       - run:
-          command: BUNDLE_GEMFILE=workflow/Gemfile bundle exec standardrb
+          command: BUNDLE_GEMFILE=Gemfile bundle exec standardrb
           name: Lint code for consistent style
 
   test:
@@ -75,7 +75,7 @@ jobs:
       - bundle_deps
       - run:
           name: Run tests
-          command: cd workflow && bundle exec rspec
+          command: bundle exec rspec
 
 workflows:
   # .github/workflows/ci.yml + lint.yml + biome.yml. They are separate files on

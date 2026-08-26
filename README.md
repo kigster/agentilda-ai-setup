@@ -32,8 +32,6 @@ Configuration file defines what skills and plugins and going to get installed in
 * Can install plugins targeting specific AI agent 
 * Comes with an executable `agentilda` which a CLI tool written in Ruby that drives a multi-agent workflow, manages `.plans` folders for project (where spec and plans live), syncs with Linear and much more.
 
-
-
 ## Quick Install
 
 ```bash
@@ -111,9 +109,9 @@ ______________________________________________________________________
 | `bin/`                      | **Bash** executables. `setup` is a pure symlink reconciler   |
 | `scripts/`                  | **Ruby**: `install-sources`, which runs before there is a bundle to run it in |
 | `docs/`                     | Documentation for people rather than context for agents: runbooks, the coverage badge, usage notes |
-| `workflow/`          | The `agentilda` gem: `exe/`, `lib/`, `agents/`, `spec/`, and its own Gemfile. **[Its own README](workflow/README.md)** |
+|                             |                                                              |
 
-Executables sit in three places, by what each needs in order to run. `bin/` holds shell, `scripts/` holds the one Ruby executable that must work before a bundle exists, and `workflow/exe/` holds the gem's, which resolve `BUNDLE_GEMFILE` from their own location and so run the same from `PATH` as from another project's root. `.envrc` puts all three on `PATH`.
+Executables sit in three places, by what each needs in order to run. `bin/` holds shell, `scripts/` holds the one Ruby executable that must work before a bundle exists.
 
 `skills/` and `plugins/` are **not committed**. Both are entirely regenerable from `configuration.yml` plus `src/skills/` (which is committed, since it's this repo's own work). A skill that went stale with no way to tell where it came from was the exact problem `install-sources` exists to solve:
 
@@ -145,29 +143,37 @@ ______________________________________________________________________
 
 ## Agentic Workflow
 
-The second half of this repository is **agentilda**, a Ruby CLI that keeps a project's specifications, plans and pull requests joined up, and drives a team of specialist agents over them: research, then a written specification, then a plan, then a back end, then an interface, then an adversarial review.
+This repository originallhy contained a ruby gem that was the orchestrator of the Agentic Team Workflow. This gem has since been moved out of this repository into it's own, and (hopefully) by the time you read this, it will also be on RubyGems, so you can install it with `gem install agentilda`.
 
-A feature's state is the name of its folder under `.plans/`, so a transition renames a directory rather than updating a row, and nothing can claim a phase whose document is missing.
+The gem is a Ruby CLI command `tilda` that keeps a project's specifications, plans and pull requests documents in the `.plans`, and drives a team of specialist agents over them. The agents implement the following workflow:
 
 ```
-⚪️ New ──▶ 🔎 Researched ──▶ ⭐️ Planned ──▶ 🟡 Building ──▶ 🎨 Building UI ──▶ 🟢 Ready for Review ──▶ 👀 In Review ──▶ ✅ Approved
+# Hppy path
+⚪️ New ──▶ 
+    🔎 Researched ──▶ 
+        ⭐️ Planned ──▶ o
+            🟡 Building ──▶ 
+                🎨 Building UI ──▶ 
+                    🟢 Ready for Review ──▶ 
+                    👀 In Review ──▶ 
+                        ✅ Approved
 ```
 
-**[Read the workflow documentation in `workflow/README.md`](workflow/README.md)** for the lifecycle in full, the specialists, the numbering scheme, the day-to-day commands, and the boundaries the harness enforces on an autonomous run.
+There are five agents, each tuned for a specific task.
 
-## Development
+ * research, 
+ * then a written specification, 
+ * then a plan, 
+ * then a frontend end, backend, 
+ * submit PR, 
+ * and perform an adversarial review.
+
+Install the gem with `gem install agentilda` and then run `tilda -h` for more options. It's also recommended to add command completion to your shell. Eg, for zsh:
 
 ```bash
-just              # pick a recipe
-just test         # rspec
-just lint         # standardrb (reports; never rewrites)
-just format       # standardrb --fix, then mdformat
-just ci           # lint + coverage
-just doctor       # what bin/install would copy and link, touching nothing
+# ~/.zshrc
+grep -q agentilda "${HOME}"/.zshrc || echo 'eval "$(agentilda completion zsh)"' >> "${HOME}/.zshrc"
 ```
-
-CircleCI runs the suite and the linter, and asserts `bin/setup` reaches a fixed point by running it twice and diffing — the bug it exists to prevent is drift going unnoticed, not a first run failing.
-
 ______________________________________________________________________
 
 © 2026 Konstantin Gredeskoul, MIT License

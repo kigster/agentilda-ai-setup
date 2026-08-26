@@ -1,6 +1,7 @@
 # Tell 'just' to run bash so recipes can use bashisms and `set -euo pipefail`.
 set shell := ["bash", "-c"]
 
+project_root := `pwd -P`
 version := `grep 'VERSION *=' workflow/lib/agentilda/version.rb | head -1 | awk -F'"' '{print $2}' | tr -d '\n'`
 
 # The `-` matters: `rbenv init bash` prints human instructions ("skipping
@@ -17,7 +18,7 @@ rbenv := 'eval "$(rbenv init - bash 2>/dev/null || true)"; '
 #
 # This repo is linted with `standard`, not rubocop: the Gemfile says so, and
 # standard is rubocop with the arguing removed.
-bundle := rbenv + 'BUNDLE_GEMFILE=workflow/Gemfile bundle exec '
+bundle := rbenv + 'BUNDLE_GEMFILE=Gemfile bundle exec '
 in_workflow := rbenv + 'cd workflow && bundle exec '
 
 # No `bundle exec`: the executable resolves BUNDLE_GEMFILE from its own
@@ -30,8 +31,12 @@ recipes:
     just --choose
 
 # Copy this checkout into ~/.agents, then link ~/.agents into ~/.claude
-install *args:
+install *args: install-gem
     bin/install {{ args }}
+
+install-gem:
+    # install the gem locally
+    cd {{ project_root }}/workflow && bundle install && bundle exec rake install
 
 # Install gem dependencies only
 bundle:

@@ -185,6 +185,20 @@ sources:
     path: skills
     include_skills: /\Aweb-design-guidelines\z/
 
+  # 72 skills, one per test framework or API concern, so this is all filter.
+  #
+  # `api-skill/` is a directory rather than a skill: it fans out into 24 of
+  # them. The six taken here are the tool-agnostic ones. The Postman and Newman
+  # families are twelve more, and they are left out because they are worth
+  # having only if you use those tools; add them by name when that changes.
+  #
+  # Names carry the `-skill` suffix at the top level and do not inside
+  # `api-skill/`, which is why the filter cannot just be a prefix.
+  - name: lambdatest
+    type: skills
+    repo: https://github.com/LambdaTest/agent-skills.git
+    include_skills: /\A(cypress-skill|playwright-skill|cicd-pipeline-skill|api-designer|api-documentation|api-mocking|api-security-patterns|api-to-testcase-generator|openapi-spec-generator)\z/
+
   # ---- from the Claude plugin list this repo used to keep as shell commands --
   #
   # Each of these was a `claude plugin install` line in a markdown file. What

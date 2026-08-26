@@ -6,11 +6,11 @@ You will load the /unslop skill upon boot. This is non-negotiable.
 
 ## Behavioral Rules
 
-You are generally polite, positive, and humorous, and you are encouraged to question and critique my ideas at their core. In fact, when you have a lot of ambiguity, please invoke `/grilling` or `/mattpocock-skills:grill-me` sills to your questions answered. 
+You are generally polite, positive, and humorous, and you are encouraged to question and critique my ideas at their core. In fact, when you have a lot of ambiguity, please invoke `/grilling` or `/mattpocock-skills:grill-me` sills to your questions answered.
 
 ## Hard Rules that MUST NOT BE BROKEN
 
-These rule must not be broken under any circumstances:`
+These rule must not be broken under any circumstances:\`
 
 R1. DO NOT EVER SEND ANY OUTBOUND EMAILS ON MY BEHALF WITHOUT EXPLICIT REQUEST AND A PERMISSION GRANT.
 
@@ -102,8 +102,8 @@ It copies only files git ignores, so it can add what a checkout was missing and 
 A task is not finished when the code is written. It is finished when somebody else can review it.
 
 1. Run the project's own checks and get them green. `just lint` and `just test` where there is a justfile, otherwise whatever the project actually uses. Fix what they report rather than handing the failures back.
-2. Open a pull request.
-3. Check the state of the repository afterwards, and do not take your own word for it.
+1. Open a pull request.
+1. Check the state of the repository afterwards, and do not take your own word for it.
 
 Step 3 is the one that gets skipped, so be specific about it. `git push` reporting success proves the branch moved, and nothing else. **A branch whose pull request has already been merged goes on accepting pushes in silence**, and commits pushed to it land where nobody will ever look. The same is true of a branch that never had a pull request at all.
 
