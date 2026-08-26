@@ -97,6 +97,25 @@ $ ~/.agents/bin/setup-worktree --dry-run    # look first
 
 It copies only files git ignores, so it can add what a checkout was missing and can never shadow tracked content with a stale local copy. It refuses to overwrite an existing file without `--force`, and production credential keys are opt-in via `--production`.
 
+## **Finishing a task**
+
+A task is not finished when the code is written. It is finished when somebody else can review it.
+
+1. Run the project's own checks and get them green. `just lint` and `just test` where there is a justfile, otherwise whatever the project actually uses. Fix what they report rather than handing the failures back.
+2. Open a pull request.
+3. Check the state of the repository afterwards, and do not take your own word for it.
+
+Step 3 is the one that gets skipped, so be specific about it. `git push` reporting success proves the branch moved, and nothing else. **A branch whose pull request has already been merged goes on accepting pushes in silence**, and commits pushed to it land where nobody will ever look. The same is true of a branch that never had a pull request at all.
+
+```bash
+just lint && just test                  # both green, before anything else
+gh pr list                              # is there an OPEN pull request at all?
+gh pr view <n> --json commits           # does it contain what you just pushed?
+git log --oneline origin/main..HEAD     # what is on the branch and not on main
+```
+
+If `gh pr list` prints nothing, the work is not submitted, whatever the push said. Open one. If the branch's pull request is already merged, branch again from `main`, move the commits across, and open a new one.
+
 ## **Tools**
 
 Use `rg` not `grep`, `fd` not `find`, `tree` if needed, `gawk` not `awk`, `gsed` not `sed`, `gfold` not `fold`, `gcat` not `cat`. Use `bat file` or `cat file | bat --language language` (where "language" you must deduce from the file, see `bat --languages`) to print code files to STDOUT with syntax highlighting.

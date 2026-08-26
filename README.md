@@ -1,8 +1,8 @@
-# `~/.agents`
+# agentilda
 
-[![CircleCI](https://dl.circleci.com/status-badge/img/gh/kigster/dot-agents/tree/main.svg?style=svg&circle-token=CCIPRJ_DrNBun6pLLc988EVbduHJm_9ec6ada64b6bd9406d19ca4e1aa56a249c20087d)](https://dl.circleci.com/status-badge/redirect/gh/kigster/dot-agents/tree/main)
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/kigster/agentilda/tree/main.svg?style=svg&circle-token=CCIPRJ_DrNBun6pLLc988EVbduHJm_9ec6ada64b6bd9406d19ca4e1aa56a249c20087d)](https://dl.circleci.com/status-badge/redirect/gh/kigster/agentilda/tree/main)
 
-# Konstantin Gredeskoul's AI setup
+Konstantin Gredeskoul's AI setup.
 
 A vendor-neutral home for the instructions, context, skills and tooling that several different AI coding agents share, plus **agentilda**: a small Ruby system that keeps a project's specifications, plans and pull requests joined up, and can drive specialist agents over them in parallel.
 
@@ -37,6 +37,43 @@ symlink to a checkout from the old arrangement.
 The trade, deliberately: an edit to `src/skills/foo` reaches `~/.claude` only
 when you run it again.
 
+### Configuring what gets installed
+
+`configuration.yml` is the file the installer reads. It is git-ignored and per machine, because which skills and which coding agents a machine should have is a property of that machine. A first run copies `configuration.example.yml` across and then stops, so you get to read it before it installs anything.
+
+It has two top-level keys. `agents:` names the coding agents themselves and the vendor's own install line for each:
+
+```bash
+scripts/install-sources agents            # which are configured, and which are on PATH
+scripts/install-sources agents install    # install the ones that are missing
+```
+
+`sources:` names where skills and plugins come from. A source clones a repository (`type: skills` or `type: plugin`) or runs a command (`type: command`, for something like Braintrust's `bt`, which ships its skill through its own CLI rather than a repository). Any source can narrow itself:
+
+```yaml
+- name: ruby-marketplace
+  type: skills
+  repo: https://github.com/hoblin/claude-ruby-marketplace.git
+  path: plugins
+  include_skills: /\A(rspec|activerecord)\z/   # or exclude_skills, never both
+  agents: [claude]                             # or exclude_agents, never both
+```
+
+Filters are matched against the name a thing installs as, not its path inside the source. `agents:` is matched against the `agents:` block above, and a source no configured agent would read is skipped and reported rather than installing skills nothing can load.
+
+**Tightening a filter takes skills back as well as adding them.** The next run unlinks whatever it installed last time and no longer installs, so `skills/` converges on what the file says rather than accumulating.
+
+### Keeping it up to date
+
+```bash
+bin/install --force            # rebuild, re-copy, re-link; --force replaces what is there
+scripts/install-sources -f     # wipe .sources and re-clone every source from scratch
+bin/setup --force              # repoint symlinks that aim somewhere else
+bin/install --dry-run          # preview all of it, touch nothing
+```
+
+`bin/install` never replaces anything already in `~/.agents` without `--force`, and refuses outright to replace a `~/.agents` that is still a symlink to a checkout from the old arrangement.
+
 ______________________________________________________________________
 
 ## What is in here
@@ -55,9 +92,9 @@ ______________________________________________________________________
 | `docs/`                     | Documentation for people rather than context for agents: runbooks, the coverage badge, usage notes                                 |
 | `workflow/`                 | The `agentilda` gem: `exe/`, `lib/`, `agents/`, `spec/`, and its own Gemfile                                                       |
 
-`bin` holds shell and `scripts` holds Ruby deliberately: `standardrb` then has a directory it must lint and one it can ignore entirely, and neither has to be configured around the other. `.envrc` puts both on `PATH`.
+Executables sit in three places, by what each needs in order to run. `bin/` holds shell, `scripts/` holds the one Ruby executable that must work before a bundle exists, and `workflow/exe/` holds the gem's, which resolve `BUNDLE_GEMFILE` from their own location and so run the same from `PATH` as from another project's root. `.envrc` puts all three on `PATH`.
 
-`skills/` and `plugins/` are **not committed**. Both are entirely regenerable from `configuration.yml` plus `skills-mine/` (which is committed, since it's this repo's own work). A skill that went stale with no way to tell where it came from was the exact problem `install-sources` exists to solve:
+`skills/` and `plugins/` are **not committed**. Both are entirely regenerable from `configuration.yml` plus `src/skills/` (which is committed, since it's this repo's own work). A skill that went stale with no way to tell where it came from was the exact problem `install-sources` exists to solve:
 
 ```bash
 scripts/install-sources          # clone what's missing, update the rest
