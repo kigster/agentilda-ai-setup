@@ -122,6 +122,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+
+install_agentilda_gem() {
+  if [[ ${DRY_RUN} -eq 1 ]]; then
+    echo "[dry-run] installing ruby gem agentilda..."
+  else
+    gem install agentilda -N || true
+  fi
+}
+
 # ------------------------------------------------------------------- helpers --
 
 # The path a link at $1 should contain in order to point at $HOME-relative $2.
@@ -246,6 +255,8 @@ in_list() {
 }
 
 # ---------------------------------------------------------------------- run --
+
+install_agentilda_gem
 
 say ""
 say "${c_bold}Linking ${REPO_ROOT} into ${CLAUDE_DIR}${c_reset}"
