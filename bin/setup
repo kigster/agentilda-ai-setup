@@ -148,14 +148,44 @@ relative_target() {
 # Create one symlink, refusing to destroy anything real.
 #
 #   $1 real path under ~/.agents      $2 where the link goes      $3 label
+# Moves a real file at $1 out of the way, dated, and never on top of a backup
+# that is already there: run twice in one day and the second run must not
+# destroy what the first one saved. That is the whole reason this exists, so
+# it is the part that may not be approximate.
+#
+# ISO order rather than the YYYY-DD-MM originally asked for: a backup whose
+# name does not sort is one you end up going through by hand.
+back_up() {
+  local target="$1" label="$2" stamp base candidate n
+  stamp="$(date +%Y-%m-%d)"
+  base="${target}.backup.on.${stamp}"
+  candidate="$base"
+  n=2
+  while [[ -e "$candidate" ]]; do candidate="${base}-${n}"; n=$((n + 1)); done
+
+  [[ $DRY_RUN -eq 1 ]] || mv "$target" "$candidate"
+  warn "$label was a real file — saved as $(basename "$candidate")"
+}
+
 link_one() {
-  local source="$1" dest="$2" label="$3" want current
+  local source="$1" dest="$2" label="$3" backup="${4:-}" want current
   want="$(relative_target "$dest" "${source#"$HOME"/}")"
 
   if [[ -L "$dest" ]]; then
     current="$(readlink "$dest")"
     if [[ "$current" == "$want" ]] || [[ "$(cd "$(dirname "$dest")" && cd "$(dirname "$current")" 2>/dev/null && pwd)/$(basename "$current")" == "$source" ]]; then
       already=$((already + 1)); note "$label ${c_dim}already linked${c_reset}"; return 0
+    fi
+
+    # A link that resolves to nothing is residue, not a decision, so repointing
+    # it needs no --force: there is nothing on the other end to protect. This is
+    # what a moved target leaves behind. ~/AGENTS.md pointed at .agents/AGENTS.md
+    # for as long as ~/.agents was a checkout with one at its root; once
+    # bin/install started assembling ~/.agents from a copy table, the file it
+    # named stopped existing and every agent quietly read no instructions at all.
+    if [[ ! -e "$dest" ]]; then
+      [[ $DRY_RUN -eq 1 ]] || { rm "$dest"; ln -s "$want" "$dest"; }
+      linked=$((linked + 1)); ok "$label ${c_dim}repointed from $current, which resolved to nothing${c_reset}"; return 0
     fi
 
     if [[ $FORCE -eq 1 ]]; then
@@ -169,9 +199,16 @@ link_one() {
   fi
 
   if [[ -e "$dest" ]]; then
-    conflicts=$((conflicts + 1))
-    bad "$label exists and is not a symlink — left untouched"
-    return 0
+    # A shared folder is never moved aside on a hunch: only the callers that
+    # ask for a backup get one, because the alternative is this quietly
+    # renaming somebody's whole ~/.claude/skills directory.
+    if [[ -z "$backup" ]]; then
+      conflicts=$((conflicts + 1))
+      bad "$label exists and is not a symlink — left untouched"
+      return 0
+    fi
+
+    back_up "$dest" "$label"
   fi
 
   [[ $DRY_RUN -eq 1 ]] || { mkdir -p "$(dirname "$dest")"; ln -s "$want" "$dest"; }
@@ -228,8 +265,8 @@ fi
 mkdir -p "$CLAUDE_DIR"
 
 say "${c_bold}Instructions${c_reset}"
-link_one "$AGENTS_MD" "$HOME/AGENTS.md"          "~/AGENTS.md"
-link_one "$AGENTS_MD" "$CLAUDE_DIR/CLAUDE.md"    "~/.claude/CLAUDE.md"
+link_one "$AGENTS_MD" "$HOME/AGENTS.md"          "~/AGENTS.md"          backup
+link_one "$AGENTS_MD" "$CLAUDE_DIR/CLAUDE.md"    "~/.claude/CLAUDE.md"  backup
 
 say ""
 say "${c_bold}Shared folders${c_reset}"

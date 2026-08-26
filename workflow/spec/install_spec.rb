@@ -219,6 +219,105 @@ RSpec.describe "bin/install" do
       end
     end
 
+    # ~/AGENTS.md and ~/.claude/CLAUDE.md both want to be the one file every
+    # agent reads, so a real file on either is what stops that. They are the
+    # only two links that move something aside in order to get made.
+    it "saves a real ~/AGENTS.md out of the way, dated, and links over it" do
+      File.write(File.join(home, "AGENTS.md"), "my own instructions\n")
+
+      output, _status = install
+      saved = Dir.glob(File.join(home, "AGENTS.md.backup.on.*"))
+
+      aggregate_failures do
+        expect(output).to include("was a real file")
+        expect(saved.size).to eq(1)
+        expect(File.read(saved.first)).to eq("my own instructions\n")
+        expect(File.readlink(File.join(home, "AGENTS.md"))).to eq(".agents/config/AGENTS.md")
+      end
+    end
+
+    it "does the same for a real ~/.claude/CLAUDE.md" do
+      FileUtils.mkdir_p(claude_dir)
+      File.write(File.join(claude_dir, "CLAUDE.md"), "my own claude md\n")
+
+      install
+      saved = Dir.glob(File.join(claude_dir, "CLAUDE.md.backup.on.*"))
+
+      aggregate_failures do
+        expect(saved.size).to eq(1)
+        expect(File.read(saved.first)).to eq("my own claude md\n")
+        expect(File.readlink(File.join(claude_dir, "CLAUDE.md"))).to eq("../.agents/config/AGENTS.md")
+      end
+    end
+
+    # A backup that lands on an earlier backup is not one, and twice in a day is
+    # the ordinary case rather than the odd one.
+    it "never writes over a backup it already made today" do
+      root = checkout
+      File.write(File.join(home, "AGENTS.md"), "first\n")
+      install(root:)
+
+      # The first run left a symlink here. Writing to that would follow it and
+      # edit the instructions themselves, so the real file has to replace it.
+      FileUtils.rm_f(File.join(home, "AGENTS.md"))
+      File.write(File.join(home, "AGENTS.md"), "second\n")
+      install("--force", root:)
+
+      saved = Dir.glob(File.join(home, "AGENTS.md.backup.on.*"))
+      aggregate_failures do
+        expect(saved.size).to eq(2)
+        expect(saved.map { |f| File.read(f) }).to contain_exactly("first\n", "second\n")
+      end
+    end
+
+    it "moves nothing under --dry-run, however loudly it says it would" do
+      root = checkout
+      install(root:)
+      FileUtils.rm_f(File.join(home, "AGENTS.md"))
+      File.write(File.join(home, "AGENTS.md"), "untouched\n")
+
+      output, _status = install("--dry-run", "--no-sources", root:)
+
+      aggregate_failures do
+        expect(output).to include("was a real file")
+        expect(File.read(File.join(home, "AGENTS.md"))).to eq("untouched\n")
+        expect(Dir.glob(File.join(home, "AGENTS.md.backup.on.*"))).to be_empty
+      end
+    end
+
+    # Everything else keeps the old behaviour. The alternative is this quietly
+    # renaming something somebody put there on purpose.
+    it "still refuses to move anything else aside" do
+      FileUtils.mkdir_p(claude_dir)
+      File.write(File.join(claude_dir, "context"), "a real file where a folder goes\n")
+
+      output, _status = install
+
+      aggregate_failures do
+        expect(output).to include("left untouched")
+        expect(File.file?(File.join(claude_dir, "context"))).to be(true)
+        expect(Dir.glob(File.join(claude_dir, "context.backup.on.*"))).to be_empty
+      end
+    end
+
+    # What a moved target leaves behind. ~/AGENTS.md pointed at .agents/AGENTS.md
+    # while ~/.agents was a checkout with one at its root; once bin/install began
+    # assembling ~/.agents from a copy table the file it named stopped existing,
+    # and every agent on the machine read no instructions at all.
+    it "repoints a link that resolves to nothing, without being forced" do
+      install
+      FileUtils.ln_sf(".agents/AGENTS.md", File.join(home, "AGENTS.md"))
+      expect(File.exist?(File.join(home, "AGENTS.md"))).to be(false)
+
+      output, _status = install("--no-sources")
+
+      aggregate_failures do
+        expect(output).to include("resolved to nothing")
+        expect(File.readlink(File.join(home, "AGENTS.md"))).to eq(".agents/config/AGENTS.md")
+        expect(File.exist?(File.join(home, "AGENTS.md"))).to be(true)
+      end
+    end
+
     it "stops before it under --no-setup" do
       install("--no-setup")
 

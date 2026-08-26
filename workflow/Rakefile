@@ -31,7 +31,7 @@ task build: :permissions
 YARD::Rake::YardocTask.new(:doc) do |t|
   t.files = %w[lib/**/*.rb exe/*.rb - README.md LICENSE.txt CHANGELOG.md]
   t.options.unshift("--title", '"FlowEngine — DSL + AST for buildiong complex flows in Ruby."')
-  t.after = -> { exec("open doc/index.html") } if RUBY_PLATFORM =~ /darwin/
+  t.after = -> { exec("open doc/index.html") } if RUBY_PLATFORM.match?(/darwin/)
 end
 
 RSpec::Core::RakeTask.new(:spec)
