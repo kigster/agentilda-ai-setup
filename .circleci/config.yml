@@ -38,7 +38,6 @@ commands:
       - run:
           name: Install Ruby dependencies
           command: |
-            cd workflow
             bundle config set --local path vendor/bundle
             bundle install --jobs=4 --retry=3
             bundle clean --force
@@ -54,7 +53,7 @@ jobs:
       - checkout
       - install_packages
       - bundle_deps
-      # `-f github` emitted GitHub's workflow-command annotations, which mean
+      # `-f github` emitted GitHub's command annotations, which mean
       # nothing to CircleCI's log renderer. Plain output; the offences are
       # identical.
       - run:
