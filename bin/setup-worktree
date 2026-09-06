@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 #
+# © 2026 Konstantin Gredeskoul
+#
 # bin/setup-worktree — give a fresh git worktree the local files git will not.
 #
 #   setup-worktree                    # seed the worktree you are standing in

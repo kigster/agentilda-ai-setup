@@ -1,47 +1,40 @@
 # Tell 'just' to run bash so recipes can use bashisms and `set -euo pipefail`.
 set shell := ["bash", "-c"]
 
-project_root := `pwd -P`
-version := `grep 'VERSION *=' workflow/lib/agentilda/version.rb | head -1 | awk -F'"' '{print $2}' | tr -d '\n'`
-
 # The `-` matters: `rbenv init bash` prints human instructions ("skipping
 # ~/.bash_login: already configured"), which eval then tries to run, and the
 # recipe dies with "skipping: command not found". `rbenv init - bash` prints
 # the shell code that is meant to be eval'd.
 rbenv := 'eval "$(rbenv init - bash 2>/dev/null || true)"; '
 
-# The gem lives in workflow/ and the installer stays at the root, so the two
-# halves are reached differently. Lint runs from here, where it sees scripts/
-# and workflow/ alike, with bundler pointed at the gem's Gemfile. The suite
-# runs from workflow/, where .rspec and spec/ are, and where SimpleCov's
-# `cover "lib/**/*.rb"` means the right lib.
+# The agentilda gem used to live in workflow/ and now comes from rubygems, so
+# what is left here, scripts/ and spec/, is linted and tested from the root
+# against the one Gemfile. CircleCI runs the same two commands.
 #
 # This repo is linted with `standard`, not rubocop: the Gemfile says so, and
 # standard is rubocop with the arguing removed.
 bundle := rbenv + 'BUNDLE_GEMFILE=Gemfile bundle exec '
-in_workflow := rbenv + 'cd workflow && bundle exec '
 
-# No `bundle exec`: the executable resolves BUNDLE_GEMFILE from its own
-# location, so it works the same run from here, from PATH, or from another
-# project's root. Paths it is given stay relative to this directory.
-tilda := rbenv + 'workflow/exe/agentilda'
+# The installed gem, not a checkout. bin/setup puts it there with
+# `gem install agentilda`, and `just install-gem` does the same by hand.
+tilda := rbenv + 'agentilda'
 
 [no-exit-message]
 recipes:
     just --choose
 
 # Copy this checkout into ~/.agents, then link ~/.agents into ~/.claude
-install *args: install-gem
+install *args:
     bin/install {{ args }}
 
+# gem install agentilda -N
 install-gem:
-    # install the gem locally
-    cd {{ project_root }}/workflow && bundle install && bundle exec rake install
+    {{ rbenv }} gem install agentilda -N
 
 # Install gem dependencies only
 bundle:
     {{ rbenv }} bundle --version >/dev/null 2>&1 || gem install bundler
-    cd workflow && bundle install
+    {{ rbenv }} bundle install
 
 # The linking step on its own. `just install` runs it for you
 setup:
@@ -69,11 +62,11 @@ format *args:
 
 # Run the specs
 test *args:
-    {{ in_workflow }} rspec {{ args }}
+    {{ bundle }} rspec {{ args }}
 
 # Run the specs with a coverage report
 test-coverage *args:
-    export COVERAGE=true; {{ in_workflow }} rspec {{ args }}
+    export COVERAGE=true; {{ bundle }} rspec {{ args }}
     @echo "open coverage/index.html"
 
 ci: lint test-coverage
@@ -91,9 +84,9 @@ clean:
 lefthook:
     {{ bundle }} lefthook run pre-commit --all-files
 
-# Print the current version
+# agentilda --version
 version:
-    @echo "{{ version }}"
+    @{{ tilda }} --version
 
 # ---------------------------------------------------------------- agentilda
 
@@ -142,6 +135,7 @@ linear-json prefix *args:
     {{ tilda }} linear import --prefix {{ prefix }} --format json {{ args }}
 
 # Regenerate context/feature-building/agentilda.md from the state machine
-docs: bundle
+docs:
+    mkdir -p context/feature-building
     {{ tilda }} docs --output context/feature-building/agentilda.md
     mdformat --wrap no context/feature-building/agentilda.md
