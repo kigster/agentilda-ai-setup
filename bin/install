@@ -54,8 +54,10 @@ COPY=(
   "bin:bin"
 )
 
-declare -a ADD_TO_PATH
-ADD_TO_PATH+=("${HOME}/.agents/bin")
+# Directories the copy leaves behind that are worth having on PATH. Checked
+# once at the very end, and reported rather than fixed: nothing here edits an
+# rc file.
+ADD_TO_PATH=("${AGENTS_DIR}/bin")
 
 # Built by install-sources rather than committed, so "not in this checkout"
 # means something different for these: not that they are absent by choice,
@@ -254,5 +256,29 @@ if [[ $RUN_SETUP -eq 1 ]]; then
 else
   say ""
   say "  ${c_dim}Copy only. bin/setup links ~/.agents into ~/.claude.${c_reset}"
+  say ""
+fi
+
+# --------------------------------------------------------------- path hint --
+
+# AGENTS.md names agent-lock and its siblings by their full ~/.agents/bin path,
+# so nothing above depends on PATH. They are still nicer to type when it is
+# there, which is worth one line at the end and never worth editing an rc file.
+missing=()
+for dir in "${ADD_TO_PATH[@]}"; do
+  case ":${PATH}:" in
+    *":${dir}:"*) ;;
+    *) missing+=("$dir") ;;
+  esac
+done
+
+if [[ ${#missing[@]} -gt 0 ]]; then
+  say ""
+  say "${c_bold}Not on PATH${c_reset}"
+  for dir in "${missing[@]}"; do
+    shown="$dir"
+    [[ "$dir" == "$HOME/"* ]] && shown='$HOME'"${dir#"$HOME"}"
+    note "${shown}   ${c_dim}add to your shell rc:${c_reset}   export PATH=\"${shown}:\$PATH\""
+  done
   say ""
 fi

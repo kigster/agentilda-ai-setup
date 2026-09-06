@@ -63,8 +63,8 @@ RSpec.describe "bin/install" do
   end
 
   # @return [Array(String, Process::Status)] output and status
-  def install(*args, root: checkout)
-    env = {"HOME" => home, "NO_COLOR" => "1"}
+  def install(*args, root: checkout, env: {})
+    env = {"HOME" => home, "NO_COLOR" => "1"}.merge(env)
     out, err, status = Open3.capture3(env, File.join(root, "bin", "install"), *args)
     [out + err, status]
   end
@@ -187,6 +187,26 @@ RSpec.describe "bin/install" do
         expect(File.exist?(agents_dir)).to be(false)
         expect(File.exist?(claude_dir)).to be(false)
       end
+    end
+  end
+
+  # ~/.agents/bin is where agent-lock and its siblings land. AGENTS.md names
+  # them by that path, so nothing depends on PATH; the run says once how to get
+  # it there, and edits no rc file to do it.
+  describe "the PATH hint" do
+    it "says how to put ~/.agents/bin on PATH when it is not there" do
+      output, _status = install
+
+      expect(output).to include("Not on PATH")
+        .and include(%(export PATH="$HOME/.agents/bin:$PATH"))
+    end
+
+    it "says nothing when it already is" do
+      path = "#{agents_dir}/bin:#{ENV.fetch("PATH")}"
+
+      output, _status = install(env: {"PATH" => path})
+
+      expect(output).not_to include("Not on PATH")
     end
   end
 
