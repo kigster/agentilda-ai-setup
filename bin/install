@@ -51,7 +51,11 @@ COPY=(
   "skills:skills"
   "plugins:plugins"
   "plugins-disabled:plugins-disabled"
+  "bin:bin"
 )
+
+declare -a ADD_TO_PATH
+ADD_TO_PATH+=("${HOME}/.agents/bin")
 
 # Built by install-sources rather than committed, so "not in this checkout"
 # means something different for these: not that they are absent by choice,

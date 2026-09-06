@@ -94,6 +94,7 @@ RSpec.describe "bin/install" do
         expect(File.file?(File.join(agents_dir, "commands", "plan-run.md"))).to be(true)
         expect(File.file?(File.join(agents_dir, "agents", "yoda-writer.md"))).to be(true)
         expect(File.file?(File.join(agents_dir, "context", "about.md"))).to be(true)
+        expect(File.file?(File.join(agents_dir, "bin", "setup"))).to be(true)
       end
     end
 
@@ -137,7 +138,7 @@ RSpec.describe "bin/install" do
       output, _status = install(root:)
 
       aggregate_failures do
-        expect(output).to include("already there").and include("conflicts 6")
+        expect(output).to include("already there").and include("conflicts 7")
         expect(File.read(File.join(agents_dir, "context", "about.md"))).to eq("edited by hand\n")
       end
     end
