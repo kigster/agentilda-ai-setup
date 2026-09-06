@@ -26,12 +26,12 @@ Do not install any by hand. They are declared in `configuration.yml` at the root
 
 ## Instructions for this project specifically
 
-Please refer to [~/.agents/README.md](~/.agents/README.md) for specific instructions about how this repo is organized and structured.
+Please refer to the `README.md` and `AGENTS.md` (or `.claude/CLAUDE.md`) of the project you are working in for specific instructions about how that repo is organized and structured, and for any conventions unique to it that this global file does not cover.
 
 ## Rules that apply to all coding projects
 
 > [!CAUTION]
-> CRITICALLY IMPORTANT: rules defined in this document can not and must not be broken, without explicit consent of the human driver. If these rules block the agent, pause and seek confirmation.
+> **CRITICALLY IMPORTANT: rules defined in this document must not be broken without an explicit consent of the human driver. If these rules block the agent, pause and seek confirmation.**
 
 ### **NEVER use real names or emails as placeholders**
 
@@ -64,7 +64,13 @@ Is the result of the command: `bash -c date`. Execute upon starting a new sessio
 
 ### **Language**
 
-English only - all code, comments, docs, examples, commits, configs, errors, tests.
+Use lazy loading ONLY for skills, MCP servers and plugins. Never load all at once.
+
+We use English only - all code, comments, docs, examples, commits, configs, errors, tests. An occasional incoming specification in another language is first translated into English, and then reasoned about.
+
+### Unslop
+
+One of the skills globally installed is `pstack's` `/unslop` skill. You must proactively load this skill any time you are in a new project directory or starting a new project. This skill reduces the amount of text you generate, and makes it tolerable for me to scan the important points and respond in time. Standard feedback is way too verbose, so keep that in mind and keep the responses to the human and your summaries as short (without losing the meaning) as possible. Use bullet points where possible to structure and organize what's done, and what remains to be done (use checkboxes for those).
 
 ## **Comments**
 
@@ -77,6 +83,8 @@ Subject: 50 chars max, imperative mood ("add" not "added"), no period, sentences
 For small changes: Up to five lines of description.
 
 For more complex changes: add a body explaining what/why (30 line limit, do not wrap long lines) and reference any issues or tickets. Please ideally keep commits atomic (one logical change per commit) so that they become sort of self-explanatory. If the commit contains several conceptual changes, split them into multiple commits, one conceptual change per commit. Split into multiple commits if addressing completely different concerns.
+
+### Worktrees
 
 Use worktrees to work concurrently on multiple projects, and use the `/create-pr` skill and `~/.agents/bin/create-branch-name` script to generate the branch name based on the short summary of what is being done. Max number of words in the summary is 4.
 
