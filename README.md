@@ -46,10 +46,10 @@ For your benefit, here is the output of `bin/install --help`:
 ```text
 install — build, copy this checkout into ~/.agents, then link it into ~/.claude.
 
-	# build, copy what is missing, never overwrite
+  # build, copy what is missing, never overwrite
   bin/install                
 
-	# replace what is already in ~/.agents
+  # replace what is already in ~/.agents
   bin/install --force        
   
   # say what it would do, touch nothing
@@ -58,13 +58,13 @@ install — build, copy this checkout into ~/.agents, then link it into ~/.claud
   # skip the build; copy what is already there
   bin/install --no-sources
 
-	# stop after the copy, skip the linking step
+  # stop after the copy, skip the linking step
   bin/install --no-setup     
 
 Three steps, and the checkout is none of them.
 
 1. scripts/install-sources assembles skills/ and plugins/ in
-	 the checkout from configuration.yml. They are generated:
+   the checkout from configuration.yml. They are generated:
    nothing under either is committed, so on a fresh clone
    neither exists until this has run.
 
@@ -74,7 +74,7 @@ Three steps, and the checkout is none of them.
    dangling.
 
 3. bin/setup links ~/.agents into ~/.claude, unchanged. It
-	 needs no table of its own: the copy below is what turns
+   needs no table of its own: the copy below is what turns
    src/commands into commands and workflow/agents into 
    agents, so what setup walks is the flat tree it has
    always walked.
@@ -126,7 +126,7 @@ scripts/install-sources agents install
   path: plugins
   # exclude_skills too, if you want both
   include_skills: /\A(rspec|activerecord)\z/
-	# or exclude_agents, never boths 
+  # or exclude_agents, never boths 
   agents: [claude]                             
 ```
 
@@ -194,7 +194,7 @@ A source that carries more than you want narrows itself with regular expressions
     type: plugin
     repo: git@github.com:cursor/plugins.git
     path: pstack
-		# exclude_skills too, if you want both
+    # exclude_skills too, if you want both
     include_skills: /\A(architect|unslop|why)\z/   
 ```
 
