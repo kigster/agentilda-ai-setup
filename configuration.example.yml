@@ -282,7 +282,7 @@ sources:
     type: plugins
     repo: https://github.com/anthropics/claude-plugins-official.git
     path: plugins
-    include_plugins: /\A(pr-review-toolkit|security-guidance|ruby-lsp|clode-code-setup|agent-sdk-dev|claude-md-management)\z/
+    exclude_plugins: /\A(clang|csharp|cwc|explanatory|gopls|jdtls|kotlin|lua|php)\z/
     adopt: [plugins]
     agents: [claude]
 

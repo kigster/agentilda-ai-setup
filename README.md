@@ -2,8 +2,6 @@
 
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/kigster/agentilda/tree/main.svg?style=svg&circle-token=CCIPRJ_DrNBun6pLLc988EVbduHJm_9ec6ada64b6bd9406d19ca4e1aa56a249c20087d)](https://dl.circleci.com/status-badge/redirect/gh/kigster/agentilda/tree/main)
 
-
-
 >  [!NOTE]
 >
 > A vendor-neutral home for the AI instructions, context, skills and tooling that several different AI coding agents share, plus **agentilda**: a small Ruby CLI gem that keeps projects specifications, plans and pull requests joined up, and can drive a team of dedicated agents from specification to completion of a given task, with review harness and proper planning.
@@ -35,13 +33,62 @@ Configuration file defines what skills and plugins and going to get installed in
 ## Quick Install
 
 ```bash
-# anywhere; this is not the install
-git clone <this repo> agentilda   
-cd agentilda
-direnv allow .                    # puts bin/, scripts/ & workflow/exe on PATH
+# pre-requisite
+gem install agentilda agent-lock
 
+# now install these skills and plugins
 bin/install
 ```
+
+### What install does
+
+For your benefit, here is the output of `bin/install --help`:
+
+```text
+install — build, copy this checkout into ~/.agents, then link it into ~/.claude.
+
+	# build, copy what is missing, never overwrite
+  bin/install                
+
+	# replace what is already in ~/.agents
+  bin/install --force        
+  
+  # say what it would do, touch nothing
+  bin/install --dry-run   
+  
+  # skip the build; copy what is already there
+  bin/install --no-sources
+
+	# stop after the copy, skip the linking step
+  bin/install --no-setup     
+
+Three steps, and the checkout is none of them.
+
+1. scripts/install-sources assembles skills/ and plugins/ in
+	 the checkout from configuration.yml. They are generated:
+   nothing under either is committed, so on a fresh clone
+   neither exists until this has run.
+
+2. this copies the result into ~/.agents with every symlink
+   resolved, so ~/.agents holds real files and the checkout
+   can then be moved, renamed or deleted without anything
+   dangling.
+
+3. bin/setup links ~/.agents into ~/.claude, unchanged. It
+	 needs no table of its own: the copy below is what turns
+   src/commands into commands and workflow/agents into 
+   agents, so what setup walks is the flat tree it has
+   always walked.
+
+```
+
+### Notes
+
+Step 1 is not optional, and not silent. skills/ missing after it has run means it did not get far enough to build one — most often because `configuration.yml` was only just seeded and is waiting to be read. Copying anyway would install a tree with no skills in it and report success, so it stops instead. `--no-sources` is for the case where you built already.
+
+The trade this makes, deliberately: editing src/skills/foo no longer shows up in `~/.claude` until this is run again. An installed tree that keeps.
+
+## Digging Deeper
 
 There are three granular steps that you can run independently, or you can skip to the next section and insetall all at once.
 
@@ -64,8 +111,11 @@ The trade, deliberately: an edit to `src/skills/foo` reaches `~/.claude` only wh
 It has two top-level keys. `agents:` names the coding agents themselves and the vendor's own install line for each:
 
 ```bash
-scripts/install-sources agents            # which are configured, and which are on PATH
-scripts/install-sources agents install    # install the ones that are missing
+# which are configured, and which are on PATH
+scripts/install-sources agents            
+
+# install the ones that are missing
+scripts/install-sources agents install    
 ```
 
 `sources:` names where skills and plugins come from. A source clones a repository (`type: skills`, `type: plugin` for one bundle, `type: plugins` for a directory of them) or runs a command (`type: command`, for something like Braintrust's `bt`, which ships its skill through its own CLI rather than a repository). Any source can narrow itself:
@@ -73,10 +123,12 @@ scripts/install-sources agents install    # install the ones that are missing
 ```yaml
 - name: ruby-marketplace
   type: skills
-  repo: https://github.com/hoblin/claude-ruby-marketplace.git
+  repo: https://github.com/hoblin/claude-ruby-marketplace
   path: plugins
-  include_skills: /\A(rspec|activerecord)\z/   # exclude_skills too, if you want both
-  agents: [claude]                             # or exclude_agents, never both
+  # exclude_skills too, if you want both
+  include_skills: /\A(rspec|activerecord)\z/
+	# or exclude_agents, never boths 
+  agents: [claude]                             
 ```
 
 Filters are matched against the name a thing installs as, not its path inside the source. Set both keys of a pair and they apply in the order the file writes them, last match winning, so `include_plugins: /.*/` followed by `exclude_plugins: /\Aruby-lsp\z/` takes every bundle but that one. `agents:` is matched against the `agents:` block above, and a source no configured agent would read is skipped and reported rather than installing skills nothing can load.
@@ -86,10 +138,17 @@ Filters are matched against the name a thing installs as, not its path inside th
 ### Keeping it up to date
 
 ```bash
-bin/install --force            # rebuild, re-copy, re-link; --force replaces what is there
-scripts/install-sources -f     # wipe .sources and re-clone every source from scratch
-bin/setup --force              # repoint symlinks that aim somewhere else
-bin/install --dry-run          # preview all of it, touch nothing
+# rebuild, re-copy, re-link; --force replaces what is there
+bin/install --force            
+
+# wipe .sources and re-clone every source from scratch
+scripts/install-sources -f     
+
+# repoint symlinks that aim somewhere else
+bin/setup --force              
+
+# preview all of it, touch nothing
+bin/install --dry-run          
 ```
 
 `bin/install` never replaces anything already in `~/.agents` without `--force`, and refuses outright to replace a `~/.agents` that is still a symlink to a checkout from the old arrangement.
@@ -117,9 +176,14 @@ Executables sit in three places, by what each needs in order to run. `bin/` hold
 `skills/` and `plugins/` are **not committed**. Both are entirely regenerable from `configuration.yml` plus `src/skills/` (which is committed, since it's this repo's own work). A skill that went stale with no way to tell where it came from was the exact problem `install-sources` exists to solve:
 
 ```bash
-scripts/install-sources          # clone what's missing, update the rest
-scripts/install-sources -f       # wipe and re-clone every source fresh
-scripts/install-sources list     # what's configured, and what's installed from where
+# clone what's missing, update the rest
+scripts/install-sources          
+
+# wipe and re-clone every source fresh
+scripts/install-sources -f       
+
+# what's configured, and what's installed from where
+scripts/install-sources list     
 ```
 
 Add a repo to `configuration.yml` instead of installing something by hand. `type: skills` treats every `SKILL.md`-rooted directory found (at any depth) as its own skill; `type: plugin` installs the whole thing into `plugins/<name>` and, if it carries its own `skills/`, fans those out individually too; `type: plugins` does that for every directory under `path`, which is how one entry takes several bundles out of one marketplace repository.
@@ -131,7 +195,8 @@ A source that carries more than you want narrows itself with regular expressions
     type: plugin
     repo: git@github.com:cursor/plugins.git
     path: pstack
-    include_skills: /\A(architect|unslop|why)\z/   # exclude_skills too, if you want both
+		# exclude_skills too, if you want both
+    include_skills: /\A(architect|unslop|why)\z/   
 ```
 
 Tightening a filter takes skills back as well as adding them: the next run unlinks whatever it installed last time and no longer installs, so `skills/` converges on what `configuration.yml` says. `bin/setup` then sweeps the matching dangling links out of `~/.claude/skills`.
