@@ -2,11 +2,10 @@
 
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/kigster/agentilda/tree/main.svg?style=svg&circle-token=CCIPRJ_DrNBun6pLLc988EVbduHJm_9ec6ada64b6bd9406d19ca4e1aa56a249c20087d)](https://dl.circleci.com/status-badge/redirect/gh/kigster/agentilda/tree/main)
 
->  [!NOTE]
->
+> [!NOTE]
 > A vendor-neutral home for the AI instructions, context, skills and tooling that several different AI coding agents share, plus **agentilda**: a small Ruby CLI gem that keeps projects specifications, plans and pull requests joined up, and can drive a team of dedicated agents from specification to completion of a given task, with review harness and proper planning.
 
-------
+______________________________________________________________________
 
 ## Customizing Configuration
 
@@ -19,16 +18,16 @@ vim configuration.yml
 
 Configuration file defines what skills and plugins and going to get installed in you two global directories:
 
-* `~/.agents` (receivies actual files — eg copies of skills, plugins, etc, does not depend on this repo checkout post install)
-* `~/.claude/` (receive symlinks into `~/.agents` to reduce duplication, although some claude-specific plugins are supported as well.)
+- `~/.agents` (receivies actual files — eg copies of skills, plugins, etc, does not depend on this repo checkout post install)
+- `~/.claude/` (receive symlinks into `~/.agents` to reduce duplication, although some claude-specific plugins are supported as well.)
 
 ### Features
 
-* Installs plugins and skills from remote repositories ensuring latest versions
-* Can install partial skills from a given repo based on regular expression matching
-* Can install plugins by executing commands
-* Can install plugins targeting specific AI agent 
-* Comes with an executable `agentilda` which a CLI tool written in Ruby that drives a multi-agent workflow, manages `.plans` folders for project (where spec and plans live), syncs with Linear and much more.
+- Installs plugins and skills from remote repositories ensuring latest versions
+- Can install partial skills from a given repo based on regular expression matching
+- Can install plugins by executing commands
+- Can install plugins targeting specific AI agent
+- Comes with an executable `agentilda` which a CLI tool written in Ruby that drives a multi-agent workflow, manages `.plans` folders for project (where spec and plans live), syncs with Linear and much more.
 
 ## Quick Install
 
@@ -157,19 +156,19 @@ ______________________________________________________________________
 
 ## What is in here
 
-| Path                        | What it is                                                   |
-| :-------------------------- | :----------------------------------------------------------- |
-| `config/AGENTS.md`          | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md` |
-| `context/`                  | What every agent gets regardless, including about.md which you should update to be about you. |
-| `src/skills/`               | Skills authored in this repo (committed); folded into `skills/` by `install-sources` |
-| `src/commands/`             | Slash commands that wrap `agentilda` with the right guardrails baked in |
-| `skills/`                   | Claude skills, **generated**, one directory per skill, symlinked into `~/.claude/skills/` |
-| `plugins/`                  | External plugin bundles (e.g. `pstack`), also generated, not committed |
+| Path                        | What it is                                                                                                                         |
+| :-------------------------- | :--------------------------------------------------------------------------------------------------------------------------------- |
+| `config/AGENTS.md`          | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md`                                           |
+| `context/`                  | What every agent gets regardless, including about.md which you should update to be about you.                                      |
+| `src/skills/`               | Skills authored in this repo (committed); folded into `skills/` by `install-sources`                                               |
+| `src/commands/`             | Slash commands that wrap `agentilda` with the right guardrails baked in                                                            |
+| `skills/`                   | Claude skills, **generated**, one directory per skill, symlinked into `~/.claude/skills/`                                          |
+| `plugins/`                  | External plugin bundles (e.g. `pstack`), also generated, not committed                                                             |
 | `configuration.example.yml` | Committed template for the git-ignored `configuration.yml`, the list `scripts/install-sources` pulls `skills/` and `plugins/` from |
-| `bin/`                      | **Bash** executables. `setup` is a pure symlink reconciler   |
-| `scripts/`                  | **Ruby**: `install-sources`, which runs before there is a bundle to run it in |
-| `docs/`                     | Documentation for people rather than context for agents: runbooks, the coverage badge, usage notes |
-|                             |                                                              |
+| `bin/`                      | **Bash** executables. `setup` is a pure symlink reconciler                                                                         |
+| `scripts/`                  | **Ruby**: `install-sources`, which runs before there is a bundle to run it in                                                      |
+| `docs/`                     | Documentation for people rather than context for agents: runbooks, the coverage badge, usage notes                                 |
+|                             |                                                                                                                                    |
 
 Executables sit in three places, by what each needs in order to run. `bin/` holds shell, `scripts/` holds the one Ruby executable that must work before a bundle exists.
 
@@ -227,12 +226,12 @@ The gem is a Ruby CLI command `tilda` that keeps a project's specifications, pla
 
 There are five agents, each tuned for a specific task.
 
- * research, 
- * then a written specification, 
- * then a plan, 
- * then a frontend end, backend, 
- * submit PR, 
- * and perform an adversarial review.
+- research,
+- then a written specification,
+- then a plan,
+- then a frontend end, backend,
+- submit PR,
+- and perform an adversarial review.
 
 Install the gem with `gem install agentilda` and then run `tilda -h` for more options. It's also recommended to add command completion to your shell. Eg, for zsh:
 
@@ -240,6 +239,7 @@ Install the gem with `gem install agentilda` and then run `tilda -h` for more op
 # ~/.zshrc
 grep -q agentilda "${HOME}"/.zshrc || echo 'eval "$(agentilda completion zsh)"' >> "${HOME}/.zshrc"
 ```
+
 ______________________________________________________________________
 
 © 2026 Konstantin Gredeskoul, MIT License
