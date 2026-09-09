@@ -41,7 +41,7 @@ RSpec.describe "bin/setup-worktree" do
     write("tracked.txt", "tracked\n")
     write(".env.example", "TRACKED_SAMPLE=1\n")
     git(main, "add", "-A")
-    git(main, "-c", "user.email=alan.turing@manchester.edu", "-c", "user.name=Alan Turing",
+    git(main, "-c", "user.email=alan.turing@manchester.edu", "-c", "user.name=Alan Turing", "-c", "commit.gpgsign=false",
       "commit", "-qm", "seed")
 
     write(".env", "SECRET=from-main\n")
@@ -184,7 +184,7 @@ RSpec.describe "bin/setup-worktree" do
       git(bare, "init", "-q", "-b", "main")
       File.write(File.join(bare, "only.txt"), "x\n")
       git(bare, "add", "-A")
-      git(bare, "-c", "user.email=alan.turing@manchester.edu", "-c", "user.name=Alan Turing",
+      git(bare, "-c", "user.email=alan.turing@manchester.edu", "-c", "user.name=Alan Turing", "-c", "commit.gpgsign=false",
         "commit", "-qm", "seed")
       git(bare, "worktree", "add", "-q", bare_tree, "-b", "side")
     end

@@ -23,6 +23,20 @@ tilda := rbenv + 'agentilda'
 recipes:
     just --choose
 
+# Setup local repository for your specific needs before running install
+init:
+    #!/usr/bin/env bash
+    [[ -f configuration.yml ]] || cp configuration.example.yml configuration.yml
+    echo -e "\n\e[1;34mINFO: This folder contains a git-ignored file configuration.yml."
+    echo -e "You should carefully review this file and understand it's capabilities"
+    echo -e "before simply running the installer (eg \e[0;32mbin/install --help\e[0m)"
+    echo
+    echo -e "\e[0;33mPress any key to enter the editor and edit your configuration....\e[0m"
+    read -n 1 -s -r -p ""
+
+    ${EDITOR:-vim} configuration.yml
+      
+
 # Copy this checkout into ~/.agents, then link ~/.agents into ~/.claude
 install *args:
     bin/install {{ args }}

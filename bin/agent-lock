@@ -19,7 +19,8 @@
 #   agent-lock.sh break   <path>            steal a lock; announce it first
 #
 # Identity comes from $AGENT_ID, else $CLAUDE_SESSION_ID, else the job dir
-# name, else the pid. Set AGENT_ID to something a human can recognise.
+# name, else a fingerprint of the session this ran in and the directory being
+# locked. Set AGENT_ID to something a human can recognise.
 #
 # © 2026 Konstantin Gredeskoul
 
@@ -28,7 +29,10 @@ set -euo pipefail
 LOCK_DIR="${AGENT_LOCK_DIR:-$HOME/.claude/locks}"
 STALE_MINUTES="${AGENT_LOCK_STALE_MINUTES:-120}"
 
+# The holder name for a lock on <path>. Every caller passes the path it is
+# acting on, because the fingerprint below is per directory.
 agent_id() {
+  local target="${1:-$PWD}"
   if [[ -n "${AGENT_ID:-}" ]]; then
     printf '%s' "$AGENT_ID"
   elif [[ -n "${CLAUDE_SESSION_ID:-}" ]]; then
@@ -36,7 +40,79 @@ agent_id() {
   elif [[ -n "${CLAUDE_JOB_DIR:-}" ]]; then
     printf '%s' "$(basename "$CLAUDE_JOB_DIR")"
   else
-    printf 'pid-%s' "$$"
+    printf '%s' "$(fingerprint "$target")"
+  fi
+}
+
+# The directory a lock is being taken in, absolute, whether or not it exists
+# yet — a lock is often claimed for a file about to be created.
+#
+# @param target the path being locked
+abs_dir() {
+  local dir
+  dir="$(dirname -- "$1")"
+  (cd "$dir" 2>/dev/null && pwd) && return 0
+  case "$dir" in
+    /*) printf '%s' "$dir" ;;
+    *) printf '%s/%s' "$PWD" "$dir" ;;
+  esac
+}
+
+# The session this ran in, as a name that survives leaving and coming back.
+#
+# Not `$$`: an agent harness runs each command in a shell of its own, so this
+# script's own pid is different every invocation and a lock could be acquired
+# but never released. Not `$PPID` either, which is that throwaway shell. The
+# process that lasts as long as the session is the first ancestor that is not
+# a shell — the `claude` or `codex` process driving it, or the terminal a
+# human is typing in — so the walk goes up until it finds one.
+#
+# Its start time goes into the hash along with its pid: pids are recycled, and
+# a new session landing on a dead one's number should not inherit its locks.
+#
+# So does the directory being locked, which is what makes one session working
+# in two worktrees of one repository two holders rather than one. The
+# directory the lock is *for*, never $PWD: an agent moves around during a run,
+# and a holder that renames itself when the process changes directory is the
+# same bug as one that renames itself every command.
+#
+# The name it prints is the ancestor's own — `claude-1f4c8a02` — because a
+# holder nobody can recognise is a lock nobody knows who to ask about.
+#
+# @param target the path being locked
+fingerprint() {
+  local pid comm hops=0 where
+
+  pid="$PPID"
+  while ((hops < 10)); do
+    comm="$(basename "$(ps -p "$pid" -o comm= 2>/dev/null || true)")"
+    [[ -n "$comm" ]] || break
+    # Login shells arrive as `-zsh`, hence the optional leading dash.
+    [[ "$comm" =~ ^-?(sh|bash|zsh|ksh|csh|tcsh|fish|dash)$ ]] || break
+    local up
+    up="$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d ' ' || true)"
+    [[ -n "$up" && "$up" -gt 1 ]] || break
+    pid="$up"
+    hops=$((hops + 1))
+  done
+
+  where="$(abs_dir "$1")"
+
+  printf '%s-%s' "${comm:-agent}" \
+    "$(printf '%s|%s|%s|%s' "$pid" "$(ps -p "$pid" -o lstart= 2>/dev/null || true)" \
+      "$(id -u)" "$where" | digest)"
+}
+
+# Whichever of the two every Unix has one of. `cksum` is the last resort: it
+# is not a hash anyone should trust, but this needs a stable short string
+# rather than a secret.
+digest() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 | cut -c1-8
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | cut -c1-8
+  else
+    cksum | tr -d ' ' | cut -c1-8
   fi
 }
 
@@ -70,11 +146,11 @@ cmd_acquire() {
   local target="${1:?path required}" intent="${2:-unspecified}"
   local f me payload
   f="$(lockfile "$target")"
-  me="$(agent_id)"
+  me="$(agent_id "$target")"
   mkdir -p "$LOCK_DIR"
 
   payload="$me
-$(cd "$(dirname "$target")" 2>/dev/null && pwd)/$(basename "$target")
+$(abs_dir "$target")/$(basename "$target")
 $(date -u +%Y-%m-%dT%H:%M:%SZ)
 $intent"
 
@@ -101,7 +177,7 @@ $intent"
 cmd_release() {
   local target="${1:?path required}" f me
   f="$(lockfile "$target")"
-  me="$(agent_id)"
+  me="$(agent_id "$target")"
   [[ -f "$f" ]] || { echo "NOT LOCKED $target"; return 0; }
   if [[ "$(holder "$f")" != "$me" ]]; then
     echo "REFUSED — $target is held by $(holder "$f"), not $me"
@@ -129,30 +205,36 @@ cmd_list() {
   for f in "${files[@]}"; do describe "$f"; done
 }
 
+# A holder name is per directory, so "mine" cannot be one string compared
+# against every file. Each lock records the path it is for on line 2, which is
+# what the name is recomputed from here.
+locked_path() { sed -n '2p' "$1"; }
+
+# @param f a lock file
+is_mine() { [[ "$(holder "$f")" == "$(agent_id "$(locked_path "$f")")" ]]; }
+
 cmd_mine() {
   mkdir -p "$LOCK_DIR"
   shopt -s nullglob
-  local me found=0
-  me="$(agent_id)"
+  local f found=0
   for f in "$LOCK_DIR"/*.lock; do
-    [[ "$(holder "$f")" == "$me" ]] || continue
+    is_mine "$f" || continue
     found=1
     describe "$f"
   done
-  ((found)) || echo "No locks held by $me."
+  ((found)) || echo "No locks held by this session."
 }
 
 cmd_release_all() {
   mkdir -p "$LOCK_DIR"
   shopt -s nullglob
-  local me count=0
-  me="$(agent_id)"
+  local f count=0
   for f in "$LOCK_DIR"/*.lock; do
-    [[ "$(holder "$f")" == "$me" ]] || continue
+    is_mine "$f" || continue
     rm -f "$f"
     count=$((count + 1))
   done
-  echo "Released $count lock(s) held by $me."
+  echo "Released $count lock(s) held by this session."
 }
 
 cmd_break() {

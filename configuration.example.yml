@@ -18,6 +18,13 @@
 #                  has its own skills/ subdirectory, each child is *also*
 #                  symlinked individually into skills/<dir-name> — a plugin's
 #                  skills are still just skills.
+#   type: plugins — `path` is a directory *of* bundles: every subdirectory
+#                  under it becomes its own plugins/<dir-name>, on the same
+#                  terms. This is the shape a marketplace repository has, and
+#                  it is how you take three of its bundles with one entry and
+#                  one clone. Narrow it with include_plugins/exclude_plugins;
+#                  `adopt:` is not the key for that, since it says which
+#                  halves a source hands over rather than which bundles.
 #   type: command — no repository at all. Runs `install:` with its working
 #                  directory inside `.sources/<name>`, then installs the
 #                  skills and plugin bundles that turned up there.
@@ -50,10 +57,21 @@
 #   include_skills:  /re/   install only the skills whose name matches
 #   exclude_skills:  /re/   install every skill except those whose name matches
 #   include_plugins: /re/   the same two, for plugin bundles, on a
-#   exclude_plugins: /re/   `type: plugin` or `type: command` source
+#   exclude_plugins: /re/   `type: plugin`, `plugins` or `command` source
 #
-# One or the other per kind, never both on the same source; a source that both
-# allows and denies is a question with no defensible answer, so the run stops.
+# A source may set both of a pair, and then the order it writes them in is the
+# whole meaning: the rules apply top to bottom and the last one to match a
+# name decides. So
+#
+#   include_plugins: /.*/
+#   exclude_plugins: /\Aruby-lsp\z/
+#
+# takes every bundle but ruby-lsp, and the same two lines the other way round
+# take ruby-lsp and nothing else. What no rule matches falls back to the
+# opposite of the first: a source that opens by including keeps only what it
+# asked for, one that opens by excluding keeps everything else, which is what
+# a single rule on its own has always meant.
+#
 # All four are matched against the name the thing installs as — the
 # `skills/<name>` or `plugins/<name>` you go looking for — and not against its
 # path inside the source, because a category tree is that repo's filing
@@ -151,9 +169,6 @@ sources:
     install: bt setup skills --local --agent claude --no-input --no-workflow
     adopt: [skills]
 
-  # ---- recovered from the skills that used to be committed under skills/ ----
-  #
-  # Both were found by their own provenance records rather than by memory:
   # nginx-configuration carries a .skillfish.json naming the repo, path and
   # commit it came from, and security-baseline has an entry in .skill-lock.json.
   # Neither was written here, so neither belongs in src/skills.
@@ -175,7 +190,7 @@ sources:
     # theme-factory from anthropics/skills is deliberately absent: it themes
     # slides, docs and landing-page artifacts, which is not what building an
     # application's interface is.
-    include_skills: /\A(security-baseline|design-system|design-standards|frontend-component-build|accessibility-audit)\z/
+    include_skills: /\A(security-baseline|design|brand|cost|email|art-direction|frontend-component-build|accessibility-audit|seo)\z/
 
   # Web Interface Guidelines, in forty lines. Small, and the only one of these
   # aimed at reviewing UI code rather than producing it.
@@ -183,7 +198,7 @@ sources:
     type: skills
     repo: https://github.com/vercel-labs/agent-skills.git
     path: skills
-    include_skills: /\Aweb-design-guidelines\z/
+    include_skills: /\Aweb-design-guidelines|deploy|react|vercel\z/
 
   # 72 skills, one per test framework or API concern, so this is all filter.
   #
@@ -197,7 +212,7 @@ sources:
   - name: lambdatest
     type: skills
     repo: https://github.com/LambdaTest/agent-skills.git
-    include_skills: /\A(cypress-skill|playwright-skill|cicd-pipeline-skill|api-designer|api-documentation|api-mocking|api-security-patterns|api-to-testcase-generator|openapi-spec-generator)\z/
+    include_skills: /\A(cypress-skill|vitest|smartui|rspec|jasmine|api|playwright-skill|cicd-pipeline-skill|openapi-spec-generator)\z/
 
   # ---- from the Claude plugin list this repo used to keep as shell commands --
   #
@@ -254,21 +269,20 @@ sources:
     adopt: [plugins]
     agents: [claude]
 
-  # Claude-only, and not arguably: six subagent definitions and a slash
-  # command, no SKILL.md anywhere in it.
-  - name: pr-review-toolkit
-    type: plugin
+  # Two Claude-only bundles out of one marketplace, and so one entry and one
+  # clone: `type: plugins` installs every directory under `path` as a bundle
+  # of its own, and the filter picks the two. Which bundles to take is what
+  # `include_plugins` is for; `adopt:` says which *halves* a source hands over
+  # and never which bundles. Neither of these two has a SKILL.md anywhere in
+  # it — pr-review-toolkit is six subagent definitions and a slash command,
+  # security-guidance is eleven Python files wired into SessionStart,
+  # UserPromptSubmit and PostToolUse through ${CLAUDE_PLUGIN_ROOT} — so both
+  # are Claude-only, and not arguably.
+  - name: claude-official
+    type: plugins
     repo: https://github.com/anthropics/claude-plugins-official.git
-    path: plugins/pr-review-toolkit
-    adopt: [plugins]
-    agents: [claude]
-
-  # Also Claude-only: eleven Python files wired into SessionStart,
-  # UserPromptSubmit and PostToolUse through ${CLAUDE_PLUGIN_ROOT}.
-  - name: security-guidance
-    type: plugin
-    repo: https://github.com/anthropics/claude-plugins-official.git
-    path: plugins/security-guidance
+    path: plugins
+    exclude_plugins: /\A(clang|csharp|cwc|explanatory|gopls|jdtls|kotlin|lua|php)\z/
     adopt: [plugins]
     agents: [claude]
 

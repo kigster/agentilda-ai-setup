@@ -103,7 +103,7 @@ ADOPTABLE = %w[skills plugins].freeze
 
 # Types for which `adopt:` is a real question. A `type: skills` source has
 # nothing but skills to give.
-ADOPTERS = %w[command plugin].freeze
+ADOPTERS = %w[command plugin plugins].freeze
 
 # Where a command's output is looked for, relative to the directory it ran in,
 # in the order they are tried.
@@ -126,7 +126,7 @@ COMMAND_ROOTS = %w[.claude .agents].freeze
 # the two are kept honest by a spec that feeds the same bad configurations to
 # both and requires them to agree.
 TOP_LEVEL_KEYS = %w[agents sources].freeze
-TYPES = %w[skills plugin command].freeze
+TYPES = %w[skills plugin plugins command].freeze
 AGENT_KEYS = %w[name installer].freeze
 SOURCE_KEYS = %w[name type repo path install adopt
   include_skills exclude_skills include_plugins exclude_plugins
@@ -174,7 +174,7 @@ end
 # portable, which is the common case and this repo's whole premise; the
 # vendor-locked source is the exception that has to say so.
 Source = Struct.new(:name, :type, :repo, :path, :install, :adopt,
-  :include_skills, :exclude_skills, :include_plugins, :exclude_plugins,
+  :skill_filters, :plugin_filters,
   :agents, :exclude_agents) do
   def self.from_yaml(hash)
     name = hash.fetch("name")
@@ -193,32 +193,35 @@ Source = Struct.new(:name, :type, :repo, :path, :install, :adopt,
 
     new(name:, type:, repo: origin(hash, name, type), path: hash["path"],
       install: command_for(hash, name, type), adopt: adoption(hash["adopt"], name, type),
-      include_skills: skills[:include], exclude_skills: skills[:exclude],
-      include_plugins: plugins[:include], exclude_plugins: plugins[:exclude],
+      skill_filters: skills, plugin_filters: plugins,
       agents: targeting[:include], exclude_agents: targeting[:exclude])
   end
 
-  # One `include_<kind>`/`exclude_<kind>` pair, compiled and checked.
+  # The `include_<kind>`/`exclude_<kind>` rules for one kind, compiled, in the
+  # order the file lists them.
   #
-  # A source that both allows and denies the same kind is a question with no
-  # defensible answer, so the run stops rather than picking one.
+  # A source may set both, and then order is the whole meaning:
+  #
+  #   include_plugins: /.*/
+  #   exclude_plugins: /\Aruby-lsp\z/
+  #
+  # takes everything except ruby-lsp, and swapping the two lines takes only
+  # ruby-lsp. YAML preserves the order its keys are written in, which is why
+  # this reads them off the entry rather than asking for each by name.
   #
   # @param hash [Hash] the raw YAML entry
   # @param name [String]
   # @param kind [String] "skills" or "plugins"
-  # @return [Hash{Symbol => Regexp, nil}] with an `any?` of false when neither is set
+  # @return [Array<Array(Symbol, Regexp)>] `[:include, /re/]` pairs, in file order
   def self.pair(hash, name, kind)
-    include_re = compile(hash["include_#{kind}"], name, "include_#{kind}")
-    exclude_re = compile(hash["exclude_#{kind}"], name, "exclude_#{kind}")
+    keys = %w[include exclude].map { |mode| "#{mode}_#{kind}" }
 
-    if include_re && exclude_re
-      raise ConfigError, "#{name}: include_#{kind} and exclude_#{kind} are both set; " \
-                         "a source may use one or the other"
+    hash.keys.map(&:to_s).select { |key| keys.include?(key) }.map do |key|
+      re = compile(hash[key], name, key)
+      raise ConfigError, "#{name}: #{key} has no pattern — give it one, or drop the key" if re.nil?
+
+      [key.start_with?("include") ? :include : :exclude, re]
     end
-
-    filters = {include: include_re, exclude: exclude_re}
-    filters.define_singleton_method(:any?) { values.any? }
-    filters
   end
 
   # `agents:` and `exclude_agents:` as lists of names, checked the same way
@@ -385,31 +388,38 @@ Source = Struct.new(:name, :type, :repo, :path, :install, :adopt,
   # tree is one source's filing decision; the installed name is the thing you
   # go looking for, so it is the thing you filter on.
   #
+  # Every rule is applied in the order the file lists them and the last one to
+  # match decides, so a later line narrows or widens what an earlier one said.
+  # What nothing matches falls back to the opposite of the first rule: a source
+  # that starts by including keeps only what it asked for, and one that starts
+  # by excluding keeps everything else. With one rule that is exactly the older
+  # one-or-the-other behaviour.
+  #
   # @param kind [String] "skills" or "plugins"
   # @param installed_name [String]
   # @return [Boolean]
   def wants?(kind, installed_name)
-    include_re, exclude_re = filters_for(kind)
-    return include_re.match?(installed_name) if include_re
-    return !exclude_re.match?(installed_name) if exclude_re
+    rules = filters_for(kind)
+    return true if rules.empty?
 
-    true
+    verdict = rules.first.first != :include
+    rules.each { |mode, re| verdict = (mode == :include) if re.match?(installed_name) }
+    verdict
   end
 
   # @param kind [String]
-  # @return [Array(Regexp, Regexp)] the include and exclude for that kind
+  # @return [Array<Array(Symbol, Regexp)>] that kind's rules, in file order
   def filters_for(kind)
-    (kind.to_s == "plugins") ? [include_plugins, exclude_plugins] : [include_skills, exclude_skills]
+    ((kind.to_s == "plugins") ? plugin_filters : skill_filters) || []
   end
 
   # @param kind [String] "skills" or "plugins"
   # @return [String, nil] how this source's filter for that kind reads in the output
   def filter_summary(kind = "skills")
-    include_re, exclude_re = filters_for(kind)
-    return "include_#{kind} /#{include_re.source}/" if include_re
-    return "exclude_#{kind} /#{exclude_re.source}/" if exclude_re
+    rules = filters_for(kind)
+    return nil if rules.empty?
 
-    nil
+    rules.map { |mode, re| "#{mode}_#{kind} /#{re.source}/" }.join(", then ")
   end
 
   # @return [Array<String>] every filter this source carries, for the listing
@@ -809,6 +819,49 @@ def install_plugin_source(source, manifest, dry_run:, force:)
   true
 end
 
+# A directory *of* bundles, each child installed as `plugins/<child>`.
+#
+# `type: plugin` says "the directory at `path` is one bundle"; this says
+# "everything under `path` is one". A marketplace repository is the second
+# shape, and saying so once beats one entry, and one clone, per bundle. Which
+# of them to take is `include_plugins`/`exclude_plugins`, the keys that
+# already mean exactly that, rather than a list of names in `adopt:`, which
+# says which *halves* a source contributes and not which bundles.
+#
+# @param source [Source]
+# @param manifest [Hash]
+# @param dry_run [Boolean]
+# @param force [Boolean]
+# @return [Boolean] whether this source's bundles were enumerated, and so can be pruned against
+def install_plugins_source(source, manifest, dry_run:, force:)
+  unless File.directory?(source.content_dir)
+    if dry_run
+      note("#{source.name}: not cloned yet — would install every bundle under it after cloning")
+    else
+      bad("#{source.name}: #{source.content_dir.sub("#{ROOT}/", "")} does not exist — check `path` in configuration.yml")
+    end
+    return false
+  end
+
+  install_bundles_in(source.content_dir, source, manifest, dry_run:, force:)
+  true
+end
+
+# Every child directory of `dir`, as its own bundle.
+#
+# @param dir [String] a directory of bundles
+# @param source [Source]
+# @param manifest [Hash]
+# @param dry_run [Boolean]
+# @param force [Boolean]
+# @return [void]
+def install_bundles_in(dir, source, manifest, dry_run:, force:)
+  Dir.children(dir).sort.reject { |name| name.start_with?(".") }.each do |name|
+    bundle = File.join(dir, name)
+    install_bundle(bundle, name, source, manifest, dry_run:, force:) if File.directory?(bundle)
+  end
+end
+
 # One bundle, copied whole into `plugins/<name>`, and its own skills fanned
 # out afterwards if this source adopts skills as well.
 #
@@ -830,10 +883,13 @@ def install_bundle(bundle_dir, name, source, manifest, dry_run:, force:)
 
   dest = File.join(PLUGINS_DIR, name)
   note("#{source.name}: installing plugin -> plugins/#{name}")
+  INSTALLED[dest] = source.name
   unless dry_run
     FileUtils.rm_rf(dest)
     FileUtils.mkdir_p(File.dirname(dest))
     FileUtils.cp_r(bundle_dir, dest)
+    manifest["paths"] ||= {}
+    manifest["paths"][dest] = source.name
   end
   ok("plugins/#{name}")
 
@@ -874,10 +930,7 @@ def install_command_source(source, manifest, dry_run:, force:)
   end
 
   if source.adopts?("plugins") && File.directory?(source.plugins_root)
-    Dir.children(source.plugins_root).sort.reject { |n| n.start_with?(".") }.each do |name|
-      bundle = File.join(source.plugins_root, name)
-      install_bundle(bundle, name, source, manifest, dry_run:, force:) if File.directory?(bundle)
-    end
+    install_bundles_in(source.plugins_root, source, manifest, dry_run:, force:)
   end
 
   true
@@ -924,6 +977,12 @@ def prune_stale(previous, manifest, reconciled, dry_run:)
     if File.symlink?(dest)
       note("#{short}: dropped by #{owner}")
       FileUtils.rm_f(dest) unless dry_run
+    elsif File.directory?(dest) && File.dirname(dest) == PLUGINS_DIR
+      # A bundle is a copy rather than a link, and plugins/ is regenerable in
+      # full from configuration.yml, so a copy this script made and no longer
+      # makes is removed rather than left to sit there unexplained.
+      note("#{short}: dropped by #{owner}")
+      FileUtils.rm_rf(dest) unless dry_run
     elsif File.exist?(dest)
       warn_("#{short} is no longer installed by #{owner} but is not a symlink — left alone")
     end
@@ -1017,9 +1076,10 @@ def cmd_install(force:, dry_run:)
     enumerated = case source.type
     when "skills" then install_skills_source(source, manifest, dry_run:, force:)
     when "plugin" then install_plugin_source(source, manifest, dry_run:, force:)
+    when "plugins" then install_plugins_source(source, manifest, dry_run:, force:)
     when "command" then install_command_source(source, manifest, dry_run:, force:)
     else
-      bad("#{source.name}: unknown type #{source.type.inspect} — expected skills, plugin or command")
+      bad("#{source.name}: unknown type #{source.type.inspect} — expected #{TYPES.join(", ")}")
       false
     end
     reconciled << source.name if enumerated
@@ -1147,8 +1207,15 @@ def usage
       scripts/install-sources agents install [name...]   install the ones that are missing
 
     A source in configuration.yml may narrow itself with `include_skills: /re/`
-    or `exclude_skills: /re/`, one or the other, matched against the name each
-    skill would install as.
+    and `exclude_skills: /re/`, matched against the name each skill would
+    install as. Both may be set: they apply in the order the file lists them,
+    last match wins, so `include_skills: /.*/` then `exclude_skills: /x/` is
+    everything but x. `include_plugins`/`exclude_plugins` are the same for
+    bundles.
+
+    `type: plugin` installs the directory at `path` as one bundle; `type:
+    plugins` installs every directory under `path` as its own, narrowed by
+    `include_plugins: /re/` or `exclude_plugins: /re/`.
 
     A `type: command` source runs `install:` inside .sources/<name> instead of
     cloning, then installs the skills and plugin bundles it wrote there.
