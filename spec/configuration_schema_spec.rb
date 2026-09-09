@@ -64,7 +64,8 @@ RSpec.describe "configuration.schema.json" do
     {
       "a plain skills source" => [{}, true],
       "a misspelled include_skills" => [{include_skils: "/x/"}, false],
-      "both include_skills and exclude_skills" => [{include_skills: "/a/", exclude_skills: "/b/"}, false],
+      "both include_skills and exclude_skills, which apply in order" => [{include_skills: "/a/", exclude_skills: "/b/"}, true],
+      "a filter key with nothing under it" => [{include_skills: nil}, false],
       "both agents and exclude_agents" => [{agents: ["claude"], exclude_agents: ["codex"]}, false],
       "install: on a source that clones" => [{install: "true"}, false],
       "a plugin filter on a skills source" => [{include_plugins: "/x/"}, false],

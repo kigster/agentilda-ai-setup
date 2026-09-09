@@ -35,7 +35,8 @@ Configuration file defines what skills and plugins and going to get installed in
 ## Quick Install
 
 ```bash
-git clone <this repo> agentilda   # anywhere; this is not the install
+# anywhere; this is not the install
+git clone <this repo> agentilda   
 cd agentilda
 direnv allow .                    # puts bin/, scripts/ & workflow/exe on PATH
 
@@ -67,18 +68,18 @@ scripts/install-sources agents            # which are configured, and which are 
 scripts/install-sources agents install    # install the ones that are missing
 ```
 
-`sources:` names where skills and plugins come from. A source clones a repository (`type: skills` or `type: plugin`) or runs a command (`type: command`, for something like Braintrust's `bt`, which ships its skill through its own CLI rather than a repository). Any source can narrow itself:
+`sources:` names where skills and plugins come from. A source clones a repository (`type: skills`, `type: plugin` for one bundle, `type: plugins` for a directory of them) or runs a command (`type: command`, for something like Braintrust's `bt`, which ships its skill through its own CLI rather than a repository). Any source can narrow itself:
 
 ```yaml
 - name: ruby-marketplace
   type: skills
   repo: https://github.com/hoblin/claude-ruby-marketplace.git
   path: plugins
-  include_skills: /\A(rspec|activerecord)\z/   # or exclude_skills, never both
+  include_skills: /\A(rspec|activerecord)\z/   # exclude_skills too, if you want both
   agents: [claude]                             # or exclude_agents, never both
 ```
 
-Filters are matched against the name a thing installs as, not its path inside the source. `agents:` is matched against the `agents:` block above, and a source no configured agent would read is skipped and reported rather than installing skills nothing can load.
+Filters are matched against the name a thing installs as, not its path inside the source. Set both keys of a pair and they apply in the order the file writes them, last match winning, so `include_plugins: /.*/` followed by `exclude_plugins: /\Aruby-lsp\z/` takes every bundle but that one. `agents:` is matched against the `agents:` block above, and a source no configured agent would read is skipped and reported rather than installing skills nothing can load.
 
 **Tightening a filter takes skills back as well as adding them.** The next run unlinks whatever it installed last time and no longer installs, so `skills/` converges on what the file says rather than accumulating.
 
@@ -121,16 +122,16 @@ scripts/install-sources -f       # wipe and re-clone every source fresh
 scripts/install-sources list     # what's configured, and what's installed from where
 ```
 
-Add a repo to `configuration.yml` instead of installing something by hand. `type: skills` treats every `SKILL.md`-rooted directory found (at any depth) as its own skill; `type: plugin` installs the whole thing into `plugins/<name>` and, if it carries its own `skills/`, fans those out individually too.
+Add a repo to `configuration.yml` instead of installing something by hand. `type: skills` treats every `SKILL.md`-rooted directory found (at any depth) as its own skill; `type: plugin` installs the whole thing into `plugins/<name>` and, if it carries its own `skills/`, fans those out individually too; `type: plugins` does that for every directory under `path`, which is how one entry takes several bundles out of one marketplace repository.
 
-A source that carries more than you want narrows itself with one regular expression, matched against the name each skill installs as:
+A source that carries more than you want narrows itself with regular expressions, matched against the name each skill or bundle installs as:
 
 ```yaml
   - name: pstack
     type: plugin
     repo: git@github.com:cursor/plugins.git
     path: pstack
-    include_skills: /\A(architect|unslop|why)\z/   # or exclude_skills, never both
+    include_skills: /\A(architect|unslop|why)\z/   # exclude_skills too, if you want both
 ```
 
 Tightening a filter takes skills back as well as adding them: the next run unlinks whatever it installed last time and no longer installs, so `skills/` converges on what `configuration.yml` says. `bin/setup` then sweeps the matching dangling links out of `~/.claude/skills`.

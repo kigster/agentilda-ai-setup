@@ -70,9 +70,10 @@
           "enum": [
             "skills",
             "plugin",
+            "plugins",
             "command"
           ],
-          "description": "skills: every SKILL.md-rooted directory under `path` becomes its own skill. plugin: `path` is one bundle. command: no repository, `install:` is run instead."
+          "description": "skills: every SKILL.md-rooted directory under `path` becomes its own skill. plugin: `path` is one bundle. plugins: every directory under `path` is a bundle of its own. command: no repository, `install:` is run instead."
         },
         "path": {
           "type": "string",
@@ -91,16 +92,20 @@
           "uniqueItems": true
         },
         "include_skills": {
-          "$ref": "#/$defs/regexp"
+          "$ref": "#/$defs/regexp",
+          "description": "Install only what matches. May be paired with exclude_skills, in which case both apply in the order this file writes them and the last to match a name decides."
         },
         "exclude_skills": {
-          "$ref": "#/$defs/regexp"
+          "$ref": "#/$defs/regexp",
+          "description": "Install everything except what matches. May be paired with include_skills, in which case both apply in the order this file writes them and the last to match a name decides."
         },
         "include_plugins": {
-          "$ref": "#/$defs/regexp"
+          "$ref": "#/$defs/regexp",
+          "description": "Install only what matches. May be paired with exclude_plugins, in which case both apply in the order this file writes them and the last to match a name decides."
         },
         "exclude_plugins": {
-          "$ref": "#/$defs/regexp"
+          "$ref": "#/$defs/regexp",
+          "description": "Install everything except what matches. May be paired with include_plugins, in which case both apply in the order this file writes them and the last to match a name decides."
         },
         "agents": {
           "type": "array",
@@ -126,7 +131,7 @@
       ],
       "allOf": [
         {
-          "$ref": "#/$defs/oneFilterPerKind"
+          "$ref": "#/$defs/oneAgentList"
         },
         {
           "$ref": "#/$defs/fetchedOneWay"
@@ -137,34 +142,14 @@
       ],
       "unevaluatedProperties": false
     },
-    "oneFilterPerKind": {
-      "description": "A source that both allows and denies the same kind is a question with no defensible answer, so it is refused rather than resolved.",
-      "allOf": [
-        {
-          "not": {
-            "required": [
-              "include_skills",
-              "exclude_skills"
-            ]
-          }
-        },
-        {
-          "not": {
-            "required": [
-              "include_plugins",
-              "exclude_plugins"
-            ]
-          }
-        },
-        {
-          "not": {
-            "required": [
-              "agents",
-              "exclude_agents"
-            ]
-          }
-        }
-      ]
+    "oneAgentList": {
+      "description": "A source that both names and denies agents is a question with no defensible answer, so it is refused rather than resolved. The regular-expression pairs are not like this: both may be set, and they apply in the order the file writes them.",
+      "not": {
+        "required": [
+          "agents",
+          "exclude_agents"
+        ]
+      }
     },
     "fetchedOneWay": {
       "description": "A source is cloned or it runs a command, never both. Each branch declares the key it permits, so the matching branch evaluates it and the source's unevaluatedProperties rejects the other. No `not` clause is needed: naming `install:` on a source that clones leaves it unevaluated, which is already the error.",
@@ -174,7 +159,8 @@
             "type": {
               "enum": [
                 "skills",
-                "plugin"
+                "plugin",
+                "plugins"
               ]
             },
             "repo": {

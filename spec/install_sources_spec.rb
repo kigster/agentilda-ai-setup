@@ -23,8 +23,11 @@ RSpec.describe "scripts/install-sources" do
     end
     git(dir, "init", "-q", "-b", "main")
     git(dir, "add", "-A")
+    # gpgsign off explicitly: a machine that signs every commit cannot sign
+    # this one, and the suite would fail on whose laptop it ran rather than on
+    # anything install-sources did.
     git(dir, "-c", "user.email=alan.turing@manchester.edu", "-c", "user.name=Alan Turing",
-      "commit", "-qm", "seed")
+      "-c", "commit.gpgsign=false", "commit", "-qm", "seed")
     dir
   end
 
@@ -232,15 +235,50 @@ RSpec.describe "scripts/install-sources" do
     end
   end
 
-  describe "a config it will not guess past" do
-    it "refuses a source that sets both filters" do
+  # Both filters at once, which is how you say "all of it except that one"
+  # without writing out the names you do want. Order is the meaning: the rules
+  # apply top to bottom and the last one to match a name decides.
+  describe "both filters on one source" do
+    it "installs everything the first rule allows, less what the second denies" do
+      repo = upstream(File.join(tmp, "up"), %w[alpha beta gamma])
+      write_config([{"name" => "up", "type" => "skills", "repo" => repo, "path" => "skills",
+                     "include_skills" => "/.*/", "exclude_skills" => "/\\Abeta\\z/"}])
+
+      _output, status = install
+      expect(status).to be_success
+      expect(installed_skills).to eq(%w[alpha gamma])
+    end
+
+    it "reads the other way round when the other key is written first" do
+      repo = upstream(File.join(tmp, "up"), %w[alpha beta gamma])
+      write_config([{"name" => "up", "type" => "skills", "repo" => repo, "path" => "skills",
+                     "exclude_skills" => "/.*/", "include_skills" => "/\\Abeta\\z/"}])
+
+      _output, status = install
+      expect(status).to be_success
+      expect(installed_skills).to eq(%w[beta])
+    end
+
+    it "says both rules, in order, in the listing" do
       repo = upstream(File.join(tmp, "up"), %w[alpha])
       write_config([{"name" => "up", "type" => "skills", "repo" => repo, "path" => "skills",
-                     "include_skills" => "/alpha/", "exclude_skills" => "/beta/"}])
+                     "include_skills" => "/.*/", "exclude_skills" => "/\\Aalpha\\z/"}])
+
+      output, status = install("list")
+      expect(status).to be_success
+      expect(output).to include("include_skills /.*/, then exclude_skills /\\Aalpha\\z/")
+    end
+  end
+
+  describe "a config it will not guess past" do
+    it "refuses a filter key with no pattern under it" do
+      repo = upstream(File.join(tmp, "up"), %w[alpha])
+      write_config([{"name" => "up", "type" => "skills", "repo" => repo, "path" => "skills",
+                     "include_skills" => nil}])
 
       output, status = install
       expect(status).not_to be_success
-      expect(output).to include("include_skills and exclude_skills are both set")
+      expect(output).to include("include_skills has no pattern")
       expect(File.directory?(File.join(root, "skills"))).to be false
     end
 
@@ -442,6 +480,15 @@ RSpec.describe "scripts/install-sources" do
       expect(installed_skills).to eq(%w[ledger-skill])
     end
 
+    it "applies both, in the order written, when a source sets the pair" do
+      write_config([{"name" => "cmd", "type" => "command",
+                     "install" => installer(plugins: %w[quota ledger tax]),
+                     "include_plugins" => "/.*/", "exclude_plugins" => "/\\Aledger\\z/"}])
+
+      install
+      expect(installed_plugins).to eq(%w[quota tax])
+    end
+
     it "applies to a plain plugin source too" do
       repo = upstream(File.join(tmp, "up"), %w[alpha], under: "pstack/skills")
       write_config([{"name" => "pstack", "type" => "plugin", "repo" => repo, "path" => "pstack",
@@ -452,6 +499,68 @@ RSpec.describe "scripts/install-sources" do
         expect(installed_plugins).to be_empty
         expect(installed_skills).to be_empty
       end
+    end
+  end
+
+  # A marketplace repository is a directory of bundles rather than one bundle,
+  # which is one entry and one clone instead of one of each per bundle.
+  describe "type: plugins" do
+    # @param names [Array<String>] one bundle per name, each with a skill of its own
+    # @return [String] the repository
+    def marketplace(names, under: "plugins")
+      dir = File.join(tmp, "market")
+      names.each do |name|
+        inner = File.join(dir, under, name, "skills", "#{name}-skill")
+        FileUtils.mkdir_p(inner)
+        File.write(File.join(inner, "SKILL.md"), "---\nname: #{name}-skill\n---\n")
+        File.write(File.join(dir, under, name, "plugin.json"), "{}")
+      end
+      upstream(dir, [])
+    end
+
+    it "installs every directory under path as a bundle of its own" do
+      write_config([{"name" => "market", "type" => "plugins", "repo" => marketplace(%w[quota ledger]),
+                     "path" => "plugins"}])
+
+      _output, status = install
+      expect(status).to be_success
+      expect(installed_plugins).to eq(%w[ledger quota])
+    end
+
+    it "narrows to the bundles the filters leave, in the order written" do
+      write_config([{"name" => "market", "type" => "plugins", "repo" => marketplace(%w[quota ledger tax]),
+                     "path" => "plugins", "include_plugins" => "/.*/",
+                     "exclude_plugins" => "/\\Aledger\\z/"}])
+
+      install
+      expect(installed_plugins).to eq(%w[quota tax])
+    end
+
+    it "fans each installed bundle's own skills out, and adopt: plugins stops that" do
+      source = {"name" => "market", "type" => "plugins", "repo" => marketplace(%w[quota]),
+                "path" => "plugins"}
+      write_config([source])
+      install
+      expect(installed_skills).to eq(%w[quota-skill])
+
+      write_config([source.merge("adopt" => ["plugins"])])
+      install
+      aggregate_failures do
+        expect(installed_plugins).to eq(%w[quota])
+        expect(installed_skills).to be_empty
+      end
+    end
+
+    it "takes back a bundle a tightened filter no longer installs" do
+      source = {"name" => "market", "type" => "plugins", "repo" => marketplace(%w[quota ledger]),
+                "path" => "plugins"}
+      write_config([source])
+      install
+
+      write_config([source.merge("exclude_plugins" => "/\\Aledger\\z/")])
+      _output, status = install
+      expect(status).to be_success
+      expect(installed_plugins).to eq(%w[quota])
     end
   end
 
@@ -497,10 +606,9 @@ RSpec.describe "scripts/install-sources" do
                "include_plugins" => "/x/"}, "installs no plugin bundles")
     end
 
-    it "refuses a source that both allows and denies the same kind" do
+    it "refuses a plugin filter with no pattern under it" do
       refuses({"name" => "cmd", "type" => "command", "install" => "true",
-               "include_plugins" => "/x/", "exclude_plugins" => "/y/"},
-        "include_plugins and exclude_plugins are both set")
+               "include_plugins" => nil}, "include_plugins has no pattern")
     end
   end
   # `install` here never has a terminal: Open3 gives the child a pipe. That is
@@ -726,7 +834,7 @@ RSpec.describe "scripts/install-sources" do
       git(dir, "init", "-q", "-b", "main")
       git(dir, "add", "-A")
       git(dir, "-c", "user.email=alan.turing@manchester.edu", "-c", "user.name=Alan Turing",
-        "commit", "-qm", "seed")
+        "-c", "commit.gpgsign=false", "commit", "-qm", "seed")
       write_config([{"name" => "up", "type" => "skills", "repo" => dir}])
 
       output, status = install
