@@ -4,7 +4,7 @@
 
 > [!NOTE]
 > A vendor-neutral home for the AI instructions, context, skills and tooling that several different AI coding agents share, plus [**agentilda**](https://github.com/kigster/agentilda) — a small Ruby CLI gem that provides agent harness for splitting and delivering features, define specs and plans and pull requests, and can drive a team of dedicated agents from specification to completion of a given task, with review harness and proper planning.
-> 
+>
 > The final piece of the puzzle Is a resource locking tool [agent-lock](https://github.com/kigster/agent-lock). It comes with the skill teaching agents how to use it and can use file system or a local Redis for maintaining the locks.
 
 ______________________________________________________________________
