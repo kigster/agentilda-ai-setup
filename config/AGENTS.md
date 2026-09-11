@@ -260,6 +260,7 @@ The `postgres-schema` skill carries the conventions, and its references carry th
 **Before you create or edit any file, claim the directory or file you are about to write.**
 
 ```bash
+
 ~/.agents/bin/agent-lock acquire hanami "scaffolding the API app"   # claim it
 ~/.agents/bin/agent-lock check   frontend                           # who holds it?
 ~/.agents/bin/agent-lock list                                       # everything held

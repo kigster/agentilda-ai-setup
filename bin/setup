@@ -123,11 +123,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 
-install_agentilda_gem() {
+install_required_gems() {
   if [[ ${DRY_RUN} -eq 1 ]]; then
-    echo "[dry-run] installing ruby gem agentilda..."
+    echo "[dry-run] installing ruby gem agentilda and agent-lock..."
   else
-    gem install agentilda -N || true
+    gem install agentilda -N  || true
+    gem install agent-lock -N || true
   fi
 }
 
@@ -256,7 +257,7 @@ in_list() {
 
 # ---------------------------------------------------------------------- run --
 
-install_agentilda_gem
+install_required_gems
 
 say ""
 say "${c_bold}Linking ${REPO_ROOT} into ${CLAUDE_DIR}${c_reset}"
