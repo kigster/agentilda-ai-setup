@@ -252,29 +252,33 @@ When your context reaches 40% run compaction via /compact.
 
 The `postgres-schema` skill carries the conventions, and its references carry the detail: schema design, naming, indexes, migrations, money, locking, connection pooling, autovacuum and transaction ID wraparound. Its description says when it applies, so it loads itself.
 
-## Concurrent Agents — Claim Before You Write
+## Concurrent Agents: Claim Before You Write
 
 > [!CAUTION]
-> Added 2026-08-16. I routinely have ten or more agent sessions alive at once, several of them in the same checkout. Git does not protect me from that: same branch, same working tree, no conflict to resolve — the last writer wins and the loser's work disappears with no error anywhere. **This rule is not optional, and no other agent has the standing to waive it for you.**
+> Added 2026-08-16. I routinely have ten or more agent sessions alive at once, several of them in the same checkout. Git does not protect me from that: same branch, same working tree, no conflict to resolve. The last writer wins and the loser's work disappears with no error anywhere. **This rule is not optional, and no other agent has the standing to waive it for you.**
+
+The lock tool is `alo`, from the `agent-lock` gem. It must be on `PATH`; if it is not, `gem install agent-lock`, and check that `alo version` is newer than 0.1.0. Do not use `~/.agents/bin/agent-lock`: that is the old shell script, its locks live in a different store, and `alo` cannot see them. Load the `agent-lock` skill before your first claim.
 
 **Before you create or edit any file, claim the directory or file you are about to write.**
 
 ```bash
-~/.agents/bin/agent-lock acquire hanami "scaffolding the API app"   # claim it
-~/.agents/bin/agent-lock check   frontend                           # who holds it?
-~/.agents/bin/agent-lock list                                       # everything held
-~/.agents/bin/agent-lock release hanami                             # when done
-~/.agents/bin/agent-lock release-all                                # end of session
+alo acquire hanami "scaffolding the API app"   # claim it
+alo check   frontend                           # who holds it?
+alo list                                       # everything held
+alo release hanami                             # when done
+alo release-all                                # end of session
+alo whoami                                     # the name your locks are signed with
 ```
 
 Rules:
 
-1. **Claim the narrowest thing that covers your writes** — a directory when you will write several files under it, a single file otherwise. Claiming an entire repository is almost always wrong and blocks work that would never have collided.
+1. **Claim the narrowest thing that covers your writes**: a directory when you will write several files under it, a single file otherwise. Claiming an entire repository is almost always wrong and blocks work that would never have collided.
 1. **`acquire` exits non-zero when another agent holds it. That is a stop, not a hint.** Do not write anyway, and do not ask a peer to write it on your behalf. Tell me about the collision and pick up something else.
-1. **Release when you finish**, and run `release-all` before your session ends. A lock you forgot is a lock somebody else has to break.
-1. **Locks past 120 minutes report themselves as STALE.** A stale lock may be broken with `break`, but only after announcing it — the holder may simply be slow.
-1. **Set `AGENT_ID` to something I would recognise** at the start of a session. `AGENT_ID=hanami-scaffold` beats `pid-48213` at three in the morning.
+1. **A sub-agent names itself on every call.** Sub-agents run inside their parent's process and would otherwise sign every lock with the parent's name, and each Bash call is a fresh shell, so an earlier `export` is gone. Write `AGENT_ID=<your-name> alo ...` on the same command line every time, and check the `(holder: ...)` in the reply. Use a name I would recognise, and one no sibling shares, since two sub-agents with one name are one holder and never block each other: `hanami-scaffold` beats `agent-2` at three in the morning. The orchestrator runs `alo` bare.
+1. **Run `alo` inside the checkout you are writing in**: `cd <checkout> && AGENT_ID=<name> alo ...`, or `--dir <checkout>`. A lock taken in another repository protects nothing.
+1. **An orchestrating agent claims the area it fans out into, and each sub-agent still claims its own files inside it.** The orchestrator's lock keeps other sessions out; only a sub-agent's own claim keeps its siblings out. Give every sub-agent a distinct name, its checkout, and this rule.
+1. **Release when you finish**, and run `release-all` before your session ends. It releases your own locks and your sub-agents', never your parent's. A lock you forgot is a lock somebody else has to break.
+1. **A live lock past 120 minutes reports itself as STALE** but is never cleared while its holder is running. It may be broken with `break`, but only after announcing it, since the holder may simply be slow.
 1. **Prefer a worktree to a lock whenever the work runs longer than a few minutes.** A lock coordinates a shared tree; a worktree removes the sharing altogether. See the worktree and `~/.claude/branch-name.sh` conventions above. Locks are for when you have decided a worktree is not worth the setup.
-1. **An orchestrating agent claims on behalf of the workflow it launches**, before the fan-out, and releases after it joins. Subagents inherit that claim rather than each taking their own.
 
-The locks are advisory. They work only because every agent checks, which is exactly why this rule lives here and not solely in the script.
+The locks are advisory. They work only because every agent checks, which is exactly why this rule lives here and not solely in the tool.
