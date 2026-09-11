@@ -142,6 +142,13 @@ sources:
     path: skills
     exclude_skills: /\A(wizard|grilling)\z/
 
+  # The skill that ships inside the agent-lock gem, which is `alo`: how to claim
+  # files before writing when several agents share one checkout.
+  - name: agent-lock
+    type: skills
+    repo: git@github.com:kigster/agent-lock.git
+    path: skills
+
   - name: pstack
     type: plugin
     repo: git@github.com:cursor/plugins.git
