@@ -11,7 +11,7 @@ ______________________________________________________________________
 
 ## Customizing Configuration
 
-Before you proceed to install anything, it is strongly recommended that you:
+Before you proceed to install anything, it is strongly recommended that you copy the [example configuration file](https://github.com/kigster/agentilda-ai-setup/blob/main/configuration.example.yml) to `configuration.yml`:
 
 ```bash
 cp configuration.example.yml configuration.yml
