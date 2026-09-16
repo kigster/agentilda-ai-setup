@@ -248,7 +248,11 @@ When your context reaches 40% run compaction via /compact.
 
 ## Database Development
 
-The `postgres-schema` skill carries the conventions, and its references carry the detail: schema design, naming, indexes, migrations, money, locking, connection pooling, autovacuum and transaction ID wraparound. Its description says when it applies, so it loads itself.
+Start at the `postgres-schema` skill for any PostgreSQL work. It carries every rule that holds regardless of what the database is for (naming, primary keys, migration safety, indexes, money, pooling, observability, autovacuum and transaction ID wraparound) in `references/core.md`, and it routes from there.
+
+Routing turns on one question the project has to answer once: which class the application is. `PG-lax` is non-critical OLTP and the default. `PG-strict` is money, PII or health records. `PG-analytics` is a warehouse. Each has its own skill (`postgres-lax`, `postgres-strict`, `postgres-analytics`) holding the recipes that only make sense for that class, and each assumes the core has already been read.
+
+Write the class into the project's `AGENTS.md` or `CLAUDE.md`. An unstated class means every agent guesses, and they will not all guess the same way.
 
 ## Concurrent Agents: Claim Before You Write
 
