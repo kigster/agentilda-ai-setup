@@ -7,6 +7,8 @@ set shell := ["bash", "-c"]
 # the shell code that is meant to be eval'd.
 rbenv := 'eval "$(rbenv init - bash 2>/dev/null || true)"; '
 
+version := `cat VERSION | tr -d '\n'`
+
 # The agentilda gem used to live in workflow/ and now comes from rubygems, so
 # what is left here, scripts/ and spec/, is linted and tested from the root
 # against the one Gemfile. CircleCI runs the same two commands.
@@ -16,12 +18,17 @@ rbenv := 'eval "$(rbenv init - bash 2>/dev/null || true)"; '
 bundle := rbenv + 'BUNDLE_GEMFILE=Gemfile bundle exec '
 
 # The installed gem, not a checkout. bin/setup puts it there with
-# `gem install agentilda`, and `just install-gem` does the same by hand.
+# `gem install agentilda`, and `just install-gems` does the same by hand.
 tilda := rbenv + 'agentilda'
 
 [no-exit-message]
 recipes:
     just --choose
+   
+
+# print the project version
+version:
+    @echo {{ version }}
 
 # Setup local repository for your specific needs before running install
 init:
@@ -41,9 +48,9 @@ init:
 install *args:
     bin/install {{ args }}
 
-# gem install agentilda -N
-install-gem:
-    {{ rbenv }} gem install agentilda -N
+# Install gems this repo depends on
+install-gems:
+    {{ rbenv }} gem install agentilda agent-lock -N
 
 # Install gem dependencies only
 bundle:
@@ -97,10 +104,6 @@ clean:
 # Run all lefthook pre-commit hooks
 lefthook:
     {{ bundle }} lefthook run pre-commit --all-files
-
-# agentilda --version
-version:
-    @{{ tilda }} --version
 
 # ---------------------------------------------------------------- agentilda
 
