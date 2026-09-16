@@ -138,6 +138,8 @@ In Rails, `t.bigint :amount_cents` plus a value object (or `money-rails`) beats 
 
 Treat the migration as a production operation, not a schema edit.
 
+> The rules below are the summary. `migrations.md` in this directory is the long form, and it is where reversibility, the mechanics and failure modes of concurrent index builds, transactional DDL, expand/contract and batched backfills are actually explained. Read it before migrating a table that has rows in it.
+
 Install `strong_migrations` - it will catch the classics before your DBA (or your 3am pager) does. The non-negotiables on PostgreSQL: `add_index` on any table with real rows must be `algorithm: :concurrently` with `disable_ddl_transaction!`; never combine that migration with anything else.
 
 Adding a column with a default is safe on PG 11+, but adding `null: false` to an existing column is not - add a `CHECK (col IS NOT NULL) NOT VALID`, `VALIDATE CONSTRAINT` in a separate migration, then `SET NOT NULL`, which PG 12+ will accept using the validated constraint as proof.

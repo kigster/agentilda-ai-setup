@@ -1,6 +1,6 @@
 ---
 name: postgres-schema
-description: "PostgreSQL schema design, migration safety, and index conventions - and the router that decides which class-specific PostgreSQL skill to load. Use when designing a table, writing or reviewing a database migration, choosing a primary key type, adding an index, naming tables or columns, or deciding between logical and physical deletes. Also triggers on strong_migrations, schema_format, concurrent index, uuidv7, timestamptz, soft delete, deleted_at, foreign key cascade, ON DELETE, partial index, N+1, strict_loading, connection pooling, pgbouncer, pgvector, and third-party schemas such as stripe.* or plaid.*. Start here for any PostgreSQL work, then load postgres-lax, postgres-strict or postgres-analytics as this skill directs."
+description: "PostgreSQL schema design, migration safety, and index conventions - and the router that decides which class-specific PostgreSQL skill to load. Use when designing a table, writing or reviewing a database migration, choosing a primary key type, adding an index, naming tables or columns, or deciding between logical and physical deletes. Also triggers on strong_migrations, schema_format, CREATE INDEX CONCURRENTLY, invalid index, reversible migration, irreversible migration, rollback, down migration, expand and contract, backfill, lock_timeout, NOT VALID, VALIDATE CONSTRAINT, table rewrite, uuidv7, timestamptz, soft delete, deleted_at, foreign key cascade, ON DELETE, partial index, N+1, strict_loading, connection pooling, pgbouncer, pgvector, and third-party schemas such as stripe.* or plaid.*. Start here for any PostgreSQL work, then load postgres-lax, postgres-strict or postgres-analytics as this skill directs."
 ---
 
 # PostgreSQL Schema Design
@@ -13,6 +13,8 @@ This skill is the entry point for all PostgreSQL work. It does three things, in 
 
 > [!IMPORTANT]
 > **The class-independent conventions are not written here.** They live in [`references/core.md`](references/core.md) - decades of accumulated practice, and the single source of truth for everything that is true regardless of application class. **Read that file before writing schema or migration code.**
+>
+> [`references/migrations.md`](references/migrations.md) is the long form on migration safety: reversibility, concurrent index builds and the `INVALID` index a failed one leaves behind, transactional DDL and its edges, expand/contract, the changes that rewrite the table, and batched backfills. **Read it before writing a migration that runs against a table with rows in it.**
 >
 > [`references/autovacuum.md`](references/autovacuum.md) covers autovacuum and transaction ID wraparound: read it before touching autovacuum settings, and before assuming a wraparound warning can wait.
 

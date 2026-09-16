@@ -14,6 +14,7 @@ flowchart LR
     A[postgres-schema] -->|classify| B{Application class}
     A --> C[references/core.md<br/>class-independent rules]
     A --> D[references/autovacuum.md<br/>vacuum and XID wraparound]
+    A --> H[references/migrations.md<br/>migration safety]
     B -->|PG-lax| E[postgres-lax]
     B -->|PG-strict| F[postgres-strict]
     B -->|PG-analytics| G[postgres-analytics]
