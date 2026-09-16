@@ -16,7 +16,7 @@ rbenv := 'eval "$(rbenv init - bash 2>/dev/null || true)"; '
 bundle := rbenv + 'BUNDLE_GEMFILE=Gemfile bundle exec '
 
 # The installed gem, not a checkout. bin/setup puts it there with
-# `gem install agentilda`, and `just install-gem` does the same by hand.
+# `gem install agentilda`, and `just install-gems` does the same by hand.
 tilda := rbenv + 'agentilda'
 
 [no-exit-message]
@@ -41,9 +41,9 @@ init:
 install *args:
     bin/install {{ args }}
 
-# gem install agentilda -N
-install-gem:
-    {{ rbenv }} gem install agentilda -N
+# Install gems this repo depends on
+install-gems:
+    {{ rbenv }} gem install agentilda agent-lock -N
 
 # Install gem dependencies only
 bundle:

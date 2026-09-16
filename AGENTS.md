@@ -46,53 +46,53 @@ Executables sit in three places, by what they need in order to run. `bin/` holds
 The `agentilda` CLI itself (`workflow/exe/agentilda`), which also answers to `tilda`, a symlink beside it for the times you are typing it twenty times an hour:
 
 ```bash
-agentilda create tax rule dsl                                 # 003.00-⚪️-tax-rule-dsl
-agentilda create --after 002 k1 sync                          # 002.01-🕰️-k1-sync (retroactive)
-agentilda list-plans                                          # every plan, state, PRs; exits 1 on a lie
-agentilda states                                              # the state machine, as a diagram
-agentilda agents list                                         # every specialist, what it handles, what it advances to
-agentilda agents describe luke-backend                    # one specialist in full, prompt included
-agentilda describe luke-backend                           # the same, without the `agents` in front
-agentilda resync dirs [--commit]                              # folder emoji vs folder contents
-agentilda resync prs [--commit]                               # [NNN.MM] prefixes on PR titles
-agentilda linear import --prefix TAX [--commit | --format json]
-agentilda run [--commit] [-j N] [--isolation worktree|shared] [--plan NNN,...]  # drive the agents
-agentilda docs -o context/feature-building/agentilda.md # regenerate conventions from the state machine
+tilda create tax rule dsl                 # 003.00-⚪️-tax-rule-dsl
+tilda create --after 002 k1 sync          # 002.01-🕰️-k1-sync (retroactive)
+tilda list-plans                          # every plan, state, PRs; exits 1 on a lie
+tilda states                              # the state machine, as a diagram
+tilda agents list                         # every specialist, what it handles, what it advances to
+tilda agents describe luke-backend        # one specialist in full, prompt included
+tilda describe luke-backend               # the same, without the `agents` in front
+tilda resync dirs [--commit]              # folder emoji vs folder contents
+tilda resync prs [--commit]               # [NNN.MM] prefixes on PR titles
+tilda linear import --prefix TAX [--commit | --format json]
+tilda run [--commit] [-j N] [--isolation worktree|shared] [--plan NNN,...]  # drive the agents
+tilda docs -o context/feature-building/agentilda.md # regenerate conventions from the state machine
 ```
 
 And the sibling installer that populates `skills/`/`plugins/` for this repo itself (`scripts/install-sources`, plain Ruby, no bundler needed):
 
 ```bash
-scripts/install-sources           # clone what's missing, update the rest
-scripts/install-sources -n        # say what it would install and unlink, touch nothing
-scripts/install-sources -f        # wipe .sources and re-clone every source fresh
-scripts/install-sources list      # what's configured, and what's installed from where
+scripts/install-sources                   # clone what's missing, update the rest
+scripts/install-sources -n                # say what it would install and unlink, touch nothing
+scripts/install-sources -f                # wipe .sources and re-clone every source fresh
+scripts/install-sources list              # what's configured, and what's installed from where
 ```
 
 Everything that writes to disk or GitHub is a **dry run until `--commit`**. Folder names and PR titles are things other people join on, so previewing before mutating is the whole point of the tool. `install-sources` is the exception: it always writes, because everything it touches (`skills/`, `plugins/`, `.sources/`) is declared regenerable in `.gitignore`.
 
 ## The workflow, step by step
 
-A feature moves through five specialists, one state at a time, never further than its own documents currently justify. This is the same machine `agentilda states` draws and `documentation.rb` generates prose from. Change who handles what, and those two commands are the staleness check.
+A feature moves through five specialists, one state at a time, never further than its own documents currently justify. This is the same machine `tilda states` draws and `documentation.rb` generates prose from. Change who handles what, and those two commands are the staleness check.
 
-| #   | State                             | Who acts                                | What happens                                                                                                                                                                                                                                                                                                                    |
-| :-- | :-------------------------------- | :-------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | ⚪️ New                            | `agentilda create`                | Mints the plan folder. For a genuinely new feature (not `--after`/`--prs`), scaffolds `spec.md`'s four fixed headings (*What we are trying to achieve*, *Why it matters*, *What already exists*, *What research needs to settle*), attempts a best-effort first pass via `claude -p`, and opens it. A human finishes the brief. |
-| 2   | 🔎 Researched                     | `leah-researcher`                       | Fans work out across parallel sub-agents, appends spec.md's `## Research` chapter. That heading *is* the transition. Nobody else may write it, not even empty.                                                                                                                                                                 |
-| 3   | ⭐️ Planned                        | `yoda-writer`, then `palpatine-planner` | `yoda-writer` turns the brief + research into Goal/Non-Goals/In-Out-of-scope/Conclusion, or writes `blocked.md` when a question is a human's to answer. `palpatine-planner` then decomposes the finished spec into `plan.md`'s non-overlapping work units.                                                                      |
-| 4   | 🟡 Building → 🎨 Building UI       | `luke-backend`                          | Builds one back-end work unit at a time — data, domain, the API — source and tests, no commits. Hands off once no back-end unit is left.                                                                                                                                                                                                              |
-| 4b  | 🎨 Building UI → 🟢 Ready for Review | `rey-frontend`                        | Builds the interface against the API Luke landed, loading the design skills as it goes. A plan with no front-end work passes straight through. Opens the `[NNN.MM] …` pull request for what both halves built.
-| 5   | 👀 In Review → 🔴 / ✅            | `hansolo-reviewer`                      | Reads the diff against the plan; requests changes (back to 🟢 once fixed) or approves. Never merges. That line is enforced in code (`Executor::UNGRANTABLE`), not just in the prompt.                                                                                                                                          |
+| #   | State                                | Who acts                                | What happens                                                                                                                                                                                                                                                                                                                    |
+| :-- | :----------------------------------- | :-------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | ⚪️ New                               | `tilda create`                          | Mints the plan folder. For a genuinely new feature (not `--after`/`--prs`), scaffolds `spec.md`'s four fixed headings (*What we are trying to achieve*, *Why it matters*, *What already exists*, *What research needs to settle*), attempts a best-effort first pass via `claude -p`, and opens it. A human finishes the brief. |
+| 2   | 🔎 Researched                        | `leah-researcher`                       | Fans work out across parallel sub-agents, appends spec.md's `## Research` chapter. That heading *is* the transition. Nobody else may write it, not even empty.                                                                                                                                                                  |
+| 3   | ⭐️ Planned                           | `yoda-writer`, then `palpatine-planner` | `yoda-writer` turns the brief + research into Goal/Non-Goals/In-Out-of-scope/Conclusion, or writes `blocked.md` when a question is a human's to answer. `palpatine-planner` then decomposes the finished spec into `plan.md`'s non-overlapping work units.                                                                      |
+| 4   | 🟡 Building → 🎨 Building UI         | `luke-backend`                          | Builds one back-end work unit at a time — data, domain, the API — source and tests, no commits. Hands off once no back-end unit is left.                                                                                                                                                                                        |
+| 4b  | 🎨 Building UI → 🟢 Ready for Review | `rey-frontend`                          | Builds the interface against the API Luke landed, loading the design skills as it goes. A plan with no front-end work passes straight through. Opens the `[NNN.MM] …` pull request for what both halves built.                                                                                                                  |
+| 5   | 👀 In Review → 🔴 / ✅               | `hansolo-reviewer`                      | Reads the diff against the plan; requests changes (back to 🟢 once fixed) or approves. Never merges. That line is enforced in code (`Executor::UNGRANTABLE`), not just in the prompt.                                                                                                                                           |
 
 Off to the side, at any point: ⭕️/🅱️ **Blocked** (a decision only a human can make, never offered to an agent by the loop) and ☢️ **Deferred** or ❌ **Discarded**.
 
-Blocks drain by hand, one answer at a time. Whoever writes `blocked.md` **must** number each open question as its own `## B1`, `## B2` heading, and each answer as `## A1`, `## A2`, where `## A1` settles `## B1`. That notation is the only part of the file a program can read: a question written any other way leaves the folder looking unblocked and `unblock` reporting nothing to drain. A human writes the answers in as `## A<n>` sections, attributed and dated, and runs `agentilda unblock NNN --commit`, which hands the folder to `lando-broker`: it folds each answered question into the document that question was stopping (`spec.md` for what and why, `plan.md` for how and in what order), deletes the question, and deletes the file when none are left. `blocked.md` holds open questions and the answers not yet folded, and the ⭕️/🅱️ invariant reads the `## B<n>` headings, so the pass that empties the file is the pass that lets the folder out. A partial drain is a normal, successful run; whatever is still open keeps the plan blocked, correctly. `lando-broker` never answers anything itself, and `run` cannot reach it, because a blocked plan waiting on a human is the one thing an autonomous loop must not quietly resolve.
+Blocks drain by hand, one answer at a time. Whoever writes `blocked.md` **must** number each open question as its own `## B1`, `## B2` heading, and each answer as `## A1`, `## A2`, where `## A1` settles `## B1`. That notation is the only part of the file a program can read: a question written any other way leaves the folder looking unblocked and `unblock` reporting nothing to drain. A human writes the answers in as `## A<n>` sections, attributed and dated, and runs `tilda unblock NNN --commit`, which hands the folder to `lando-broker`: it folds each answered question into the document that question was stopping (`spec.md` for what and why, `plan.md` for how and in what order), deletes the question, and deletes the file when none are left. `blocked.md` holds open questions and the answers not yet folded, and the ⭕️/🅱️ invariant reads the `## B<n>` headings, so the pass that empties the file is the pass that lets the folder out. A partial drain is a normal, successful run; whatever is still open keeps the plan blocked, correctly. `lando-broker` never answers anything itself, and `run` cannot reach it, because a blocked plan waiting on a human is the one thing an autonomous loop must not quietly resolve.
 
 ### Invoking it: slash command or the binary directly
 
 Both paths run the same `workflow/exe/agentilda`. The difference is which guardrails come along.
 
-- **`workflow/exe/agentilda <command>` directly.** The whole tool, no Claude required. Use this for scripting, CI, or driving it from any other agent.
+- **`workflow/exe/tilda <command>` directly.** The whole tool, no Claude required. Use this for scripting, CI, or driving it from any other agent.
 - **A Claude Code slash command**, via `src/commands/*.md` (`/plan-create`, `/plan-research`, `/plan-run`, `/plan-status`, `/plan-unblock`, `/plan-resync-dirs`, `/plan-resync-prs`, `/plan-docs`, `/plan-insert`, `/plan-linear-import`). A thin wrapper around the same binary, plus the constraints that erode if left to memory. `/plan-create` won't seed a `## Research` heading or pre-write Goals. `/plan-run` insists on confirming scope, `--commit`, and parallelism first. **Prefer the slash command inside a Claude Code session.** It carries the constraints `src/commands/plan-create.md` documents in full.
 
 `skills/` and `workflow/agents/*.md` are a separate concern from the above: Claude's general skill/specialist library, not part of invoking `agentilda` itself. `workflow/agents/*.md` *is* where the five specialists above are defined, plus `lando-broker`. Frontmatter `handles:`/`advances_to:` is exactly what `Agents#for_status` reads to route a plan.
@@ -125,7 +125,7 @@ Entry point `workflow/lib/agentilda.rb` requires each component only if the file
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `config/AGENTS.md`          | The instructions every agent reads; symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md` by `bin/setup`                                                                                                       |
 | `configuration.example.yml` | Committed template for configuration.yml, which is per-machine and git-ignored. Declarative list `scripts/install-sources` fills `skills/`/`plugins/` from, by cloning a repo or running an installer command |
-| `context/`                  | What every agent gets regardless: who Konstantin is, and the generated agentilda lifecycle doc                                                                                                                |
+| `context/`                  | What every agent gets regardless: who Konstantin is, and the generated tilda lifecycle doc                                                                                                                    |
 | `src/skills/`               | Skills authored in this repo, **committed**. Folded into `skills/` by `install-sources`                                                                                                                       |
 | `src/commands/`             | Slash commands wrapping `agentilda` (table above)                                                                                                                                                             |
 | `skills/`                   | Claude skills, **generated** by `install-sources`, not committed. One directory per skill, symlinked into `~/.claude/skills/`                                                                                 |
@@ -144,7 +144,7 @@ Entry point `workflow/lib/agentilda.rb` requires each component only if the file
 ## Project-specific conventions worth knowing before editing
 
 - **Every change ends green, and ends in a pull request**: run `just lint` and `just test` before calling a code change done, and fix what they report rather than handing the failures back. `just ci` runs the pair the way CircleCI does. Then open a pull request and verify it exists: `gh pr list` printing nothing means the work is not submitted, whatever `git push` said. A branch whose pull request has already merged keeps accepting pushes in silence, so a successful push is not evidence of anything. Nobody has to ask for either half.
-- **Concurrency safety**: many agent sessions may run against this checkout at once. Before creating or editing a file, claim it with `bin/agent-lock acquire <id> "<reason>"` (narrowest scope that covers the writes); release with `bin/agent-lock release <id>` or `release-all` at session end. Prefer a git worktree over a lock for anything longer than a few minutes.
+- **Concurrency safety**: many agent sessions may run against this checkout at once. Before creating or editing a file, claim it with `alock acquire <id> "<reason>"` (narrowest scope that covers the writes); release with `alock release <id>` or `release-all` at session end. Prefer a git worktree over a lock for anything longer than a few minutes.
 - **Numbering is permanent**: a plan's `NNN.MM` is set once and joined on by branch names, PR titles and `pull-requests.md`; renumbering breaks those links silently.
 - **`resync` never guesses across ambiguity**: `resync prs` only edits a PR title when the diff touches exactly one plan; anything ambiguous is reported, never edited, even with `--commit`.
 - **Real names/emails**: never use real people's names or emails as placeholders anywhere in this repo (code, docs, specs, fixtures). Use `Alan Turing <alan.turing@manchester.edu>` as the canonical example person. See `config/AGENTS.md` for the specific list of names/emails that must never appear.

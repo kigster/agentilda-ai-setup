@@ -45,13 +45,13 @@ Verbatim, in that order — that is exactly what `create` writes, and it is what
 The mechanics are three commands and do not need a skill of their own — `create`, `status`, `run --plan`. The constraints above are what erode, because nothing on disk enforces them; get them right per plan, then batch the handoff.
 
 1. `agentilda create <words>`, once per plan.
-2. Write (or let `create`'s draft attempt) each `spec.md`, following every constraint above.
-3. **Verify each one before handing off, not after** — `agentilda list-plans` shows every plan at a glance:
+1. Write (or let `create`'s draft attempt) each `spec.md`, following every constraint above.
+1. **Verify each one before handing off, not after** — `agentilda list-plans` shows every plan at a glance:
    - `spec.md` exists.
    - Exactly the four `##` headings above, nothing added.
    - No heading beginning with "Research".
    - Status reads ⚪️ New, not 🔎 Researched.
-4. Report readiness and print **one** command — do not run it yourself unless asked:
+1. Report readiness and print **one** command — do not run it yourself unless asked:
    ```bash
    agentilda run --commit --plan <NNN,NNN,...>
    ```
@@ -59,4 +59,4 @@ The mechanics are three commands and do not need a skill of their own — `creat
 **One handoff at the end, not N.** `run` with no `--plan` is a whole-tree loop; running it after every single `create` turns N new plans into N overlapping whole-tree loops, each claiming worktrees for plans the others are touching too — the exact concurrency hazard `config/AGENTS.md`'s "Concurrent Agents — Claim Before You Write" warns about, industrialized by a loop instead of a person. `--plan` exists so a batch step can hand off exactly the plans it just made, once.
 
 > [!CAUTION]
-> **Never start `--commit` while a manual agent session is already in flight on any plan in that tree — yours or anyone else's.** `run` reads and writes plan folders the same as a person driving an agent by hand would, and two writers on one folder produce no git conflict to catch it — just whichever one wrote last, silently. Check with `bin/agent-lock list` (or ask) before `--commit`, the same as before writing any file in this repository.
+> **Never start `--commit` while a manual agent session is already in flight on any plan in that tree — yours or anyone else's.** `run` reads and writes plan folders the same as a person driving an agent by hand would, and two writers on one folder produce no git conflict to catch it — just whichever one wrote last, silently. Check with `alock list` (or ask) before `--commit`, the same as before writing any file in this repository.

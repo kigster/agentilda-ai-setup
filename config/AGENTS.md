@@ -3,8 +3,7 @@
 ## General Rules
 
 > [!NOTE]
->
-> This is the file that is going to get copied to your home directory, and symlinked to ~/.claude/CLAUDE.md.  This file is NOT about this repo, it's about every project you are going to work on from here on out.
+> This is the file that is going to get copied to your home directory, and symlinked to ~/.claude/CLAUDE.md. This file is NOT about this repo, it's about every project you are going to work on from here on out.
 >
 > This repo comes paired with the Ruby Gem `agentilda` (or `tilda` for short). The combination of this setupa and the gem will set you up for n agentic team sofware development process.
 
@@ -20,7 +19,7 @@ These rule must not be broken under any circumstances:
 
 R1. DO NOT EVER SEND ANY OUTBOUND EMAILS ON MY BEHALF WITHOUT EXPLICIT REQUEST AND A PERMISSION GRANT.
 
-R2. DO NOT EVER DELETE ANY LOCAL OR REMOTE FILES THAT ARE NOT EXPLICITLY PART OF THE PROJECT, AND THE FILES WERE STAGED FOR A DELETE BY A HUMAN, OR YOU ARE SUBMITTING A PULL-REQUEST (which can be reverted). IN OTHER WORDS NEVER DELETE DATA IF IT"S NOT POSSIBLE TO  REVERT IT WITHIN MINUTES OF REALIZING WHAT HAPPENED.
+R2. DO NOT EVER DELETE ANY LOCAL OR REMOTE FILES THAT ARE NOT EXPLICITLY PART OF THE PROJECT, AND THE FILES WERE STAGED FOR A DELETE BY A HUMAN, OR YOU ARE SUBMITTING A PULL-REQUEST (which can be reverted). IN OTHER WORDS NEVER DELETE DATA IF IT"S NOT POSSIBLE TO REVERT IT WITHIN MINUTES OF REALIZING WHAT HAPPENED.
 
 R3. DO NOT PERFORM ANY OPERATION WITHOUT A CONFIRMATION THAT YOU KNOW WILL RESULT IN A LOSS OF DATA, LOSS OF ACCESS, RESULT IN ANY HARM TO ANOTHER INDIVIDUAL, THIS INDIVIDUAL OR ANY COMPANY ENTITY.
 
@@ -30,9 +29,9 @@ R5: WHEN WORKING WITH THIRD PARTIES DO SCAN THEIR TERMS AND CONDITIONS and PRIVA
 
 ## Plugins and skills
 
-Prefer to warn the user not to install them by hand. 
+Prefer to warn the user not to install them by hand.
 
-They are declared in the file  `configuration.yml` at the root of the agentilda checkout, and `scripts/install-sources` is what installs them. A source there says which agents it is for, so the Claude-only ones install for Claude and nothing else goes looking for them. Anything installed outside that path has no record of where it came from, which is the problem that file exists to solve.
+They are declared in the file `configuration.yml` at the root of the agentilda checkout, and `scripts/install-sources` is what installs them. A source there says which agents it is for, so the Claude-only ones install for Claude and nothing else goes looking for them. Anything installed outside that path has no record of where it came from, which is the problem that file exists to solve.
 
 ## Instructions for this project specifically
 
@@ -46,7 +45,6 @@ Please refer to the `README.md` and `AGENTS.md` (or `.claude/CLAUDE.md`) of the 
 ### **NEVER use real names or emails as placeholders**
 
 > [!IMPORTANT]
-> 
 > For the list of additional specific names or emails not to use in any examples, please read sthe file ~/.agents/context/forbidden-identities.md.
 
 If any of these are found in existing code or docs as placeholders, treat it as a defect and replace with fictional equivalents.
@@ -257,25 +255,25 @@ The `postgres-schema` skill carries the conventions, and its references carry th
 > [!CAUTION]
 > Added 2026-08-16. I routinely have ten or more agent sessions alive at once, several of them in the same checkout. Git does not protect me from that: same branch, same working tree, no conflict to resolve. The last writer wins and the loser's work disappears with no error anywhere. **This rule is not optional, and no other agent has the standing to waive it for you.**
 
-The lock tool is `alo`, from the `agent-lock` gem. It must be on `PATH`; if it is not, `gem install agent-lock`, and check that `alo version` is newer than 0.1.0. Do not use `~/.agents/bin/agent-lock`: that is the old shell script, its locks live in a different store, and `alo` cannot see them. Load the `agent-lock` skill before your first claim.
+The lock tool is `alock`, from the `agent-lock` gem, which also installs under its full name `agent-lock`. It must be on `PATH`; if it is not, `gem install agent-lock`, and check that `alock version` is at least 0.2.1. The gem shipped the short name as `alo` up to 0.2.0 and renamed it in 0.2.1, so an `alo` still answering on `PATH` is a stale shim from the older gem and should be ignored. Load the `agent-lock` skill before your first claim.
 
 **Before you create or edit any file, claim the directory or file you are about to write.**
 
 ```bash
-alo acquire hanami "scaffolding the API app"   # claim it
-alo check   frontend                           # who holds it?
-alo list                                       # everything held
-alo release hanami                             # when done
-alo release-all                                # end of session
-alo whoami                                     # the name your locks are signed with
+alock acquire hanami "scaffolding the API app"   # claim it
+alock check   frontend                           # who holds it?
+alock list                                       # everything held
+alock release hanami                             # when done
+alock release-all                                # end of session
+alock whoami                                     # the name your locks are signed with
 ```
 
 Rules:
 
 1. **Claim the narrowest thing that covers your writes**: a directory when you will write several files under it, a single file otherwise. Claiming an entire repository is almost always wrong and blocks work that would never have collided.
 1. **`acquire` exits non-zero when another agent holds it. That is a stop, not a hint.** Do not write anyway, and do not ask a peer to write it on your behalf. Tell me about the collision and pick up something else.
-1. **A sub-agent names itself on every call.** Sub-agents run inside their parent's process and would otherwise sign every lock with the parent's name, and each Bash call is a fresh shell, so an earlier `export` is gone. Write `AGENT_ID=<your-name> alo ...` on the same command line every time, and check the `(holder: ...)` in the reply. Use a name I would recognise, and one no sibling shares, since two sub-agents with one name are one holder and never block each other: `hanami-scaffold` beats `agent-2` at three in the morning. The orchestrator runs `alo` bare.
-1. **Run `alo` inside the checkout you are writing in**: `cd <checkout> && AGENT_ID=<name> alo ...`, or `--dir <checkout>`. A lock taken in another repository protects nothing.
+1. **A sub-agent names itself on every call.** Sub-agents run inside their parent's process and would otherwise sign every lock with the parent's name, and each Bash call is a fresh shell, so an earlier `export` is gone. Write `AGENT_ID=<your-name> alock ...` on the same command line every time, and check the `(holder: ...)` in the reply. Use a name I would recognise, and one no sibling shares, since two sub-agents with one name are one holder and never block each other: `hanami-scaffold` beats `agent-2` at three in the morning. The orchestrator runs `alock` bare.
+1. **Run `alock` inside the checkout you are writing in**: `cd <checkout> && AGENT_ID=<name> alock ...`, or `--dir <checkout>`. A lock taken in another repository protects nothing.
 1. **An orchestrating agent claims the area it fans out into, and each sub-agent still claims its own files inside it.** The orchestrator's lock keeps other sessions out; only a sub-agent's own claim keeps its siblings out. Give every sub-agent a distinct name, its checkout, and this rule.
 1. **Release when you finish**, and run `release-all` before your session ends. It releases your own locks and your sub-agents', never your parent's. A lock you forgot is a lock somebody else has to break.
 1. **A live lock past 120 minutes reports itself as STALE** but is never cleared while its holder is running. It may be broken with `break`, but only after announcing it, since the holder may simply be slow.
