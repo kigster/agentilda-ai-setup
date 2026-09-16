@@ -3,8 +3,7 @@
 ## General Rules
 
 > [!NOTE]
->
-> This is the file that is going to get copied to your home directory, and symlinked to ~/.claude/CLAUDE.md.  This file is NOT about this repo, it's about every project you are going to work on from here on out.
+> This is the file that is going to get copied to your home directory, and symlinked to ~/.claude/CLAUDE.md. This file is NOT about this repo, it's about every project you are going to work on from here on out.
 >
 > This repo comes paired with the Ruby Gem `agentilda` (or `tilda` for short). The combination of this setupa and the gem will set you up for n agentic team sofware development process.
 
@@ -20,7 +19,7 @@ These rule must not be broken under any circumstances:
 
 R1. DO NOT EVER SEND ANY OUTBOUND EMAILS ON MY BEHALF WITHOUT EXPLICIT REQUEST AND A PERMISSION GRANT.
 
-R2. DO NOT EVER DELETE ANY LOCAL OR REMOTE FILES THAT ARE NOT EXPLICITLY PART OF THE PROJECT, AND THE FILES WERE STAGED FOR A DELETE BY A HUMAN, OR YOU ARE SUBMITTING A PULL-REQUEST (which can be reverted). IN OTHER WORDS NEVER DELETE DATA IF IT"S NOT POSSIBLE TO  REVERT IT WITHIN MINUTES OF REALIZING WHAT HAPPENED.
+R2. DO NOT EVER DELETE ANY LOCAL OR REMOTE FILES THAT ARE NOT EXPLICITLY PART OF THE PROJECT, AND THE FILES WERE STAGED FOR A DELETE BY A HUMAN, OR YOU ARE SUBMITTING A PULL-REQUEST (which can be reverted). IN OTHER WORDS NEVER DELETE DATA IF IT"S NOT POSSIBLE TO REVERT IT WITHIN MINUTES OF REALIZING WHAT HAPPENED.
 
 R3. DO NOT PERFORM ANY OPERATION WITHOUT A CONFIRMATION THAT YOU KNOW WILL RESULT IN A LOSS OF DATA, LOSS OF ACCESS, RESULT IN ANY HARM TO ANOTHER INDIVIDUAL, THIS INDIVIDUAL OR ANY COMPANY ENTITY.
 
@@ -30,9 +29,9 @@ R5: WHEN WORKING WITH THIRD PARTIES DO SCAN THEIR TERMS AND CONDITIONS and PRIVA
 
 ## Plugins and skills
 
-Prefer to warn the user not to install them by hand. 
+Prefer to warn the user not to install them by hand.
 
-They are declared in the file  `configuration.yml` at the root of the agentilda checkout, and `scripts/install-sources` is what installs them. A source there says which agents it is for, so the Claude-only ones install for Claude and nothing else goes looking for them. Anything installed outside that path has no record of where it came from, which is the problem that file exists to solve.
+They are declared in the file `configuration.yml` at the root of the agentilda checkout, and `scripts/install-sources` is what installs them. A source there says which agents it is for, so the Claude-only ones install for Claude and nothing else goes looking for them. Anything installed outside that path has no record of where it came from, which is the problem that file exists to solve.
 
 ## Instructions for this project specifically
 
@@ -46,7 +45,6 @@ Please refer to the `README.md` and `AGENTS.md` (or `.claude/CLAUDE.md`) of the 
 ### **NEVER use real names or emails as placeholders**
 
 > [!IMPORTANT]
-> 
 > For the list of additional specific names or emails not to use in any examples, please read sthe file ~/.agents/context/forbidden-identities.md.
 
 If any of these are found in existing code or docs as placeholders, treat it as a defect and replace with fictional equivalents.
@@ -250,7 +248,11 @@ When your context reaches 40% run compaction via /compact.
 
 ## Database Development
 
-The `postgres-schema` skill carries the conventions, and its references carry the detail: schema design, naming, indexes, migrations, money, locking, connection pooling, autovacuum and transaction ID wraparound. Its description says when it applies, so it loads itself.
+Start at the `postgres-schema` skill for any PostgreSQL work. It carries every rule that holds regardless of what the database is for (naming, primary keys, migration safety, indexes, money, pooling, observability, autovacuum and transaction ID wraparound) in `references/core.md`, and it routes from there.
+
+Routing turns on one question the project has to answer once: which class the application is. `PG-lax` is non-critical OLTP and the default. `PG-strict` is money, PII or health records. `PG-analytics` is a warehouse. Each has its own skill (`postgres-lax`, `postgres-strict`, `postgres-analytics`) holding the recipes that only make sense for that class, and each assumes the core has already been read.
+
+Write the class into the project's `AGENTS.md` or `CLAUDE.md`. An unstated class means every agent guesses, and they will not all guess the same way.
 
 ## Concurrent Agents: Claim Before You Write
 
