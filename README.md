@@ -106,7 +106,12 @@ scripts/install-sources agents
 
 # install the ones that are missing
 scripts/install-sources agents install    
+
+# run each entry's update: line, for the ones already here
+scripts/install-sources agents update     
 ```
+
+`executables:` is the same block for everything else that should be on PATH, and takes the same three verbs. An entry's `update:` is the vendor's own line for bringing it up to date; it runs only when asked for by name, never as part of a sync.
 
 `sources:` names where skills and plugins come from. A source clones a repository (`type: skills`, `type: plugin` for one bundle, `type: plugins` for a directory of them) or runs a command (`type: command`, for something like Braintrust's `bt`, which ships its skill through its own CLI rather than a repository). Any source can narrow itself:
 

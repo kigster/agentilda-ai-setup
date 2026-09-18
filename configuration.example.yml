@@ -156,8 +156,13 @@ agents:
 # that is not a coding agent belongs here, and the braintrust source below is
 # the reason the block is installed before the sources rather than after.
 #
+# `update:` is the vendor's own line for bringing an entry already here up to
+# date. It runs only when asked for by name, never as part of a sync, and
+# never for an entry that is not installed yet. `agents:` takes it too.
+#
 #   scripts/install-sources executables
 #   scripts/install-sources executables install [name...]
+#   scripts/install-sources executables update [name...]
 executables:
   - name: bt
     installer: curl -fsSL https://bt.dev/cli/install.sh | bash

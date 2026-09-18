@@ -716,6 +716,91 @@ RSpec.describe "scripts/install-sources" do
       end
     end
 
+    # `update:` is the vendor's own way of bringing an entry already here up to
+    # date. A sync that reinstalled every CLI it found would be a different
+    # tool, so nothing but the verb itself reaches this.
+    describe "update:" do
+      it "runs the line for one that is installed" do
+        write_agents([{"name" => "sh", "update" => "exit 0"}])
+
+        output, status = install("agents", "update")
+        aggregate_failures do
+          expect(status).to be_success
+          expect(output).to include("sh updated")
+        end
+      end
+
+      it "reports an update that failed" do
+        write_agents([{"name" => "sh", "update" => "exit 3"}])
+
+        expect(install("agents", "update").first).to include("update exited 3")
+      end
+
+      it "names the command rather than running it under --dry-run" do
+        write_agents([{"name" => "sh", "update" => "exit 3"}])
+
+        output, status = install("-n", "agents", "update")
+        aggregate_failures do
+          expect(status).to be_success
+          expect(output).to include("would run: exit 3")
+        end
+      end
+
+      # Updating something absent is installing it, which is the other verb.
+      it "leaves one that is not installed to install" do
+        write_agents([{"name" => "definitely-not-an-agent", "installer" => "exit 3", "update" => "exit 3"}])
+
+        output = install("agents", "update").first
+        aggregate_failures do
+          expect(output).to include("not installed").and include("agents install definitely-not-an-agent")
+          expect(output).not_to include("exited 3")
+        end
+      end
+
+      it "says so for an entry that states none" do
+        write_agents([{"name" => "sh"}])
+
+        expect(install("agents", "update").first).to include("no update: to run")
+      end
+
+      it "updates only the names asked for" do
+        write_agents([{"name" => "sh", "update" => "exit 3"}, {"name" => "env", "update" => "exit 4"}])
+
+        output = install("agents", "update", "env").first
+        aggregate_failures do
+          expect(output).to include("update exited 4")
+          expect(output).not_to include("exited 3")
+        end
+      end
+
+      it "refuses a name that is not on the list" do
+        write_agents([{"name" => "sh", "update" => "true"}])
+
+        output, status = install("agents", "update", "nosuch")
+        aggregate_failures do
+          expect(status.exitstatus).to eq(78)
+          expect(output).to include("not listed under agents: nosuch")
+        end
+      end
+
+      it "refuses one that is not a command line" do
+        write_agents([{"name" => "sh", "update" => 42}])
+
+        output, status = install("agents", "update")
+        aggregate_failures do
+          expect(status.exitstatus).to eq(78)
+          expect(output).to include("update: must be a command line")
+        end
+      end
+
+      # A routine sync installs what is missing and leaves the rest alone.
+      it "is no part of a bare run" do
+        write_agents([{"name" => "sh", "update" => "exit 3"}])
+
+        expect(install.first).not_to include("exited 3")
+      end
+    end
+
     # `exists:` is the vendor's own way of answering "is this here?", for the
     # tools where being on PATH under your own name is not that question.
     describe "exists:" do

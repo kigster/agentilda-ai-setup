@@ -68,6 +68,15 @@
             "command -V cursor >/dev/null",
             "test -x \"$HOME/.local/bin/bt\""
           ]
+        },
+        "update": {
+          "type": "string",
+          "minLength": 1,
+          "description": "How to bring this up to date once it is installed, in the vendor's own terms. Any command line, run through a shell. Run only by `<block> update [name...]`, never by a routine sync, and never for an entry that is not installed.",
+          "examples": [
+            "bt update",
+            "brew upgrade bt"
+          ]
         }
       },
       "required": [

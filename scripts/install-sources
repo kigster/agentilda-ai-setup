@@ -127,7 +127,11 @@ COMMAND_ROOTS = %w[.claude .agents].freeze
 # both and requires them to agree.
 TOP_LEVEL_KEYS = %w[agents executables sources].freeze
 TYPES = %w[skills plugin plugins command].freeze
-TOOL_KEYS = %w[name installer exists].freeze
+TOOL_KEYS = %w[name installer exists update].freeze
+
+# The verbs `agents` and `executables` take. Anything else in that position is
+# a name to narrow the block to.
+TOOL_VERBS = %w[install update].freeze
 
 # The two blocks of installable binaries, in the order a run installs them.
 # Agents first because `agents:` on a source is matched against that block and
@@ -1122,7 +1126,11 @@ end
 # on PATH, which is right for a CLI installed as its own name and wrong for
 # everything else: a tool whose binary is named differently, one that lives
 # outside PATH, or one where being on PATH is not the same as being set up.
-Tool = Struct.new(:kind, :name, :installer, :exists) do
+# `update` is optional as well, and is the vendor's own way of bringing an
+# entry that is already here up to date. It is never part of a routine run:
+# only `<block> update` asks for it, and only for entries that report
+# themselves installed, because updating something absent is installing it.
+Tool = Struct.new(:kind, :name, :installer, :exists, :update) do
   # Looked up on PATH rather than with `which`, so the answer does not depend
   # on a shell being present or on how it was configured.
   #
@@ -1159,14 +1167,14 @@ def load_tools(kind)
     reject_unknown_keys(h, TOOL_KEYS, "#{h["name"]}: keys nothing reads")
 
     # Absent is fine; present and not a usable command line is not.
-    %w[installer exists].each do |key|
+    %w[installer exists update].each do |key|
       value = h[key]
       next if value.nil? || (value.is_a?(String) && !value.strip.empty?)
 
       raise ConfigError, "#{h["name"]}: #{key}: must be a command line, got #{value.inspect}"
     end
 
-    Tool.new(kind, h["name"].to_s, h["installer"], h["exists"])
+    Tool.new(kind, h["name"].to_s, h["installer"], h["exists"], h["update"])
   end
 end
 
@@ -1236,6 +1244,51 @@ def reconcile_tools(kind, tools, installing:, dry_run:, force:)
   end
 end
 
+# `<block> update [name...]`: run each entry's `update:` line, for the entries
+# that have one and are already here.
+#
+# Nothing else reaches this. A bare run installs what is missing and leaves
+# what is present alone, because a sync that reinstalled a vendor's CLI every
+# time would be a different tool than this one. Asking for it by name is the
+# whole interface.
+#
+# @param kind [String] "agents" or "executables"
+# @param tools [Array<Tool>] already filtered to what was asked for
+# @param dry_run [Boolean]
+# @return [void]
+def update_tools(kind, tools, dry_run:)
+  say("")
+  say(paint(kind, 1))
+
+  tools.each do |tool|
+    unless tool.update
+      note("#{tool.name}: no update: to run")
+      next
+    end
+
+    # Updating something that is not here is installing it, which is the other
+    # verb's job and says so.
+    unless tool.installed?
+      note("#{tool.name} not installed — `#{kind} install #{tool.name}` first")
+      next
+    end
+
+    if dry_run
+      note("#{tool.name} would run: #{tool.update}")
+      next
+    end
+
+    # Through a shell, for the same reason `installer:` is: it is the vendor's
+    # own line, and their own line is usually a pipeline.
+    say("  #{paint("\u00b7", 2)} #{tool.name}: #{tool.update}")
+    if system(tool.update)
+      ok("#{tool.name} updated")
+    else
+      bad("#{tool.name}: update exited #{$?.exitstatus}")
+    end
+  end
+end
+
 # What a bare run does before it looks at a single source: bring the binaries
 # up first, agents then executables, because a source's `install:` may well be
 # one of them. A tool that reports itself present is skipped, so the usual run
@@ -1261,15 +1314,17 @@ def cmd_tools(kind, args, dry_run:, force:)
     return
   end
 
-  installing = args.first == "install"
-  wanted = installing ? args.drop(1) : args
+  verb = TOOL_VERBS.include?(args.first) ? args.first : nil
+  wanted = verb ? args.drop(1) : args
   unless wanted.empty?
     unknown = wanted - tools.map(&:name)
     raise ConfigError, "not listed under #{kind}: #{unknown.join(", ")}" unless unknown.empty?
     tools = tools.select { |t| wanted.include?(t.name) }
   end
 
-  reconcile_tools(kind, tools, installing:, dry_run:, force:)
+  return update_tools(kind, tools, dry_run:) if verb == "update"
+
+  reconcile_tools(kind, tools, installing: verb == "install", dry_run:, force:)
 end
 
 # ------------------------------------------------------------------- cli --
@@ -1284,11 +1339,16 @@ def usage
       scripts/install-sources list         what's configured, and what's installed
       scripts/install-sources agents       which coding agents are configured, and installed
       scripts/install-sources agents install [name...]        install the ones that are missing
-      scripts/install-sources executables [install [name...]] the same, for everything else on PATH
+      scripts/install-sources agents update [name...]         run each entry's update: line
+      scripts/install-sources executables [install|update [name...]] the same, for everything else on PATH
 
     A bare run installs `agents:` and then `executables:` before it looks at a
     single source, because a source's `install:` line may well be one of them.
     An entry already present is skipped; `-f` runs its installer anyway.
+
+    `update` is never part of that. It runs only when asked for by name, only
+    for entries that state an `update:` line, and only for the ones already
+    installed — updating something absent is what `install` is for.
 
     Whether an entry is present is `exists:` if it states one — any command
     line, run through a shell, exit 0 meaning yes — and otherwise whether
