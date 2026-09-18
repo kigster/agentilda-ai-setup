@@ -66,23 +66,11 @@ install — build, copy this checkout into ~/.agents, then link it into ~/.claud
 
 Three steps, and the checkout is none of them.
 
-1. scripts/install-sources assembles skills/ and plugins/ in
-   the checkout from configuration.yml. They are generated:
-   nothing under either is committed, so on a fresh clone
-   neither exists until this has run.
+1. scripts/install-sources assembles skills/ and plugins/ in the checkout from configuration.yml. They are generated: nothing under either is committed, so on a fresh clone neither exists until this has run.
 
-2. this copies the result into ~/.agents with every symlink
-   resolved, so ~/.agents holds real files and the checkout
-   can then be moved, renamed or deleted without anything
-   dangling.
+1. this copies the result into ~/.agents with every symlink resolved, so ~/.agents holds real files and the checkout can then be moved, renamed or deleted without anything dangling.
 
-3. bin/setup links ~/.agents into ~/.claude, unchanged. It
-   needs no table of its own: the copy below is what turns
-   src/commands into commands and workflow/agents into 
-   agents, so what setup walks is the flat tree it has
-   always walked.
-
-
+1. bin/setup links ~/.agents into ~/.claude, unchanged. It needs no table of its own: the copy below is what turns src/commands into commands and workflow/agents into agents, so what setup walks is the flat tree it has always walked.
 
 ### Notes
 

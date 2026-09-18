@@ -2,14 +2,21 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/kigster/agentilda/configuration.schema.json",
   "title": "agentilda configuration",
-  "description": "What a machine should have: which coding agents, and which skills and plugins to give them. Read by scripts/install-sources from configuration.yml.",
+  "description": "What a machine should have: which coding agents, which other executables, and which skills and plugins to give them. Read by scripts/install-sources from configuration.yml.",
   "type": "object",
   "properties": {
     "agents": {
       "type": "array",
       "description": "The coding agents themselves. Also the set a source's `agents:` is matched against.",
       "items": {
-        "$ref": "#/$defs/agent"
+        "$ref": "#/$defs/tool"
+      }
+    },
+    "executables": {
+      "type": "array",
+      "description": "Everything else this machine should have on PATH: the binaries a source's `install:` may call, and anything else worth having. Installed after `agents:` and before any source. Unlike `agents:`, these names are matched against nothing.",
+      "items": {
+        "$ref": "#/$defs/tool"
       }
     },
     "sources": {
@@ -38,26 +45,36 @@
         "tdd"
       ]
     },
-    "agent": {
+    "tool": {
       "type": "object",
       "properties": {
         "name": {
           "$ref": "#/$defs/name",
-          "description": "The executable's name, looked up on PATH to decide whether it is installed."
+          "description": "How the run names it, and, when `exists:` is absent, the executable looked up on PATH to decide whether it is installed."
         },
         "installer": {
           "type": "string",
           "minLength": 1,
-          "description": "The vendor's own install line. Runs through a shell, unlike a source's `install:`, and only when asked for by name.",
+          "description": "The vendor's own install line. Runs through a shell, unlike a source's `install:`. Skipped when the entry is already present, unless -f is passed.",
           "examples": [
             "curl -fsSL https://claude.ai/install.sh | bash"
+          ]
+        },
+        "exists": {
+          "type": "string",
+          "minLength": 1,
+          "description": "How to tell whether this is already installed. Any command line, run through a shell, exit 0 meaning yes. Absent means: is something named `name` on PATH?",
+          "examples": [
+            "command -V cursor >/dev/null",
+            "test -x \"$HOME/.local/bin/bt\""
           ]
         }
       },
       "required": [
         "name"
       ],
-      "unevaluatedProperties": false
+      "unevaluatedProperties": false,
+      "description": "One entry under `agents:` or `executables:`. Both blocks have the same shape; they differ only in what the names are used for."
     },
     "source": {
       "type": "object",

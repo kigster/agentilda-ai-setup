@@ -2,6 +2,7 @@
 
 require "open3"
 require "tmpdir"
+require "yaml"
 
 # `scripts/install-sources` is a standalone executable rather than a library:
 # it belongs to the installer at the root of this repo. It has to run on a
@@ -713,6 +714,122 @@ RSpec.describe "scripts/install-sources" do
         expect(status.exitstatus).to eq(78)
         expect(output).to include("has no name")
       end
+    end
+
+    # `exists:` is the vendor's own way of answering "is this here?", for the
+    # tools where being on PATH under your own name is not that question.
+    describe "exists:" do
+      it "takes a passing check as installed, whatever PATH says" do
+        write_agents([{"name" => "definitely-not-an-agent", "installer" => "exit 3", "exists" => "true"}])
+
+        output, status = install("agents", "install")
+        aggregate_failures do
+          expect(status).to be_success
+          expect(output).to include("says yes")
+          expect(output).not_to include("exited 3")
+        end
+      end
+
+      it "runs the installer when the check fails, though the name is on PATH" do
+        write_agents([{"name" => "sh", "installer" => "exit 3", "exists" => "false"}])
+
+        expect(install("agents", "install").first).to include("exited 3")
+      end
+
+      # A probe that printed would bury the run's own report, and several of
+      # them would bury it completely.
+      it "keeps the check's own output out of the run" do
+        probe = File.join(tmp, "probe")
+        File.write(probe, "#!/bin/sh\necho LOUD\n")
+        File.chmod(0o755, probe)
+        write_agents([{"name" => "definitely-not-an-agent", "exists" => probe}])
+
+        expect(install("agents").first).not_to include("LOUD")
+      end
+
+      it "refuses one that is not a command line" do
+        write_agents([{"name" => "sh", "exists" => 42}])
+
+        output, status = install("agents")
+        aggregate_failures do
+          expect(status.exitstatus).to eq(78)
+          expect(output).to include("exists: must be a command line")
+        end
+      end
+
+      it "installs anyway under -f, however the check answered" do
+        write_agents([{"name" => "definitely-not-an-agent", "installer" => "exit 3", "exists" => "true"}])
+
+        expect(install("-f", "agents", "install").first).to include("exited 3")
+      end
+    end
+  end
+
+  # The second block of binaries: same shape, same rules, installed straight
+  # after `agents:`. It differs only in that nothing is matched against it.
+  describe "executables" do
+    def write_config(doc) = File.write(File.join(root, "configuration.yml"), YAML.dump(doc))
+
+    it "reports and installs the same way agents do" do
+      write_config("executables" => [{"name" => "definitely-not-a-binary", "installer" => "exit 3"}])
+
+      output, _status = install("executables")
+      expect(output).to include("not installed").and include("exit 3")
+      expect(install("executables", "install").first).to include("exited 3")
+    end
+
+    it "says so when there is no block at all" do
+      write_config("agents" => [{"name" => "sh"}])
+
+      expect(install("executables").first).to include("no executables: block")
+    end
+
+    it "refuses a name that is not on the list" do
+      write_config("executables" => [{"name" => "sh"}])
+
+      output, status = install("executables", "install", "nosuch")
+      aggregate_failures do
+        expect(status.exitstatus).to eq(78)
+        expect(output).to include("not listed under executables: nosuch")
+      end
+    end
+
+    # An executable is not a reader of skills, so a source aimed at one has
+    # nobody to install for. Only `agents:` answers that question.
+    it "is not what a source's agents: is matched against" do
+      write_config(
+        "agents" => [{"name" => "claude"}],
+        "executables" => [{"name" => "bt"}],
+        "sources" => [{"name" => "up", "type" => "skills", "repo" => "git@example.com:x.git", "agents" => ["bt"]}]
+      )
+
+      expect(install("--dry-run").first).to include("none of which this machine has")
+    end
+  end
+
+  # Binaries before skills: a source's `install:` line may be one of them, and
+  # `bt setup skills` cannot run on a machine that has no `bt`.
+  describe "a bare run" do
+    it "installs agents, then executables, then the sources" do
+      File.write(File.join(root, "configuration.yml"), YAML.dump(
+        "agents" => [{"name" => "definitely-not-an-agent", "installer" => "echo AGENT-RAN"}],
+        "executables" => [{"name" => "definitely-not-a-binary", "installer" => "echo EXE-RAN"}],
+        "sources" => []
+      ))
+
+      output, status = install
+      aggregate_failures do
+        expect(status).to be_success
+        expect(output).to match(/AGENT-RAN.*EXE-RAN.*src\/skills/m)
+      end
+    end
+
+    it "leaves an entry that is already here alone" do
+      File.write(File.join(root, "configuration.yml"), YAML.dump(
+        "agents" => [{"name" => "sh", "installer" => "echo SHOULD-NOT-RUN"}], "sources" => []
+      ))
+
+      expect(install.first).not_to include("SHOULD-NOT-RUN")
     end
   end
   describe "agent targeting" do

@@ -125,9 +125,16 @@ COMMAND_ROOTS = %w[.claude .agents].freeze
 # script has to run before there is a bundle to load a validator from — so
 # the two are kept honest by a spec that feeds the same bad configurations to
 # both and requires them to agree.
-TOP_LEVEL_KEYS = %w[agents sources].freeze
+TOP_LEVEL_KEYS = %w[agents executables sources].freeze
 TYPES = %w[skills plugin plugins command].freeze
-AGENT_KEYS = %w[name installer].freeze
+TOOL_KEYS = %w[name installer exists].freeze
+
+# The two blocks of installable binaries, in the order a run installs them.
+# Agents first because `agents:` on a source is matched against that block and
+# nothing else; executables second because one of them is often what a
+# source's `install:` line calls, and `bt setup skills` cannot run before `bt`
+# exists. Sources come after both.
+TOOL_KINDS = %w[agents executables].freeze
 SOURCE_KEYS = %w[name type repo path install adopt
   include_skills exclude_skills include_plugins exclude_plugins
   agents exclude_agents].freeze
@@ -444,7 +451,9 @@ def config
     # the moment it is written, and `list` reporting the sources cleanly while
     # `agents` would have refused the same file is a way to believe a typo is
     # fine.
-    Array(c["agents"]).each { |a| reject_unknown_keys(a, AGENT_KEYS, "#{a["name"]}: keys nothing reads") if a.is_a?(Hash) }
+    TOOL_KINDS.each do |kind|
+      Array(c[kind]).each { |a| reject_unknown_keys(a, TOOL_KEYS, "#{a["name"]}: keys nothing reads") if a.is_a?(Hash) }
+    end
     Array(c["sources"]).each { |x| reject_unknown_keys(x, SOURCE_KEYS, "#{x["name"]}: keys nothing reads") if x.is_a?(Hash) }
   end
 end
@@ -1034,9 +1043,14 @@ def cmd_install(force:, dry_run:)
   # Read the config before anything is written. A configuration.yml this script
   # refuses should not first cost you a `.sources` wipe or an empty `skills/`.
   sources = load_sources
+  TOOL_KINDS.each { |kind| load_tools(kind) }
 
   say(paint("Installing sources into #{ROOT}", 1))
   say(paint("dry run — nothing will be written", 33)) if dry_run
+
+  # Binaries before skills. A source's `install:` may be one of them, and
+  # `bt setup skills` cannot run on a machine that has no `bt`.
+  install_tools(dry_run:, force:)
   say("")
 
   if force
@@ -1091,13 +1105,24 @@ def cmd_install(force:, dry_run:)
   say(paint("Done.", 1) + " `scripts/install-sources list` to see what's installed from where.")
 end
 
-# ---------------------------------------------------------------- agents --
+# ----------------------------------------------------------------- tools --
 
-# A coding agent this machine should have, and the vendor's own line for
-# getting it. `installer` is optional: an agent can be listed purely to say
-# "this machine has one of these", which is all a source's `agents:` needs in
-# order to decide whether its skills have a reader.
-Agent = Struct.new(:name, :installer) do
+# A binary this machine should have, and the vendor's own line for getting it.
+# Two blocks hold these, and they differ only in what the names are used for:
+# `agents:` is also the set a source's `agents:` is matched against, while
+# `executables:` is everything else worth having on PATH and is matched
+# against nothing.
+#
+# `installer` is optional: an entry can be listed purely to say "this machine
+# has one of these", which is all a source's `agents:` needs in order to
+# decide whether its skills have a reader.
+#
+# `exists` is optional too, and is the question "is it already here?" asked
+# the vendor's way. Without it the answer is whether something named `name` is
+# on PATH, which is right for a CLI installed as its own name and wrong for
+# everything else: a tool whose binary is named differently, one that lives
+# outside PATH, or one where being on PATH is not the same as being set up.
+Tool = Struct.new(:kind, :name, :installer, :exists) do
   # Looked up on PATH rather than with `which`, so the answer does not depend
   # on a shell being present or on how it was configured.
   #
@@ -1110,21 +1135,38 @@ Agent = Struct.new(:name, :installer) do
     nil
   end
 
-  def installed? = !on_path.nil?
+  # `exists:` goes through a shell, because `command -V foo >/dev/null` is a
+  # shell construct and writing it any other way would make the key useless
+  # for what it is for. Its output is discarded either way: the exit status is
+  # the whole answer, and a probe that printed would bury the run's own report.
+  #
+  # @return [Boolean]
+  def installed?
+    return !on_path.nil? unless exists
+
+    system(exists, out: File::NULL, err: File::NULL) || false
+  end
+
+  # @return [String] how the run says where it found it
+  def evidence = exists ? "`#{exists}` says yes" : on_path.to_s
 end
 
-# @return [Array<Agent>]
-def load_agents
-  (config["agents"] || []).map do |h|
-    raise ConfigError, "an entry under agents: has no name" if h["name"].to_s.strip.empty?
-    reject_unknown_keys(h, AGENT_KEYS, "#{h["name"]}: keys nothing reads")
+# @param kind [String] "agents" or "executables"
+# @return [Array<Tool>]
+def load_tools(kind)
+  (config[kind] || []).map do |h|
+    raise ConfigError, "an entry under #{kind}: has no name" if h["name"].to_s.strip.empty?
+    reject_unknown_keys(h, TOOL_KEYS, "#{h["name"]}: keys nothing reads")
 
     # Absent is fine; present and not a usable command line is not.
-    installer = h["installer"]
-    usable = installer.nil? || (installer.is_a?(String) && !installer.strip.empty?)
-    raise ConfigError, "#{h["name"]}: installer: must be a command line, got #{installer.inspect}" unless usable
+    %w[installer exists].each do |key|
+      value = h[key]
+      next if value.nil? || (value.is_a?(String) && !value.strip.empty?)
 
-    Agent.new(h["name"].to_s, installer)
+      raise ConfigError, "#{h["name"]}: #{key}: must be a command line, got #{value.inspect}"
+    end
+
+    Tool.new(kind, h["name"].to_s, h["installer"], h["exists"])
   end
 end
 
@@ -1132,65 +1174,102 @@ end
 # this machine, or listed in the configuration as one this machine should
 # have. A source aimed at anything outside this set has nobody to install for.
 #
+# `executables:` is deliberately not part of this. A source is for a coding
+# agent or it is portable; `bt` being on this machine says nothing about who
+# would read a skill.
+#
 # @return [Array<String>]
 # Memoised: every source consults it, and it is a property of the run.
 #
 # Empty means the configuration has no `agents:` block at all, and targeting
 # is then inert rather than exclusive — a file written before this existed
 # should not suddenly install nothing.
-def known_agents = @known_agents ||= load_agents.map(&:name)
+def known_agents = @known_agents ||= load_tools("agents").map(&:name)
 
-def cmd_agents(args, dry_run:)
-  agents = load_agents
-  if agents.empty?
-    say("")
-    note("no agents: block in #{CONFIG_FILE.sub("#{ROOT}/", "")}")
-    return
-  end
-
-  installing = args.first == "install"
-  wanted = args.drop(1)
-  unless wanted.empty?
-    unknown = wanted - agents.map(&:name)
-    raise ConfigError, "not listed under agents: #{unknown.join(", ")}" unless unknown.empty?
-  end
-
+# One block, reported and optionally installed.
+#
+# @param kind [String] "agents" or "executables"
+# @param tools [Array<Tool>] already filtered to what was asked for
+# @param installing [Boolean] whether a missing one should actually be installed
+# @param dry_run [Boolean]
+# @param force [Boolean] run the installer even for one already here
+# @return [void]
+def reconcile_tools(kind, tools, installing:, dry_run:, force:)
   say("")
-  say(paint("agents", 1))
-  agents.each do |agent|
-    next unless wanted.empty? || wanted.include?(agent.name)
+  say(paint(kind, 1))
 
-    if agent.installed?
-      ok("#{agent.name} #{paint(agent.on_path, 2)}")
+  tools.each do |tool|
+    here = tool.installed?
+
+    if here && !force
+      ok("#{tool.name} #{paint(tool.evidence, 2)}")
       next
     end
 
-    unless agent.installer
-      note("#{agent.name} not installed, and no installer: to run")
+    state = here ? "already installed" : "not installed"
+
+    unless tool.installer
+      note("#{tool.name} #{state}, and no installer: to run")
       next
     end
 
     unless installing
-      note("#{agent.name} not installed — `agents install #{agent.name}` runs: #{agent.installer}")
+      note("#{tool.name} #{state} — `#{kind} install #{tool.name}` runs: #{tool.installer}")
       next
     end
 
     if dry_run
-      note("#{agent.name} would run: #{agent.installer}")
+      note("#{tool.name} would run: #{tool.installer}")
       next
     end
 
     # Through a shell, unlike a source's `install:`. A vendor's install line
-    # is a pipeline and is meant to be one; what makes that acceptable here
-    # and not there is that this runs only when somebody asked for this agent
-    # by name, never as part of a routine sync.
-    say("  #{paint("·", 2)} #{agent.name}: #{agent.installer}")
-    if system(agent.installer)
-      ok("#{agent.name} installed")
+    # is a pipeline and is meant to be one, and it is the vendor's own words
+    # rather than something this script composed.
+    again = (force && here) ? paint(" (--force, reinstalling)", 33) : ""
+    say("  #{paint("·", 2)} #{tool.name}#{again}: #{tool.installer}")
+    if system(tool.installer)
+      ok("#{tool.name} installed")
     else
-      bad("#{agent.name}: installer exited #{$?.exitstatus}")
+      bad("#{tool.name}: installer exited #{$?.exitstatus}")
     end
   end
+end
+
+# What a bare run does before it looks at a single source: bring the binaries
+# up first, agents then executables, because a source's `install:` may well be
+# one of them. A tool that reports itself present is skipped, so the usual run
+# does nothing here and says so in two lines.
+#
+# @return [void]
+def install_tools(dry_run:, force:)
+  TOOL_KINDS.each do |kind|
+    tools = load_tools(kind)
+    next if tools.empty?
+
+    reconcile_tools(kind, tools, installing: true, dry_run:, force:)
+  end
+end
+
+# The `agents` and `executables` verbs: the same reconciliation, restricted to
+# the names asked for, and reporting only unless `install` is written out.
+def cmd_tools(kind, args, dry_run:, force:)
+  tools = load_tools(kind)
+  if tools.empty?
+    say("")
+    note("no #{kind}: block in #{CONFIG_FILE.sub("#{ROOT}/", "")}")
+    return
+  end
+
+  installing = args.first == "install"
+  wanted = installing ? args.drop(1) : args
+  unless wanted.empty?
+    unknown = wanted - tools.map(&:name)
+    raise ConfigError, "not listed under #{kind}: #{unknown.join(", ")}" unless unknown.empty?
+    tools = tools.select { |t| wanted.include?(t.name) }
+  end
+
+  reconcile_tools(kind, tools, installing:, dry_run:, force:)
 end
 
 # ------------------------------------------------------------------- cli --
@@ -1204,7 +1283,16 @@ def usage
       scripts/install-sources -f           wipe .sources and re-clone everything
       scripts/install-sources list         what's configured, and what's installed
       scripts/install-sources agents       which coding agents are configured, and installed
-      scripts/install-sources agents install [name...]   install the ones that are missing
+      scripts/install-sources agents install [name...]        install the ones that are missing
+      scripts/install-sources executables [install [name...]] the same, for everything else on PATH
+
+    A bare run installs `agents:` and then `executables:` before it looks at a
+    single source, because a source's `install:` line may well be one of them.
+    An entry already present is skipped; `-f` runs its installer anyway.
+
+    Whether an entry is present is `exists:` if it states one — any command
+    line, run through a shell, exit 0 meaning yes — and otherwise whether
+    something named `name` is on PATH.
 
     A source in configuration.yml may narrow itself with `include_skills: /re/`
     and `exclude_skills: /re/`, matched against the name each skill would
@@ -1237,7 +1325,7 @@ begin
   case verb
   when "install" then cmd_install(force:, dry_run:) if ensure_configuration
   when "list" then cmd_list if ensure_configuration
-  when "agents" then cmd_agents(args, dry_run:) if ensure_configuration
+  when "agents", "executables" then cmd_tools(verb, args, dry_run:, force:) if ensure_configuration
   else
     out("install-sources: unknown command #{verb.inspect}\n")
     usage
