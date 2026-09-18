@@ -70,7 +70,7 @@ RSpec.describe Calculator do
     end
 
     describe 'when the denominator is zero' do
-      expect { it }.to raise_error(ZeroDivisionError) }    
+      it { expect { calculator.divide(x, y) }.to raise_error(ZeroDivisionError) }
     end
   end
 end
@@ -84,11 +84,11 @@ For example, without `rspec-its`:
 
 ```ruby
 RSpec.describe Bicycle do
-  subject(:bike) { Bicycle.new(tires: :mountain, gears: 5, material: :carbon_fiber}
+  subject(:bike) { Bicycle.new(tires: :mountain, gears: 5, material: :carbon_fiber) }
 
   describe 'when bike has mountain tires and five gears it weights 12kg' do
     it 'is expected to weight 12kg' do
-      expect(bike.weight_kg).is eq(12
+      expect(bike.weight_kg).to eq(12)
       expect(bike.gears).to eq(5)
     end
   end
@@ -97,9 +97,9 @@ RSpec.describe Bicycle do
   require 'rspec-its' # usually is loaded in spec_helper.rb
 
   describe 'when bike has mountain tires and five gears it weights 12kg' do
-    its(:weight_kg).is_expected.to eq(12)
-    its(:gears).is_expected.to eq(5)
-    its(:"tires.thickness").is_expected.to be > 0.012 # meters.
+    its(:weight_kg) { is_expected.to eq(12) }
+    its(:gears) { is_expected.to eq(5) }
+    its(:"tires.thickness") { is_expected.to be > 0.012 } # meters.
   end
 end 
 ```
@@ -118,27 +118,27 @@ require 'rspec-its' # usually is loaded in spec_helper.rb
 
 RSpec.describe Bicycle do
   # Subject always goes first
-  subject(:bike) { Bicycle.new(tires: :mountain, gears: 5, material:}
+  subject(:bike) { Bicycle.new(tires: tires, gears: gears, material: material) }
 
   # RSpec will resolve these variables in a lazy fashion, unless you use let!(:property)
   # Because they are defined in the outer scope, they will be the defaults unless innner
   # scopre overrides it.
   let(:material) { :carbon_fiber }
   let(:gears) { 5 } 
-  let(:tires) { :maintain }
+  let(:tires) { :mountain }
 
   # Now this is very convenient because we can modify just one of the properties, and re-test in the block
   # the expected result. This removes any duplication and prioritizes variable definitions closest to the
   # test block.
   describe 'when carbon fiber bike with mountain tires has five gears' do
     # First use-case: we are keeping all of the defintitions from the outer scope.
-    its(:weight_kg).is_expected.to eq(12)
-    its(:gears).is_expected.to eq(5)
-    its(:tires).is_expected.to eq(:mountain)
+    its(:weight_kg) { is_expected.to eq(12) }
+    its(:gears) { is_expected.to eq(5) }
+    its(:tires) { is_expected.to eq(:mountain) }
 
     describe 'bike wheels' do
       # In the nested definition we swap what is the subject. Now subject is the "wheels"
-      subject(bike.wheels)
+      subject { bike.wheels }
       its(:thickness) { is_expected.to be > 0.012 } # meters
     end
   end
@@ -155,12 +155,12 @@ RSpec.describe Bicycle do
     # the variables set above. So inside this block the subject has values 
     # defined here.
 
-    its(:weight_kg).is_expected.to eq(18)
-    its(:gears).is_expected.to eq(6)
-    its(:tires).is_expected.to eq(:street)
+    its(:weight_kg) { is_expected.to eq(18) }
+    its(:gears) { is_expected.to eq(6) }
+    its(:tires) { is_expected.to eq(:street) }
 
     describe 'bike wheels' do
-      subject(bike.wheels)
+      subject { bike.wheels }
 
       its(:thickness) { is_expected.to be < 0.08 } # meters.
     end
