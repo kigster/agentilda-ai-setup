@@ -280,6 +280,7 @@ sources:
     type: skills
     repo: https://github.com/hoblin/claude-ruby-marketplace.git
     path: plugins
+    include_skills: /\A(rspec|activerecord)\z/
 
   - name: justfile
     type: skills
