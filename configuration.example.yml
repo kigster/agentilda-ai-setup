@@ -106,12 +106,19 @@
 # thing, which is take its skills and leave the bundle.
 # The coding agents themselves. Each `installer:` is a vendor's own line,
 # verbatim from their install page, so unlike a source's `install:` it does
-# go through a shell — that is what a `curl … | sh` is. The difference is
-# deliberate: a source's command runs on every sync, for anyone who clones
-# this repo, while an agent installer runs only when somebody asks for it by
-# name, and never as part of a routine sync.
+# go through a shell — that is what a `curl … | sh` is.
 #
-# An agent already on PATH is left alone.
+# `exists:` is how an entry says whether it is already here, in the vendor's
+# own terms. Any command line; exit 0 means installed, and the installer is
+# then skipped. Leave it out and the question is the default one: is something
+# named `name` on PATH? That is right for a CLI installed as its own name and
+# wrong for everything else — a binary named differently from the thing, one
+# that lives outside PATH, or one where being on PATH is not the same as being
+# set up. `-f` runs the installer anyway, however the check answered.
+#
+# A bare `scripts/install-sources` installs this block, then `executables:`,
+# then the sources. Binaries first, because a source's `install:` line may
+# well be one of them: `bt setup skills` cannot run on a machine with no `bt`.
 #
 #   scripts/install-sources agents            # what is configured, and what is installed
 #   scripts/install-sources agents install    # install the ones that are missing
@@ -122,8 +129,10 @@
 agents:
   - name: claude
     installer: curl -fsSL https://claude.ai/install.sh | bash
+    exists: command -V claude >/dev/null
   - name: pi
     installer: curl -fsSL https://pi.dev/install.sh | sh
+    exists: command -V pi >/dev/null
   - name: grok
     installer: curl -fsSL https://x.ai/cli/install.sh | bash
   - name: codex
@@ -134,6 +143,31 @@ agents:
     installer: curl -fsSL https://opencode.ai/install | bash
   - name: cursor
     installer: curl https://cursor.com/install -fsS | bash
+    exists: command -V cursor >/dev/null
+
+# Everything else this machine should have on PATH. Same shape as `agents:`,
+# same `exists:`/`installer:` rules, installed straight after it and before
+# any source.
+#
+# The difference is what the names are for. An agent's name is also what a
+# source's `agents:` is matched against, so listing one there says "skills
+# aimed at this have a reader here". Nothing is matched against this block:
+# `bt` being installed says nothing about who would read a skill. So anything
+# that is not a coding agent belongs here, and the braintrust source below is
+# the reason the block is installed before the sources rather than after.
+#
+# `update:` is the vendor's own line for bringing an entry already here up to
+# date. It runs only when asked for by name, never as part of a sync, and
+# never for an entry that is not installed yet. `agents:` takes it too.
+#
+#   scripts/install-sources executables
+#   scripts/install-sources executables install [name...]
+#   scripts/install-sources executables update [name...]
+executables:
+  - name: bt
+    installer: curl -fsSL https://bt.dev/cli/install.sh | bash
+    exists: command -V bt >/dev/null
+    update: bt update && bt --version
 
 sources:
   - name: mattpocock

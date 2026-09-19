@@ -109,6 +109,15 @@ RSpec.describe "configuration.schema.json" do
       end
     end
 
+    it "takes update: on a tool entry, which both of them read" do
+      doc = {"executables" => [{"name" => "bt", "installer" => "curl x | sh", "update" => "bt update"}]}
+
+      aggregate_failures do
+        expect(schema_accepts?(doc)).to be(true)
+        expect(installer_accepts?(doc)).to be(true)
+      end
+    end
+
     it "refuses a misspelled key on an agent" do
       doc = {"agents" => [{"name" => "claude", "instaler" => "curl x | sh"}]}
 
