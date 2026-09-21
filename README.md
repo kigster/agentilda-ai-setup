@@ -1,11 +1,23 @@
-# Agent~ (agentilda)
+# agentilda-ai-setup (v2.0.0)
 
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/kigster/agentilda/tree/main.svg?style=svg&circle-token=CCIPRJ_DrNBun6pLLc988EVbduHJm_9ec6ada64b6bd9406d19ca4e1aa56a249c20087d)](https://dl.circleci.com/status-badge/redirect/gh/kigster/agentilda/tree/main)
 
+#### What is this?
+
+This repo is a collection of installers (BASH and Ruby) which ensure a consistent vendor-neutral agentic setup on your computer, coupled with an agentic software team that diligently creates your feature specs in collaboration with you, and then works on them until they become reviewed, CI-passing PRs that you get to merge.
+
+Here is a screenshot of agents working on two plans at the same time, but on two different phases of the process:
+
+![workflow](docs/img/agentilda-two-plan-work.png)
+
 > [!NOTE]
-> A vendor-neutral home for the AI instructions, context, skills and tooling that several different AI coding agents share, plus [**agentilda**](https://github.com/kigster/agentilda) — a small Ruby CLI gem that provides agent harness for splitting and delivering features, define specs and plans and pull requests, and can drive a team of dedicated agents from specification to completion of a given task, with review harness and proper planning.
+> 1. [`agentilda`](<>) is the Ruby Gem, which is a CLI tool that creates and manages the `.plans` folder, and comes with eight or so specialized agents that take a spec.md file and work through it until it's a set of PRs open, reviewed, and passing on your CI. It does not automatically merge anything.
+> 1. [`agentilda-ai-setup`](https://kigster/agentilda-ai-setup) is the GitHub repo that's a mixture of BASH and Ruby installers. It's comes with the [`configuration.yml`](https://github.com/kigster/agentilda-ai-setup/blob/main/configuration.example.yml) file, which lists the installation commands for the coding agents you'd like to install locally, any other executables you might want (for instance, it installs `bt` — braintrust's CLI utility), and then you can list any number of Github Repos and use them to install skills, plugins, commands from them, specifying exactly which you want to install and which you want to exclude. Moreover you can specify a sub-directory of a github repo to install from.
+> 1. The final piece of the puzzle is the locking gem **[`agent-lock`](https://github.com/kigster/agent-lock)**. This flexible gem comes with the executable `alock` and a skill teaching agents how to use it. Using `alock` agents can work in parallel in the same worktree but on different files, sub-folders, and so on. The gem uses locally running Redis as the default backend, and if that's not available, it uses the file system. The choice of the backend happens once and is saved in the git-ignored file in your local working repo.
 >
-> The final piece of the puzzle Is a folder locking tool **[agent-lock](https://github.com/kigster/agent-lock)**. It comes with the skill teaching agents how to use it and can use file system or a local Redis for maintaining the locks.
+> Together, the three repos, after installation provide you with the consistent way to replicate your `~/.agents` and `~/.claude` folders on multiple computers, and to enable a consistent agentic software team workflow across any number of many projects.
+
+## 
 
 ______________________________________________________________________
 
@@ -45,23 +57,23 @@ bin/install
 
 For your benefit, here is the output of `bin/install --help`:
 
-```text
-install — build, copy this checkout into ~/.agents, then link it into ~/.claude.
+```bash
+# install — build, copy this checkout into ~/.agents, then link it into ~/.claude.
 
-  # build, copy what is missing, never overwrite
-  bin/install                
+# build, copy what is missing, never overwrite
+bin/install                
 
-  # replace what is already in ~/.agents
-  bin/install --force        
+# replace what is already in ~/.agents
+bin/install --force        
   
-  # say what it would do, touch nothing
-  bin/install --dry-run   
+# say what it would do, touch nothing
+bin/install --dry-run   
   
-  # skip the build; copy what is already there
-  bin/install --no-sources
+# skip the build; copy what is already there
+bin/install --no-sources
 
-  # stop after the copy, skip the linking step
-  bin/install --no-setup     
+# stop after the copy, skip the linking step
+bin/install --no-setup     
 ```
 
 Three steps, and the checkout is none of them.
@@ -203,6 +215,9 @@ Tightening a filter takes skills back as well as adding them: the next run unlin
 ______________________________________________________________________
 
 ## Agentic Workflow
+
+> [!NOTE]
+> For full information on the workflow states and transitions, please run `tilda docs` and read the file it generates, and prints the path to it on your screen.
 
 This repository originallhy contained a ruby gem that was the orchestrator of the Agentic Team Workflow. This gem has since been moved out of this repository into it's own, and (hopefully) by the time you read this, it will also be on RubyGems, so you can install it with `gem install agentilda`.
 
