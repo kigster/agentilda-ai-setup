@@ -17,8 +17,6 @@ Here is a screenshot of agents working on two plans at the same time, but on two
 >
 > Together, the three repos, after installation provide you with the consistent way to replicate your `~/.agents` and `~/.claude` folders on multiple computers, and to enable a consistent agentic software team workflow across any number of many projects.
 
-## 
-
 ______________________________________________________________________
 
 ## Customizing Configuration
