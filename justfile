@@ -1,13 +1,14 @@
 # Tell 'just' to run bash so recipes can use bashisms and `set -euo pipefail`.
 set shell := ["bash", "-c"]
 
+repo    := 'git@github.com:kigster/agentilda-ai-setup'
+version := `cat VERSION | tr -d '\n'`
+
 # The `-` matters: `rbenv init bash` prints human instructions ("skipping
 # ~/.bash_login: already configured"), which eval then tries to run, and the
 # recipe dies with "skipping: command not found". `rbenv init - bash` prints
 # the shell code that is meant to be eval'd.
 rbenv := 'eval "$(rbenv init - bash 2>/dev/null || true)"; '
-
-version := `cat VERSION | tr -d '\n'`
 
 # The agentilda gem used to live in workflow/ and now comes from rubygems, so
 # what is left here, scripts/ and spec/, is linted and tested from the root
@@ -156,3 +157,11 @@ docs:
     mkdir -p context/feature-building
     {{ tilda }} docs --output context/feature-building/agentilda.md
     mdformat --wrap no context/feature-building/agentilda.md
+
+# Tag v{{ version }}, publish the GH release, & refresh the Homebrew tap.
+release:
+    git fetch --tags
+    git tag -f "v{{ version }}"
+    git push -f --tags
+    gh release delete -y "v{{ version }}" --repo {{ repo }} 2>/dev/null || true
+    gh release create "v{{ version }}" --generate-notes --repo {{ repo }}
