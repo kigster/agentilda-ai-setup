@@ -151,7 +151,21 @@ executables:
     exists: command -V bt >/dev/null
     update: bt update && bt --version
 
+  - name: typesafe-claude
+    installer: claude plugin marketplace add typesafe-ai/skills && claude plugin install typesafe@typesafe-ai
+    update: claude plugin marketplace update typesafe-ai && claude plugin update typesafe@typesafe-ai 
+
+  - name: typesafe-agents
+    installer: npx skills add typesafe-ai/skills --skill typesafe-ai
+
+
 sources:
+  - name: jev
+    type: plugin
+    repo: https://github.com/typesafe-ai/skills.git
+    adopt: [plugins]
+    agents: [claude]
+
   - name: mattpocock
     type: skills
     repo: git@github.com:mattpocock/skills.git
@@ -309,6 +323,7 @@ sources:
     path: plugins/security-guidance
     adopt: [plugins]
     agents: [claude]
+
 
   # Deliberately absent: ruby-lsp. It is `ruby-lsp@claude-ruby-marketplace`,
   # not `@ruby-skills`, and it is three files — a plugin manifest, a README and
