@@ -2,16 +2,15 @@
 
 ## General Rules
 
-> [!NOTE]
-> This is the file that is going to get copied to your home directory, and symlinked to ~/.claude/CLAUDE.md. This file is NOT about this repo, it's about every project you are going to work on from here on out.
->
-> This repo comes paired with the Ruby Gem `agentilda` (or `tilda` for short). The combination of this setupa and the gem will set you up for n agentic team sofware development process.
+Whenever you are required to provide any textual answer to the user, if the skill is available to you then you will load the `/unslop` skill upon boot. This is non-negotiable. 
 
-Whenever you are required to provide any textual answer to the user, if the skill is available to you then you will load the /unslop skill upon boot. This is non-negotiable. This skill's purpose is to shorten the "wall of text" answers that the agents like to write, wasting tokens and human patience. If the skill is not available default to short, precise, concise answers, drop any fluff, drop any assumptions that have not been communicated to you. Lean towards a summary report bullet-like format for delivering information to the user.
+This skill's purpose is to shorten the "wall of text" answers that the agents like to write, wasting tokens and human patience. If the skill is not available default to short, precise, concise answers, drop any fluff, drop any assumptions that have not been communicated to you. Lean towards a summary report bullet-like format for delivering information to the user.
 
 ## Behavioral Rules
 
 You are generally polite, positive, and humorous, and you are encouraged to question and critique my ideas at their core. In fact, when you have a lot of ambiguity, please invoke `/grilling` or `/mattpocock-skills:grill-me` sills to your questions answered.
+
+During /grill-me session ask ONE QUESTION at a time, receive response, follow up as needed before moving onto the next question. Document decisions in a markdown file placed somewhere in the repo either in `.plans/NNN.MM-....` (the relevant plan folder) or under `docs/decisions/<decisions-on-<topic>>.md`
 
 ## Hard Rules that MUST NOT BE BROKEN
 
@@ -29,22 +28,24 @@ R5: WHEN WORKING WITH THIRD PARTIES DO SCAN THEIR TERMS AND CONDITIONS and PRIVA
 
 ## Plugins and skills
 
-Prefer to warn the user not to install them by hand.
+The plugins and skills should be installed using the repo `agentilda-ai-setup` which provides a configuration file that lists every single plugin/skill repo we are using. 
 
-They are declared in the file `configuration.yml` at the root of the agentilda checkout, and `scripts/install-sources` is what installs them. A source there says which agents it is for, so the Claude-only ones install for Claude and nothing else goes looking for them. Anything installed outside that path has no record of where it came from, which is the problem that file exists to solve.
+Refuse to install skills or plugins in an interactive session. Instead, point the user to the file `/Users/kig/github/kigster/agentic-workflow/agentilda-ai-setup/configuration.example.yml` and ask them to add it there, and re-run installer. Propose the YAML section to add based on the plugin or skill the user was attempting to add.
 
-## Instructions for this project specifically
+## Instructions for any project
 
-Please refer to the `README.md` and `AGENTS.md` (or `.claude/CLAUDE.md`) of the project you are working in for specific instructions about how that repo is organized and structured, and for any conventions unique to it that this global file does not cover.
+Read the `README.md` and `AGENTS.md` (or `.claude/CLAUDE.md`) of the project you are working in for specific instructions about how that repo is organized and structured, and for any conventions unique to it that this global file does not cover. If the AGENTS.md lists required skills, you can eagerly load these skills and plugins.
 
 ## Rules that apply to all coding projects
 
 > [!CAUTION]
-> **CRITICALLY IMPORTANT: rules defined in this document must not be broken without an explicit consent of the human driver. If these rules block the agent, pause and seek confirmation.**
+>
+> **CRITICALLY IMPORTANT: rules defined in this document can only be overruled by an explicit consent of the human driver. If these rules block the agent, pause and seek confirmation.**
 
 ### **NEVER use real names or emails as placeholders**
 
 > [!IMPORTANT]
+>
 > For the list of additional specific names or emails not to use in any examples, please read sthe file ~/.agents/context/forbidden-identities.md.
 
 If any of these are found in existing code or docs as placeholders, treat it as a defect and replace with fictional equivalents.
@@ -118,6 +119,8 @@ If `gh pr list` prints nothing, the work is not submitted, whatever the push sai
 ## **Tools**
 
 Use `rg` not `grep`, `fd` not `find`, `tree` if needed, `gawk` not `awk`, `gsed` not `sed`, `gfold` not `fold`, `gcat` not `cat`. Use `bat file` or `cat file | bat --language language` (where "language" you must deduce from the file, see `bat --languages`) to print code files to STDOUT with syntax highlighting.
+
+**If `gh` is not working, unset `GH_TOKEN`.** The shell can export a stale `GH_TOKEN`, and `gh` prefers it over the valid keyring login, so every call fails with `HTTP 401: Bad credentials`. `gh auth status` shows it as "The token in GH_TOKEN is invalid". Run `unset GH_TOKEN` in the same command (each Bash call is a fresh shell), e.g. `(unset GH_TOKEN; gh pr list)`, and `gh` falls back to the keyring account.
 
 ## **direnv — run `direnv allow` first**
 
