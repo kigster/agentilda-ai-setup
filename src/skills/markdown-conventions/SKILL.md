@@ -41,21 +41,23 @@ Install `mdformat` in the following way, or ask the user to do so:
 
 1. Also, run `mdformat --wrap no` on any markdown you generate as part of regular work such as specs, README.md, CLAUDE.md etc.
 
-1. Use admonitions where appropriate:
+1. Use admonitions where appropriate, but add a blank line between it's colored label and text:
 
    > [!CAUTION]
+   >
+   >
    > This is a caution because a dangerous operation may be described.
 
 1. Never ever use em-dashes anywhere. Use regular dashes only. Similarly, only use double quotes (or single quotes if double quotes are already used) in any writing or commands. Do not use unicode quotations ever in markdown or any other document or comment.
 
-1. Use Mermaid diagrams as much as possible to convey the design, architecture, state flow, sequence diagram, class diagram, ERD digram and so on. "One picture is worth a thousand words they say".
+1. Use Mermaid diagrams whenever it has a chance to clarify the ideas, to convey the design, architecture, state flow, sequence diagram, class diagram, ERD digram and so on. "One picture is worth a thousand words they say".
 
 1. Never ever append agent's name, "Generated with ..." or session ID URL to any PR description, commit or any other document unless explicitly asked to do so. Example: this should never appear in any PR.
 
    ```
    ______________________________________________________________________
-
+   
    🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-   https://claude.ai/code/session_01BhwNDANn1oLH3qQ3M2i2oV
+   
+   https://claude.ai/code/session_*
    ```
