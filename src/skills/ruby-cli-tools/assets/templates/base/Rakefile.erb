@@ -1,0 +1,49 @@
+# frozen_string_literal: true
+
+require "bundler/gem_tasks"
+<% if test_framework == "rspec" -%>
+require "rspec/core/rake_task"
+<% else -%>
+require "rake/testtask"
+<% end -%>
+require "yard"
+
+def shell(*args)
+  puts ["running:", *args].join(" ")
+  system(args.join(" "))
+end
+
+CLEAN.include("pkg", "tmp", "coverage", "doc")
+
+desc "Build the gem and install it locally"
+task gem: [:build] do
+  shell("gem install pkg/*")
+end
+
+desc "Make every file world-readable before packaging"
+task permissions: [:clean] do
+  shell("/usr/bin/find . -path ./.git -prune -o -type d -exec chmod o+rx,g+rx {} + -o -type f -exec chmod o+r,g+r {} +")
+end
+
+Rake::Task[:build].enhance([:permissions])
+
+YARD::Rake::YardocTask.new(:doc) do |t|
+  t.files = %w[lib/**/*.rb exe/* - README.md LICENSE.txt]
+  t.files << "CHANGELOG.md" if File.exist?("CHANGELOG.md")
+  t.options.unshift("--title", Gem::Specification.load(Dir["*.gemspec"].first).summary)
+  t.after = -> { exec("open doc/index.html") } if RUBY_PLATFORM.include?("darwin")
+end
+<% if test_framework == "rspec" -%>
+
+RSpec::Core::RakeTask.new(:spec)
+
+task default: :spec
+<% else -%>
+
+Rake::TestTask.new(:test) do |t|
+  t.libs << "test" << "lib"
+  t.test_files = FileList["test/**/test_*.rb", "test/**/*_test.rb"]
+end
+
+task default: :test
+<% end -%>

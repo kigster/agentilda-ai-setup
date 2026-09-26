@@ -1,0 +1,9 @@
+# What every command inherits: the ui helpers, and the flags they all share.
+class Command < Dry::CLI::Command
+  include Dry::CLI::UI
+
+  def self.inherited(subclass)
+    super
+    subclass.option :verbose, type: :boolean, default: false, aliases: ["-v"], desc: "Print the full backtrace on failure"
+  end
+end

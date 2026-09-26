@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+#
+# Generates a gem with `bundle gem`, then applies the ruby-cli-tools
+# conventions to it through scaffold.rb.
+
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# What each option accepts. The case arms and the prompts share these.
+ci_values="github|gitlab|circleci"
+test_values="rspec|minitest|test-unit"
+linter_values="rubocop|standard"
+ext_values="none|c|go|rust"
+yes_no="yes|no"
+
+# Defaults, overridable by the options parse_args understands.
+ci="github"
+test_framework="rspec"
+linter="rubocop"
+ext="none"
+mit="yes"
+ui="no"
+# github.user is the conventional key for this in ~/.gitconfig.
+github_username="$(git config --global --get github.user || true)"
+gem_name=""
+interactive="no"
+
+usage() {
+  cat <<EOF
+usage: $(basename "$0") [ options ] [ gem-name | words joined with dashes ]
+
+options:
+  -c | --ci SERVICE          one of: ${ci_values//|/, }    (default: ${ci})
+  -t | --test FRAMEWORK      one of: ${test_values//|/, }  (default: ${test_framework})
+  -l | --linter LINTER       one of: ${linter_values//|/, }           (default: ${linter})
+  -x | --ext LANGUAGE        native extension: ${ext_values//|/, } (default: ${ext})
+  -n | --name GEM            the gem's name; alternative to positional words
+  -u | --ui                  add a dry-cli command line with a multi-threaded demo command
+       --github-username U   GitHub username for the README      (default: ${github_username:-github.user in ~/.gitconfig})
+       --no-mit              leave out the MIT license
+  -i | --interactive         ask for each value, showing the default in brackets;
+                             ENTER keeps it. Also what happens with no arguments on a terminal.
+  -h | --help                show this help
+EOF
+}
+
+die() {
+  echo "error: $*" >&2
+  echo >&2
+  usage >&2
+  exit 1
+}
+
+# One loop, one case. An option with a value takes "-x VALUE", "--long VALUE" or "--long=VALUE".
+parse_args() {
+  local opt value
+  while [[ $# -gt 0 ]]; do
+    opt="$1"
+    value="${2:-}"
+    if [[ ${opt} == --*=* ]]; then
+      value="${opt#*=}"
+      opt="${opt%%=*}"
+      set -- "${opt}" "${value}" "${@:2}"
+    fi
+
+    case "${opt}" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -c | --ci)
+      [[ ${value} =~ ^(${ci_values})$ ]] || die "invalid CI service: '${value}'"
+      ci="${value}"
+      shift 2
+      ;;
+    -t | --test)
+      [[ ${value} =~ ^(${test_values})$ ]] || die "invalid test framework: '${value}'"
+      test_framework="${value}"
+      shift 2
+      ;;
+    -l | --linter)
+      [[ ${value} =~ ^(${linter_values})$ ]] || die "invalid linter: '${value}'"
+      linter="${value}"
+      shift 2
+      ;;
+    -x | --ext)
+      [[ ${value} =~ ^(${ext_values})$ ]] || die "invalid extension language: '${value}'"
+      ext="${value}"
+      shift 2
+      ;;
+    -n | --name)
+      [[ -n ${value} ]] || die "${opt} requires a GEM name"
+      gem_name="${value}"
+      shift 2
+      ;;
+    -u | --ui)
+      ui="yes"
+      shift
+      ;;
+    --github-username)
+      [[ -n ${value} ]] || die "${opt} requires a USERNAME"
+      github_username="${value}"
+      shift 2
+      ;;
+    --no-mit)
+      mit="no"
+      shift
+      ;;
+    -i | --interactive)
+      interactive="yes"
+      shift
+      ;;
+    -*)
+      die "unknown option: ${opt}"
+      ;;
+    *)
+      gem_name="${gem_name:+${gem_name} }${opt}"
+      shift
+      ;;
+    esac
+  done
+}
+
+# Asks for one value, offering the current one in brackets; ENTER keeps it.
+# Asks again until the answer matches the pattern.
+ask() {
+  local var="$1" prompt="$2" pattern="$3" answer
+  while true; do
+    read -r -p "${prompt} [${!var}]: " answer
+    answer="${answer:-${!var}}"
+    [[ ${answer} =~ ^(${pattern})$ ]] && break
+    echo "  expected: ${pattern//|/, }" >&2
+  done
+  printf -v "${var}" '%s' "${answer}"
+}
+
+ask_all() {
+  ask gem_name "Gem name" ".+"
+  ask ci "CI service (${ci_values//|/, })" "${ci_values}"
+  ask test_framework "Test framework (${test_values//|/, })" "${test_values}"
+  ask linter "Linter (${linter_values//|/, })" "${linter_values}"
+  ask ext "Native extension (${ext_values//|/, })" "${ext_values}"
+  ask ui "Add a dry-cli command line with a multi-threaded demo? (yes, no)" "${yes_no}"
+  ask mit "Add the MIT license? (yes, no)" "${yes_no}"
+  ask github_username "GitHub username" ".+"
+}
+
+parse_args "$@"
+
+if [[ ${interactive} == yes || (-z ${gem_name} && -t 0 && -t 1) ]]; then
+  ask_all
+fi
+
+[[ -n ${gem_name} ]] || die "gem-name is required"
+[[ -n ${github_username} ]] ||
+  die "no GitHub username: pass --github-username, or run: git config --global github.user <name>"
+
+gem="$(echo "${gem_name}" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')"
+[[ -e ${gem} ]] && die "${gem} already exists here"
+
+bundle_args=(--exe --changelog --git --bundle
+  --github-username="${github_username}"
+  --test="${test_framework}"
+  --ci="${ci/circleci/circle}" # bundler calls CircleCI "circle"
+  --linter="${linter}")
+[[ ${mit} == yes ]] && bundle_args+=(--mit) || bundle_args+=(--no-mit)
+[[ ${ext} != none ]] && bundle_args+=(--ext="${ext}")
+
+gem update --system
+
+bundle gem "${gem}" "${bundle_args[@]}"
+
+cd "${gem}"
+
+test_gems=(simplecov coverage-badge)
+[[ ${test_framework} == rspec ]] && test_gems+=(rspec-its)
+[[ ${test_framework} == rspec && ${ui} == yes ]] && test_gems+=(aruba)
+bundle add "${test_gems[@]}" --group=test --skip-install
+bundle add yard --group=development --skip-install
+
+if [[ ${linter} == rubocop ]]; then
+  lint_gems=(rubocop-rake)
+  [[ ${test_framework} == rspec ]] && lint_gems+=(rubocop-rspec)
+  bundle add "${lint_gems[@]}" --group=development --skip-install
+fi
+
+scaffold_args=(--test "${test_framework}" --linter "${linter}")
+[[ ${ui} == yes ]] && scaffold_args+=(--ui)
+ruby "${script_dir}/scaffold.rb" "${scaffold_args[@]}"
+
+bundle install
+
+# Sorts what `bundle add` appended and settles the style rules the two linters disagree on.
+if [[ ${linter} == rubocop ]]; then
+  bundle exec rubocop --autocorrect-all --format quiet || echo "warning: rubocop left offenses it cannot fix" >&2
+else
+  bundle exec standardrb --fix --format quiet || echo "warning: standardrb left offenses it cannot fix" >&2
+fi
+
+echo
+echo "created ${gem}. next: cd ${gem} && direnv allow . && bundle exec rake"
