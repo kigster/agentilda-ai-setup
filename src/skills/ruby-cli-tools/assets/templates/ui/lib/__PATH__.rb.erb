@@ -8,6 +8,6 @@ require "zeitwerk"
 
 <%= wrap(gem.modules, "class Error < StandardError; end\n") -%>
 
-loader = Zeitwerk::Loader.<%= gem.parents.empty? ? "for_gem" : "for_gem_extension(#{gem.parents.join("::")})" %>
+loader = Zeitwerk::Loader.<%= gem.parents.empty? ? "for_gem" : "for_gem_extension(::#{gem.parents.join("::")})" %>
 loader.inflector.inflect(<%= gem.inflections %>)
 loader.setup
