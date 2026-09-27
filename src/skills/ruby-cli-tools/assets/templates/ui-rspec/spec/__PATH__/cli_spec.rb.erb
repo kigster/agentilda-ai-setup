@@ -32,4 +32,11 @@ RSpec.describe "<%= gem.exe %>", type: :aruba do
     }.to output(/error: invalid value for Integer\(\): "many"/).to_stderr
     expect(last_command_started).to have_exit_status(1)
   end
+
+  it "prints a backtrace in verbose mode on command failure" do
+    expect {
+      run_command_and_stop("<%= gem.exe %> demo --jobs many --verbose", fail_on_error: false)
+    }.to output(%r{error: invalid value for Integer\(\): "many".*cli/demo\.rb}m).to_stderr
+    expect(last_command_started).to have_exit_status(1)
+  end
 end

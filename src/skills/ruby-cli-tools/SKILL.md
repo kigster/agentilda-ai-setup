@@ -235,15 +235,30 @@ PATH_add "$(brew --prefix postgresql@18)/bin"
 
 export RUBYOPT="-W0" # silence deprecation warnings
 
-# Export every variable from whichever encrypted env files exist.
+# Export every variable from whichever encrypted env files exist. Keep them as
+# single-line KEY=value entries; quoted and escaped values are fine.
 for file in .env.encrypted .env.development.encrypted; do
   [[ -s ${file} ]] || continue
-  while IFS= read -r line; do
-    [[ ${line} =~ ^[[:space:]]*# ]] && continue
-    [[ ${line} =~ ^[[:space:]]*$ ]] && continue
-    [[ ${line} =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || continue
-    export "${line}"
-  done < <(sopsy decrypt "${file}")
+  while IFS= read -r exported; do
+    export "${exported}"
+  done < <(
+    sopsy decrypt "${file}" | ruby -rshellwords -e '
+      ARGF.each_line do |raw|
+        line = raw.strip
+        next if line.empty? || line.start_with?("#")
+
+        key, value = line.split("=", 2)
+        abort "invalid env line: #{raw.rstrip}" unless value && /\A[A-Za-z_][A-Za-z0-9_]*\z/.match?(key)
+
+        parsed = Shellwords.split(value)
+        abort "invalid env line: #{raw.rstrip}" unless parsed.length == 1
+
+        puts "#{key}=#{parsed.first}"
+      rescue ArgumentError
+        abort "invalid env line: #{raw.rstrip}"
+      end
+    '
+  )
 done
 
 export LOG_LEVEL=info

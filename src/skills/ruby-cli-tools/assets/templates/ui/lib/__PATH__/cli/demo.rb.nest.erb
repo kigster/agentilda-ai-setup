@@ -14,7 +14,7 @@ class Demo < Command
     steps = Integer(steps)
     threads = Integer(threads)
 
-    ui.multi_progress("Processing #{jobs} jobs", concurrent: threads.zero? || threads) do |multi|
+    ui.multi_progress("Processing #{jobs} jobs", concurrent: threads.zero? ? jobs : threads) do |multi|
       jobs.times do |index|
         multi.progress("job #{index + 1}", total: steps) do |bar|
           steps.times do
