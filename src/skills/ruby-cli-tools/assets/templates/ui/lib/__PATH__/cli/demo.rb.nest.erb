@@ -1,0 +1,30 @@
+# Sample concurrent work: each job runs in a thread of its own with its own
+# progress bar, under a headline bar that counts them all.
+class Demo < Command
+  desc "Run simulated jobs in parallel threads, one progress bar each"
+
+  option :jobs, default: "4", aliases: ["-j"], desc: "How many jobs to run"
+  option :steps, default: "40", aliases: ["-s"], desc: "Units of work in each job"
+  option :threads, default: "0", aliases: ["-t"], desc: "Most jobs running at once; 0 runs them all together"
+
+  example ["", "--jobs 8 --threads 3"]
+
+  def call(jobs:, steps:, threads:, **)
+    jobs = Integer(jobs)
+    steps = Integer(steps)
+    threads = Integer(threads)
+
+    ui.multi_progress("Processing #{jobs} jobs", concurrent: threads.zero? || threads) do |multi|
+      jobs.times do |index|
+        multi.progress("job #{index + 1}", total: steps) do |bar|
+          steps.times do
+            sleep(rand * 0.05) # stands in for real work
+            bar.advance
+          end
+        end
+      end
+    end
+
+    ui.success "Finished #{jobs} jobs of #{steps} steps each"
+  end
+end

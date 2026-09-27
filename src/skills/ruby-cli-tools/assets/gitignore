@@ -1,0 +1,16 @@
+/.ai
+/.idea
+**/.DS_Store
+/.bundle/
+/.yardoc
+/_yardoc/
+/.rubymate
+/coverage/
+/doc/
+/pkg/
+/spec/reports/
+/tmp/
+.rspec_status
+**/*.gem
+**/*.tmp
+.env
