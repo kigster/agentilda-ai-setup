@@ -141,8 +141,10 @@ module Scaffold
   def add_runtime_dependencies(gemspec, deps)
     text = File.read(gemspec)
     lines = deps.map { |name, version| %(  spec.add_dependency "#{name}", "#{version}"\n) }
-    lines.reject! { |line| text.include?(line.strip) }
-    text.sub!(/^\s*# spec\.add_dependency.*\n/) { |example| example + lines.join } or text.sub!(/^end\s*\z/, "#{lines.join}end\n")
+    missing = lines.reject { |line| text.include?(line.strip) }
+    unless missing.empty?
+      text.sub!(/^\s*# spec\.add_dependency.*\n/) { |example| example + missing.join } or text.sub!(/^end\s*\z/, "#{missing.join}end\n")
+    end
     text.sub!(/^(\s*(?:\w+\.)?)required_ruby_version\s*=\s*.*$/, '\1required_ruby_version = ">= 4.0"')
     File.write(gemspec, text)
   end

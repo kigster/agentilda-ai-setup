@@ -240,7 +240,7 @@ for file in .env.encrypted .env.development.encrypted; do
   [[ -s ${file} ]] || continue
   while IFS= read -r line; do
     [[ ${line} =~ ^[[:space:]]*# ]] && continue
-    [[ -z ${line} ]] && continue
+    [[ ${line} =~ ^[[:space:]]*$ ]] && continue
     [[ ${line} =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || continue
     export "${line}"
   done < <(sopsy decrypt "${file}")
