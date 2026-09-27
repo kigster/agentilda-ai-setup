@@ -33,16 +33,16 @@ The script prompts for its values when run on a terminal. Your Bash tool has no 
 
 1. Ask the user for each value in one `AskUserQuestion` call, with the default as the first option marked "(Recommended)", so accepting every default takes one confirmation:
 
-   | Question         | Flag                | Default                     | Choices                            |
-   | :--------------- | :------------------ | :-------------------------- | :--------------------------------- |
-   | Gem name         | `-n NAME`           | none; required              | lowercase, dashes nest modules     |
-   | CI service       | `-c`                | `github`                    | `github`, `gitlab`, `circleci`     |
-   | Test framework   | `-t`                | `rspec`                     | `rspec`, `minitest`, `test-unit`   |
-   | Linter           | `-l`                | `rubocop`                   | `rubocop`, `standard`              |
-   | Command line     | `-u`                | yes, for a CLI gem          | yes adds `-u`                      |
-   | Native extension | `-x`                | `none`                      | `none`, `c`, `go`, `rust`          |
-   | MIT license      | `--no-mit` when no  | yes                         |                                    |
-   | GitHub username  | `--github-username` | `github.user` in gitconfig  | ask only when that key is unset    |
+   | Question         | Flag                | Default                    | Choices                          |
+   | :--------------- | :------------------ | :------------------------- | :------------------------------- |
+   | Gem name         | `-n NAME`           | none; required             | lowercase, dashes nest modules   |
+   | CI service       | `-c`                | `github`                   | `github`, `gitlab`, `circleci`   |
+   | Test framework   | `-t`                | `rspec`                    | `rspec`, `minitest`, `test-unit` |
+   | Linter           | `-l`                | `rubocop`                  | `rubocop`, `standard`            |
+   | Command line     | `-u`                | yes, for a CLI gem         | yes adds `-u`; needs `-t rspec`  |
+   | Native extension | `-x`                | `none`                     | `none`, `c`, `go`, `rust`        |
+   | MIT license      | `--no-mit` when no  | yes                        |                                  |
+   | GitHub username  | `--github-username` | `github.user` in gitconfig | ask only when that key is unset  |
 
    Take a value the user already gave in the request as answered, and do not ask it again.
 
@@ -52,7 +52,7 @@ The script prompts for its values when run on a terminal. Your Bash tool has no 
    <skill-dir>/scripts/create-gem -n acme-tool -c github -t rspec -l rubocop -u
    ```
 
-   It runs `gem update --system`, `bundle gem` with `--exe --changelog --git --bundle`, adds the default gems, renders the templates, installs, and autocorrects with the chosen linter. It stops if the target directory already exists.
+   It runs `gem update --system` (a failure there only warns), `bundle gem` with `--exe --changelog --git --bundle`, adds the default gems, renders the templates, installs, and autocorrects with the chosen linter. It stops if the target directory already exists.
 
 1. Done means `bundle exec rake` in the new gem has run and you have reported its result. Bundler's sample test fails on purpose, and it stays, so one failure is expected until the user writes a real test. With `-u`, run `exe/<gem> demo` as well.
 
@@ -108,7 +108,7 @@ In-process Aruba supports `run_command_and_stop` only. For a command expected to
 
 The generator writes these from `assets/`; for an existing gem, copy them from there.
 
-- `Rakefile`: build, local install, world-readable permissions before packaging, YARD docs (`rake doc`), and the test task as the default.
+- `Rakefile`: build, local install, world-readable permissions before packaging (`.env*` files excepted), YARD docs (`rake doc`), and the test task as the default.
 - `.gitignore`: the lines in `assets/gitignore` on top of Bundler's.
 - `.envrc`: puts `bin` and `exe` on `PATH`, and decrypts `.env.encrypted` and `.env.development.encrypted` with `sopsy` into the environment, never onto disk. Add `PATH_add $(brew --prefix postgresql@18)/bin` when the gem uses PostgreSQL.
 - `.rubocop.yml`: relaxed.ruby.style with new cops enabled, plus `rubocop-rake` and `rubocop-rspec`.

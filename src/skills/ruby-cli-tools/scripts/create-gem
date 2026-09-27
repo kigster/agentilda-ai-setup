@@ -155,6 +155,10 @@ fi
 [[ -n ${gem_name} ]] || die "gem-name is required"
 [[ -n ${github_username} ]] ||
   die "no GitHub username: pass --github-username, or run: git config --global github.user <name>"
+# The command line's tests are Aruba specs; minitest and test-unit would leave
+# it untested, below the 95% coverage floor.
+[[ ${ui} == yes && ${test_framework} != rspec ]] &&
+  die "--ui needs --test rspec: its Launcher and commands are tested with Aruba specs"
 
 gem="$(echo "${gem_name}" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')"
 [[ -e ${gem} ]] && die "${gem} already exists here"
@@ -167,7 +171,9 @@ bundle_args=(--exe --changelog --git --bundle
 [[ ${mit} == yes ]] && bundle_args+=(--mit) || bundle_args+=(--no-mit)
 [[ ${ext} != none ]] && bundle_args+=(--ext="${ext}")
 
-gem update --system
+# A newer RubyGems is preferred, not required: a read-only or managed Ruby
+# cannot update itself, and generation works with the one it has.
+gem update --system || echo "warning: gem update --system failed; continuing with RubyGems $(gem --version)" >&2
 
 bundle gem "${gem}" "${bundle_args[@]}"
 

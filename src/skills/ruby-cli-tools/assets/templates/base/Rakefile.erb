@@ -8,9 +8,12 @@ require "rake/testtask"
 <% end -%>
 require "yard"
 
+# Rake ignores a task block's return value, so a failed command has to abort
+# the task itself.
 def shell(*args)
-  puts ["running:", *args].join(" ")
-  system(args.join(" "))
+  command = args.join(" ")
+  puts "running: #{command}"
+  system(command) or abort "failed: #{command}"
 end
 
 CLEAN.include("pkg", "tmp", "coverage", "doc")
@@ -20,9 +23,11 @@ task gem: [:build] do
   shell("gem install pkg/*")
 end
 
-desc "Make every file world-readable before packaging"
+desc "Make every file world-readable before packaging, except secrets"
 task permissions: [:clean] do
-  shell("/usr/bin/find . -path ./.git -prune -o -type d -exec chmod o+rx,g+rx {} + -o -type f -exec chmod o+r,g+r {} +")
+  # .env files hold decrypted secrets (see .envrc), so they keep their permissions.
+  shell("/usr/bin/find . -path ./.git -prune -o -name '.env*' -prune -o " \
+        "-type d -exec chmod o+rx,g+rx {} + -o -type f -exec chmod o+r,g+r {} +")
 end
 
 Rake::Task[:build].enhance([:permissions])

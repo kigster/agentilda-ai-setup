@@ -5,7 +5,8 @@ require "coverage/badge"
 require "fileutils"
 
 SimpleCov.start do
-  skip %r{\A/(spec|test)/}
+  # SimpleCov 1.x gives project-relative paths without a leading slash; 0.22 kept it.
+  skip %r{\A/?(spec|test)/}
   enable_coverage :branch
   minimum_coverage 95
   formatter SimpleCov::Formatter::MultiFormatter.new(
