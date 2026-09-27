@@ -1,6 +1,6 @@
 ---
 name: ruby-conventions
-description: "Konstantin's Ruby conventions: how he lays out and versions a gem, YARD comment style, frozen_string_literal, standardrb rather than rubocop, and running a multi-process application locally through an explicit process definition rather than Foreman. Use when writing or reviewing Ruby, starting a new gem, setting up a Gemfile or justfile, or wiring up local processes for a Ruby project."
+description: "Konstantin's Ruby conventions: how he lays out and versions a gem, YARD comment style, frozen_string_literal, RuboCop with the relaxed style, and running a multi-process application locally through an explicit process definition rather than Foreman. Use when writing or reviewing Ruby, starting a new gem, setting up a Gemfile or justfile, or wiring up local processes for a Ruby project."
 ---
 
 # Ruby

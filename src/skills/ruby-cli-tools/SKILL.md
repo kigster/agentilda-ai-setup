@@ -11,7 +11,7 @@ category: creating CLI tools in ruby
 license: MIT
 metadata:
   author: Konstantin Gredeskoul
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Ruby CLI tooling
@@ -48,6 +48,12 @@ R9. Optional: save a screenshot of the top-level `--help` as `docs/img/cli-help.
 
 R10. Put process startup in `MyCLI::Launcher` (`lib/my_cli/launcher.rb`). The executable and the Aruba suite both call it. The shape, and why Aruba runs in-process, is in [How to write CLI tools in Ruby and test them with RSpec and Aruba](https://kig.re/2020/09/07/writing-cli-tools-ruby-migrating-github-issues-to-pivotal-tracker.html). The three extensions are the subject of [How I built three gem extensions](https://kig.re/2026/09/17/2026-09-17--how-i-build-three-gem-extensions-and-got-ai-banned.html).
 
+R11. Define the version once, as `MyCLI::VERSION = "0.1.0"` in `lib/my_cli/version.rb`. The gemspec requires that file and reads the constant.
+
+R12. Every command that takes options also accepts `-i` / `--interactive`. See [Interactivity](#interactivity).
+
+### The help configuration (R3, R4, R6)
+
 ```ruby
 Dry::CLI::Help.configure do
   title "MyCLI"
@@ -68,11 +74,9 @@ Dry::CLI::Help.configure do
 end
 ```
 
-R11: Version is always defined by a constant located in `lib/mycli/version.rb` and matches the module namespace, eg `MyCLI::Version = '0.1.0'`
-
-The gem file reads this file and assigns this version to the gem.
-
 Those styles are overrides. The gem's defaults are yellow headings, green usage and examples, and cyan options.
+
+### The Launcher (R10)
 
 `Launcher#initialize` takes `argv`, `stdin`, `stdout`, `stderr`, and `kernel` (defaults: `$stdin`, `$stdout`, `$stderr`, `Kernel`). `#execute!` runs the CLI and exits only through `kernel.exit(code)`. Commands write to the streams passed in, not to the global constants. Do not make `Launcher` a singleton. Aruba constructs a new one per example, and a singleton would keep the first example's argv and streams.
 
@@ -83,18 +87,45 @@ Aruba.configure do |config|
 end
 ```
 
+Things the Launcher has to cover, because dry-cli and Aruba do not:
+
+- **STDIN.** dry-cli hands a command `out` and `err`, never an input stream. The Launcher stores its `stdin` where the base command's `ui` can read it for the length of one run, falling back to `$stdin`. Without this, prompts in an in-process test read the real terminal.
+- **Load order.** Require `dry/cli` and its extensions in `lib/my_cli.rb`, before Zeitwerk is set up. `Launcher` names `Dry::CLI` before Zeitwerk has loaded `cli.rb`, and an eager-loading spec suite will not notice.
+- **A closed pipe.** `mycli export | head` must exit 0 quietly. Rescue `Errno::EPIPE` in the Launcher, and in `exe/` call `Signal.trap("PIPE", "SYSTEM_DEFAULT")`.
+
+In specs, run commands with `run_command_and_stop(cmd, fail_on_error: false)`. The in-process launcher raises `NotImplementedError` on `run_command`, and it cannot feed STDIN to a running command. Test `-i` answers in a unit spec against the command, with a `StringIO` whose `tty?` returns true.
+
+## Scaffolding a new gem
+
+Start with `create-gem`, which sits next to this file. It wraps `bundle gem`, then finishes what `bundle gem` leaves undone:
+
+- Fills in the gemspec's `TODO` summary, description and `allowed_push_host`, turns on `rubygems_mfa_required`, and adds the runtime dependencies from R1, R2 and [File layout](#file-layout).
+- Adds the development gems from [RuboCop](#rubocop) and the testing paragraph to the `Gemfile`.
+- Writes `.rubocop.yml`, deletes the template's deliberately failing example, runs `bundle install` and `rubocop -A`.
+
+The result builds with `gem build` and passes `bundle exec rake` before a line of it has been written by hand.
+
+```text
+create-gem recipe box                    # gem recipe_box, module RecipeBox; rspec, GitHub Actions
+create-gem -c circleci -t minitest -s "Sync recipes." recipe box
+create-gem -i recipe box                 # ask for each value, ENTER keeps the default
+```
+
+- Words are joined with underscores. A dash means a namespace to bundler: `recipe-box` is `Recipe::Box`.
+- `-t` and `-c` win over `~/.bundle/config`, which `bundle gem` would otherwise obey and ignore the flags.
+- Without `-i` it never waits for input and never opens an editor. With `-i` it needs a terminal, offers the other flags as defaults, and opens the gemspec in `$VISUAL` or `$EDITOR` at the end.
+
 ## Project files
 
-## Rakefile
+### Rakefile
 
-Every gem has a Rake file.  Most of my gems have nearly identical `Rakefile` — 
+Every gem has a `Rakefile`, and most of Konstantin's are nearly identical:
 
 ```ruby
 # frozen_string_literal: true
 
 require "bundler/gem_tasks"
 require "rspec/core/rake_task"
-require "timeout"
 require "yard"
 
 def shell(*args)
@@ -103,26 +134,26 @@ def shell(*args)
 end
 
 task :clean do
-  shell("rm -rf pkg/ tmp/ coverage/ doc/ ")
-send
+  shell("rm -rf pkg/ tmp/ coverage/ doc/")
+end
 
 task gem: [:build] do
   shell("gem install pkg/*")
 end
 
 task permissions: [:clean] do
-	shell("/usr/bin/find . -path ./.git -prune -o -type d -exec chmod o+rx,g+rx {} + -o -type f -exec chmod o+r,g+r {} +")
+  shell("/usr/bin/find . -path ./.git -prune -o -type d -exec chmod o+rx,g+rx {} + -o -type f -exec chmod o+r,g+r {} +")
 end
 
 task build: :permissions
 
-gem_summary = [[ -n $(ls -1 *.gemspec) ]] && `cat *.gemspec | grep summary | sed 's/^.* = *//g; s/"//g' | tr -d '\n'`
+gem_summary = Dir["*.gemspec"].first&.then { |f| Gem::Specification.load(f).summary } || "Documentation"
 
 YARD::Rake::YardocTask.new(:doc) do |t|
-  t.files = %w[lib/**/*.rb exe/*.rb - README.md LICENSE.txt]
- 	t.files << 'CHANGELOG.md' if File.exist?('CHANGELOG.md')
+  t.files = %w[lib/**/*.rb exe/* - README.md LICENSE.txt]
+  t.files << "CHANGELOG.md" if File.exist?("CHANGELOG.md")
   t.options.unshift("--title", gem_summary)
-  t.after = -> { exec("open doc/index.html") } if RUBY_PLATFORM.match?(/darwin/)
+  t.after = -> { system("open doc/index.html") } if RUBY_PLATFORM.match?(/darwin/)
 end
 
 RSpec::Core::RakeTask.new(:spec)
@@ -130,11 +161,11 @@ RSpec::Core::RakeTask.new(:spec)
 task default: :spec
 ```
 
-## `.gitignore`
+### `.gitignore`
 
-Ruby gems have a pretty specific `.gitignore` file that can certainly have more items than presented here, but the ones in this list are definitely  not,
+A gem's `.gitignore` may hold more than this, but never less:
 
-```.gitignore
+```gitignore
 /.ai
 /.idea
 **/.DS_Store
@@ -154,31 +185,30 @@ Ruby gems have a pretty specific `.gitignore` file that can certainly have more 
 **/*.tmp
 ```
 
-### `.envrc`	
+### `.envrc`
 
-This file is used by `direnv` (which must be first enabled, and then allowed to read this folder). When you cd into your project `direnv` executes this file. Here is a sample `.envrc` file that should work for most gems:
+`direnv` runs this file on `cd` into the gem, once `direnv allow .` has trusted it. It puts `bin` and `exe` on `PATH`, and decrypts any `sopsy`-encrypted secrets straight into the environment, so no plain-text `.env` sits on disk. `sopsy` encrypts `.env` to `.env.encrypted` and `.env.development` to `.env.development.encrypted`.
 
 ```bash
 PATH_add bin
-# only if you are using PostgreSQL
-PATH_add $(brew --prefix postgresql@18)/bin
+PATH_add exe
+# Only when the gem uses PostgreSQL.
+PATH_add "$(brew --prefix postgresql@18)/bin"
 
 export RUBYOPT="-W0" # silence deprecation warnings
 
-# this block 
-if [[ -f .env.encrypted || .env.development.encrypted ]]; then
-	for file in .env.encrypted .env.development.encrypted; do
-		[[ -s ${file} ]] || continue
-		eval "$(sopsy decrypt ${file} | sed -E '/^#/d; /^$/d; s/^([A-Z])/export \1/g')"
-  done
-fi
+# Export every variable from whichever encrypted env files exist.
+for file in .env.encrypted .env.development.encrypted; do
+  [[ -s ${file} ]] || continue
+  eval "$(sopsy decrypt "${file}" | sed -E '/^#/d; /^$/d; s/^([A-Z])/export \1/g')"
+done
 
 export LOG_LEVEL=info
 ```
 
-### Rubocop Formatting
+### RuboCop
 
-RuboCop, with `rubocop-rake` and `rubocop-rspec`. Inherit relaxed style and enable new cops:
+Lint with RuboCop, with `rubocop-rake` and `rubocop-rspec`. Inherit relaxed style and enable new cops:
 
 ```yaml
 inherit_from:
@@ -210,14 +240,6 @@ Reach for these when the gem needs them, not before:
 - A global configuration object: [`dry-configurable`](https://github.com/dry-rb/dry-configurable).
 - Types, schemas, and validations: `dry-schema`, `dry-types`, `dry-struct`, `dry-validation`.
 - Return values: `dry-monads`.
-
-`.envrc` at the gem root contains `PATH_add exe`. This is also the file that can use `sopsy` to auto-decrypt and load into memory any development API keys and secrets without exposing them on the file system.
-
-Assuming that these are stored in either `.env` or `.env.development`, `sopsy` would have encrypted these into `.env.enrypted` and `env.development.encrypted`.
-
-Then in 	 Hey, quick question for you: 
-
-`exe/<gem-cli-name>` does not load Bundler. It puts `lib/` on `$LOAD_PATH` and calls `MyCLI::Launcher.new(ARGV).execute!`. A `Gemfile` in the directory where the user ran the command must not change which gems load.
 
 ## Output
 
@@ -266,7 +288,15 @@ mycli reformat '**/*.rb' -g
 
 Prompts go through `ui.prompt` and `ui.confirm` (tty-prompt, inside dry-cli-ui). Do not use `tty-option` for questions. That gem parses options.
 
-When the defaults are obvious, or they can be read from `.mycli-defaults.json`, also accept `-y` / `--yes` and do not prompt.
+`-i` / `--interactive` switches a command to asking for its options one at a time:
+
+- Each question shows the value the command would use, in brackets: `CI service [github]:`. ENTER keeps it.
+- That value comes from the flag when one was given, else `.mycli-defaults.json`, else the built-in default. dry-cli fills an option's `default:` in before `call` runs, which hides whether the user passed the flag and means the file would never be read. So an option the defaults file may set declares no `default:`; keep its built-in value in a constant, and name it in `desc` so help still shows it.
+- A bad answer is rejected with the reason, and the same question is asked again. Validate with the same code the flag parser uses.
+- Questions go to STDERR, like every prompt, so the command's STDOUT stays clean.
+- With STDIN not a terminal, `-i` fails with a non-zero exit instead of hanging or reading garbage.
+
+When the defaults are obvious, or they can be read from `.mycli-defaults.json`, also accept `-y` / `--yes` and do not prompt. `-i` and `-y` together are a usage error.
 
 ## External commands
 
@@ -301,6 +331,8 @@ lib/my_cli/cli/cook/breakfast.rb
 lib/my_cli/cli/cook/dinner.rb
 ```
 
+`exe/<gem-cli-name>` does not load Bundler. It puts `lib/` on `$LOAD_PATH` and calls `MyCLI::Launcher.new(ARGV).execute!`. A `Gemfile` in the directory where the user ran the command must not change which gems load.
+
 Keep a command class small. Put the work in a namespace next to it, grouped by what it does.
 
 ## Domain-driven design
@@ -322,10 +354,9 @@ lib/my_cli/domains/transpiling/...
 
 ## Installing skills and completion
 
-Most CLI gems these days shouzld have ` [blah]` command:
+A CLI gem that agents will drive has an `install` command with two subcommands:
 
-1. `mycli completion` writes the shell lines in the completion section above.
-
+- `mycli install completion` writes the shell lines from [Shell completion](#shell-completion).
 - `mycli install skills` copies each skill into `~/.agents/skills/<skill-name>` and symlinks `~/.claude/skills/<skill-name>` to that directory.
 
 A skill shipped by the gem is invoked as `/mycli-skill [arguments]`. The gem may ship others, such as `/mycli-help` or `/mycli-explain`.

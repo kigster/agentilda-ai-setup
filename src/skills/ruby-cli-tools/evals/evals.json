@@ -1,0 +1,59 @@
+{
+  "skill_name": "ruby-cli-tools",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Create a Ruby CLI gem called recipe-box with two commands: `add` (takes a recipe name and --servings, saves to ~/.recipe-box.json) and `list` (prints saved recipes). Write all the files.",
+      "expected_output": "A gem tree following the conventions: dry-cli + 3 extensions, Launcher, Zeitwerk, VERSION, RuboCop, -n on add only, -i on commands with options.",
+      "files": [],
+      "assertions": [
+        "gemspec depends on dry-cli and all three extensions",
+        "Launcher class takes injected streams and kernel",
+        "VERSION constant in lib/recipe_box/version.rb",
+        "Zeitwerk loader used",
+        "Help configured to exit 0 without arguments",
+        "completion command registered",
+        "add command declares --dry-run with -n alias",
+        "list command does not declare --dry-run",
+        "add command supports -i / --interactive",
+        "RuboCop configured with relaxed style (not standardrb)",
+        "exe does not load Bundler",
+        "Aruba configured in-process with Launcher"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Add an interactive mode to the `deploy` command in my dry-cli gem (fixtures/deployer). It has --env, --region and --force.",
+      "expected_output": "-i/--interactive that prompts per option showing the default, ENTER keeps it, revalidates, STDERR, TTY check, -i with -y rejected.",
+      "files": [
+        "fixtures/deployer/lib/deployer/cli/deploy.rb"
+      ],
+      "assertions": [
+        "deploy declares -i / --interactive boolean",
+        "prompts via ui.prompt/ui.ask (tty-prompt), not gets",
+        "current value offered as the prompt default",
+        "checks STDIN is a TTY before prompting",
+        "rejects -i combined with -y/--yes",
+        "invalid answer re-asked (validation or choices)",
+        "specs cover interactive mode"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Write Aruba specs for the `export` command in my gem (fixtures/exporter). It prints CSV to STDOUT. Fix anything in the command that would break piping.",
+      "expected_output": "In-process Aruba against a Launcher, fresh per example; CSV-only STDOUT, messages moved to STDERR.",
+      "files": [
+        "fixtures/exporter/lib/exporter/cli/export.rb"
+      ],
+      "assertions": [
+        "Aruba configured in-process",
+        "Aruba main_class is the Launcher",
+        "Launcher takes argv, stdin, stdout, stderr, kernel",
+        "Launcher is not a singleton",
+        "progress message no longer written to STDOUT via ui.info",
+        "spec asserts STDOUT is CSV only",
+        "spec asserts message goes to STDERR"
+      ]
+    }
+  ]
+}

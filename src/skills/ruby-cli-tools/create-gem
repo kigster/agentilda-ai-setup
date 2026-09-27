@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+
+# Defaults, overridable by the options parse_args understands.
+ci="github"
+test_framework="rspec"
+# github.user is the conventional key for this in ~/.gitconfig.
+github_username="$(git config --global --get github.user)"
+gem_name=""
+summary=""
+interactive=0
+
+usage() {
+  cat <<EOF
+usage: $(basename "$0") [ options ] [ gem-name | words joined with underscores ]
+
+Multi-word names are joined with underscores, so "recipe box" becomes the gem
+recipe_box and the module RecipeBox. A dash in a gem name means a namespace to
+bundler (recipe-box is Recipe::Box), so pass one with -n only when you want that.
+
+options:
+  -c | --ci SERVICE          one of: github, circleci, gitlab    (default: ${ci})
+  -t | --test FRAMEWORK      one of: rspec, minitest, test-unit  (default: ${test_framework})
+  -n | --name GEM            the gem's name; alternative to positional words
+  -u | --github-username U   GitHub username for the README      (default: ${github_username:-github.user in ~/.gitconfig})
+  -s | --summary TEXT        one-line gemspec summary            (default: derived from the name)
+  -i | --interactive         ask for each value; ENTER keeps the default shown
+  -h | --help                show this help
+EOF
+}
+
+die() {
+  echo "error: $*" >&2
+  echo >&2
+  usage >&2
+  exit 1
+}
+
+# Validators print nothing and return non-zero on a bad value, so the
+# option parser and the interactive prompt share one definition of "valid".
+valid_ci() { [[ $1 =~ ^(github|gitlab|circleci|circle)$ ]]; }
+valid_test_framework() { [[ $1 =~ ^(rspec|minitest|test-unit)$ ]]; }
+valid_present() { [[ -n $1 ]]; }
+
+# Bundler calls CircleCI "circle".
+normalize_ci() { echo "${1/circleci/circle}"; }
+
+# One loop, one case. Each option takes "-x VALUE", "--long VALUE" or "--long=VALUE".
+parse_args() {
+  local opt value
+  while [[ $# -gt 0 ]]; do
+    opt="$1"
+    value="$2"
+    if [[ ${opt} == --*=* ]]; then
+      value="${opt#*=}"
+      opt="${opt%%=*}"
+      set -- "${opt}" "${value}" "${@:2}"
+    fi
+
+    case "${opt}" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -i | --interactive)
+      interactive=1
+      shift
+      ;;
+    -c | --ci)
+      valid_ci "${value}" || die "invalid CI service: '${value}'"
+      ci="$(normalize_ci "${value}")"
+      shift 2
+      ;;
+    -t | --test)
+      valid_test_framework "${value}" || die "invalid test framework: '${value}'"
+      test_framework="${value}"
+      shift 2
+      ;;
+    -n | --name)
+      valid_present "${value}" || die "${opt} requires a GEM name"
+      gem_name="${value}"
+      shift 2
+      ;;
+    -s | --summary)
+      valid_present "${value}" || die "${opt} requires TEXT"
+      summary="${value}"
+      shift 2
+      ;;
+    -u | --github-username)
+      valid_present "${value}" || die "${opt} requires a USERNAME"
+      github_username="${value}"
+      shift 2
+      ;;
+    -*)
+      die "unknown option: ${opt}"
+      ;;
+    *)
+      gem_name="${gem_name:+${gem_name} }${opt}"
+      shift
+      ;;
+    esac
+  done
+}
+
+# ask VAR "Label" VALIDATOR
+# Shows the variable's current value as the default. ENTER keeps it;
+# anything else must pass VALIDATOR or the question is asked again.
+ask() {
+  local var="$1" label="$2" validator="$3"
+  local current="${!var}" answer
+  while true; do
+    read -r -p "${label}${current:+ [${current}]}: " answer || exit 1
+    answer="${answer:-${current}}"
+    if "${validator}" "${answer}"; then
+      printf -v "${var}" '%s' "${answer}"
+      return
+    fi
+    echo "  '${answer}' is not valid, try again" >&2
+  done
+}
+
+prompt_for_values() {
+  [[ -t 0 ]] || die "-i needs a terminal on STDIN"
+  ask gem_name "Gem name" valid_present
+  ask ci "CI service (github, circleci, gitlab)" valid_ci
+  ci="$(normalize_ci "${ci}")"
+  ask test_framework "Test framework (rspec, minitest, test-unit)" valid_test_framework
+  ask github_username "GitHub username" valid_present
+  summary="${summary:-$(default_summary)}"
+  ask summary "One-line summary" valid_present
+}
+
+default_summary() {
+  echo "A command-line tool: ${gem_name//[_-]/ }."
+}
+
+# bundle gem leaves TODO placeholders that make `gem build` fail, and none of
+# the runtime dependencies the ruby-cli-tools skill calls for. Fill both in.
+customize_gemspec() {
+  local gemspec="${gem}/${gem}.gemspec"
+  # shellcheck disable=SC2016 # Ruby code, expanded by Ruby
+  SUMMARY="${summary}" ruby -i -pe '
+    sub(/spec\.summary = .*/)          { %(spec.summary = #{ENV["SUMMARY"].dump}) }
+    sub(/spec\.description = .*/)      { %(spec.description = spec.summary) }
+    sub(/"TODO: Set to your gem server.*"/) { %("https://rubygems.org") }
+    sub(/# (spec\.metadata\["rubygems_mfa_required"\])/) { $1 }
+    if $_.include?("# spec.add_dependency")
+      $_ = %w[dry-cli dry-cli-autocomplete dry-cli-help dry-cli-ui zeitwerk]
+        .map { |g| %(  spec.add_dependency "#{g}"\n) }.join
+    end
+  ' "${gemspec}"
+  ! grep -q TODO "${gemspec}" || die "TODO left in ${gemspec}"
+
+  # The template ships a deliberately failing example; a new gem starts green.
+  # shellcheck disable=SC2016 # Ruby code, expanded by Ruby
+  find "${gem}" \( -path "${gem}/spec/*" -o -path "${gem}/test/*" \) -name '*.rb' -exec ruby -i -0pe '
+    $_ = $_.gsub(/\n  it "does something useful" do\n.*?\n  end\n/m, "")
+           .gsub(/\n  def test_it_does_something_useful\n.*?\n  end\n/m, "")
+  ' {} +
+
+  cat >"${gem}/.rubocop.yml" <<'EOF'
+inherit_from:
+  - https://relaxed.ruby.style/rubocop.yml
+
+plugins:
+  - rubocop-rake
+  - rubocop-rspec
+
+AllCops:
+  NewCops: enable
+  SuggestExtensions: false
+EOF
+
+  cat >>"${gem}/Gemfile" <<'EOF'
+
+group :development, :test do
+  gem "aruba"
+  gem "rspec-its"
+  gem "rubocop-rake"
+  gem "rubocop-rspec"
+  gem "simplecov"
+  gem "yard"
+end
+EOF
+}
+
+parse_args "$@"
+((interactive)) && prompt_for_values
+
+[[ -n ${gem_name} ]] || die "gem-name is required"
+[[ -n ${github_username} ]] ||
+  die "no GitHub username: pass -u, or run: git config --global github.user <name>"
+
+gem="$(echo "${gem_name}" | tr ' ' '_' | tr '[:upper:]' '[:lower:]')"
+summary="${summary:-$(default_summary)}"
+[[ ! -e ${gem} ]] || die "./${gem} already exists"
+
+gem update --system
+
+# bundle gem ignores --test and --ci when ~/.bundle/config already sets them;
+# the environment outranks that file. </dev/null keeps it from ever waiting on
+# a question it would otherwise ask a terminal.
+BUNDLE_GEM__TEST="${test_framework}" BUNDLE_GEM__CI="${ci}" BUNDLE_GEM__LINTER=rubocop \
+  bundle gem "${gem}" --exe --changelog --git \
+  --github-username="${github_username}" --mit \
+  --test="${test_framework}" --ci="${ci}" --linter=rubocop </dev/null || exit
+
+customize_gemspec
+# The template itself fails a few cops; a new gem starts lint-clean.
+(cd "${gem}" && bundle install && bundle exec rubocop -A >/dev/null) || exit
+
+# Opening an editor is for a person at a terminal, never for a script.
+if ((interactive)); then
+  "${VISUAL:-${EDITOR:-vi}}" "${gem}/${gem}.gemspec"
+fi
