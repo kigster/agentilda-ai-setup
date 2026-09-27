@@ -23,7 +23,8 @@ class Launcher
   rescue SystemExit => e
     e.status
   rescue => e
-    @stderr.puts "error: #{e.message}"
+    message = e.message.to_s.empty? ? e.class.name : e.message
+    @stderr.puts "error: #{message}"
     @stderr.puts(e.backtrace) if @verbose
     1
   end

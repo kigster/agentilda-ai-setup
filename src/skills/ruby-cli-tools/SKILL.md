@@ -52,7 +52,7 @@ The script prompts for its values when run on a terminal. Your Bash tool has no 
    <skill-dir>/scripts/create-gem -n acme-tool -c github -t rspec -l rubocop -u
    ```
 
-   It runs `gem update --system` (a failure there only warns), `bundle gem` with `--exe --changelog --git --bundle`, adds the default gems, renders the templates, installs, and autocorrects with the chosen linter. It stops if the target directory already exists.
+   With `--update-rubygems` it first tries `gem update --system` (a failure there only warns). It then runs `bundle gem` with `--exe --changelog --git --bundle`, adds the default gems, renders the templates, installs, and autocorrects with the chosen linter. It stops if the target directory already exists.
 
 1. Done means `bundle exec rake` in the new gem has run and you have reported its result. Bundler's sample test fails on purpose, and it stays, so one failure is expected until the user writes a real test. With `-u`, run `exe/<gem> demo` as well.
 

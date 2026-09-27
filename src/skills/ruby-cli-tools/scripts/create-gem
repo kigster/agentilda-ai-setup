@@ -25,6 +25,7 @@ ui="no"
 github_username="$(git config --global --get github.user || true)"
 gem_name=""
 interactive="no"
+update_rubygems="no"
 
 usage() {
   cat <<EOF
@@ -37,6 +38,7 @@ options:
   -x | --ext LANGUAGE        native extension: ${ext_values//|/, } (default: ${ext})
   -n | --name GEM            the gem's name; alternative to positional words
   -u | --ui                  add a dry-cli command line with a multi-threaded demo command
+       --update-rubygems     try `gem update --system` before generation
        --github-username U   GitHub username for the README      (default: ${github_username:-github.user in ~/.gitconfig})
        --no-mit              leave out the MIT license
   -i | --interactive         ask for each value, showing the default in brackets;
@@ -96,6 +98,10 @@ parse_args() {
       ;;
     -u | --ui)
       ui="yes"
+      shift
+      ;;
+    --update-rubygems)
+      update_rubygems="yes"
       shift
       ;;
     --github-username)
@@ -173,7 +179,9 @@ bundle_args=(--exe --changelog --git --bundle
 
 # A newer RubyGems is preferred, not required: a read-only or managed Ruby
 # cannot update itself, and generation works with the one it has.
-gem update --system || echo "warning: gem update --system failed; continuing with RubyGems $(gem --version)" >&2
+if [[ ${update_rubygems} == yes ]]; then
+  gem update --system || echo "warning: gem update --system failed; continuing with RubyGems $(gem --version)" >&2
+fi
 
 bundle gem "${gem}" "${bundle_args[@]}"
 

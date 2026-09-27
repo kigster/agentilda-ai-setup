@@ -145,7 +145,7 @@ module Scaffold
     unless missing.empty?
       text.sub!(/^\s*# spec\.add_dependency.*\n/) { |example| example + missing.join } or text.sub!(/^end\s*\z/, "#{missing.join}end\n")
     end
-    text.sub!(/^(\s*(?:\w+\.)?)required_ruby_version\s*=\s*.*$/, '\1required_ruby_version = ">= 4.0"')
+    text.sub!(/^(\s*(?:\w+\.)?)required_ruby_version\s*=\s*.*$/) { "#{$1}required_ruby_version = \">= 4.0\"" }
     File.write(gemspec, text)
   end
 end

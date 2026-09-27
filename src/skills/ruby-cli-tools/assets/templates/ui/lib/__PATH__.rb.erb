@@ -6,6 +6,7 @@ require "dry/cli/ui"
 require "dry/cli/autocomplete/command"
 require "zeitwerk"
 
+<%= wrap(gem.parents, "") unless gem.parents.empty? -%>
 <%= wrap(gem.modules, "class Error < StandardError; end\n") -%>
 
 loader = Zeitwerk::Loader.<%= gem.parents.empty? ? "for_gem" : "for_gem_extension(::#{gem.parents.join("::")})" %>
