@@ -1,0 +1,29 @@
+# frozen_string_literal: true
+
+RSpec.describe "<%= gem.exe %>", type: :aruba do
+  it "prints help and exits 0 without arguments" do
+    run_command_and_stop("<%= gem.exe %>")
+    expect(last_command_started).to have_output(/demo/)
+  end
+
+  it "prints the version" do
+    run_command_and_stop("<%= gem.exe %> version")
+    expect(last_command_started).to have_output(<%= gem.namespace %>::VERSION)
+  end
+
+  it "runs the demo jobs" do
+    run_command_and_stop("<%= gem.exe %> demo --jobs 2 --steps 3 --threads 2")
+    expect(last_command_started).to have_output(/Finished 2 jobs of 3 steps each/)
+  end
+
+  # dry-cli-autocomplete writes to $stdout rather than the stream Aruba hands
+  # the command, so this reads the process's stdout instead.
+  it "prints a zsh completion script" do
+    expect { run_command_and_stop("<%= gem.exe %> completion zsh") }.to output(/_<%= gem.exe.tr("-", "_") %>\(\)/).to_stdout
+  end
+
+  it "fails on a non-numeric job count" do
+    run_command_and_stop("<%= gem.exe %> demo --jobs many", fail_on_error: false)
+    expect(last_command_started).to have_exit_status(1)
+  end
+end

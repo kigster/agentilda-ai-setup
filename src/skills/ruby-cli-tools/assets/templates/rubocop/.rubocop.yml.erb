@@ -1,0 +1,15 @@
+inherit_from:
+  - https://relaxed.ruby.style/rubocop.yml
+
+plugins:
+  - rubocop-rake
+<% if test_framework == "rspec" -%>
+  - rubocop-rspec
+<% end -%>
+
+AllCops:
+  NewCops: enable
+  Exclude:
+    - "pkg/**/*"
+    - "tmp/**/*"
+    - "vendor/**/*"

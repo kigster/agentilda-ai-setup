@@ -1,0 +1,7 @@
+class Version < Command
+  desc "Print the version"
+
+  def call(**)
+    out.puts <%= gem.namespace %>::VERSION
+  end
+end
