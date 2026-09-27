@@ -20,7 +20,8 @@ CLEAN.include("pkg", "tmp", "coverage", "doc")
 
 desc "Build the gem and install it locally"
 task gem: [:build] do
-  shell("gem install pkg/*")
+  gem_file = Dir["pkg/*.gem"].max_by { |path| File.mtime(path) } or abort "failed: no built gem found in pkg/"
+  shell("gem install #{gem_file}")
 end
 
 desc "Make every file world-readable before packaging, except secrets"

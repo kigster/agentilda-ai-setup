@@ -22,6 +22,10 @@ RSpec.describe "<%= gem.exe %>", type: :aruba do
     expect { run_command_and_stop("<%= gem.exe %> completion zsh") }.to output(/_<%= gem.exe.tr("-", "_") %>\(\)/).to_stdout
   end
 
+  it "prints a bash completion script" do
+    expect { run_command_and_stop("<%= gem.exe %> completion bash") }.to output(/complete -F/).to_stdout
+  end
+
   it "fails on a non-numeric job count" do
     expect {
       run_command_and_stop("<%= gem.exe %> demo --jobs many", fail_on_error: false)

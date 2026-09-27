@@ -2,11 +2,12 @@
 # its own argv and streams, and it exits only through kernel.exit.
 class Launcher
   def initialize(argv, stdin = $stdin, stdout = $stdout, stderr = $stderr, kernel = Kernel)
-    @argv = argv
+    @argv = argv.dup
     @stdin = stdin
     @stdout = stdout
     @stderr = stderr
     @kernel = kernel
+    @verbose = @argv.intersect?(%w[-v --verbose])
   end
 
   def execute!
@@ -23,7 +24,7 @@ class Launcher
     e.status
   rescue => e
     @stderr.puts "error: #{e.message}"
-    @stderr.puts(e.backtrace) if @argv.intersect?(%w[-v --verbose])
+    @stderr.puts(e.backtrace) if @verbose
     1
   end
 end
