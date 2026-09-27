@@ -238,7 +238,12 @@ export RUBYOPT="-W0" # silence deprecation warnings
 # Export every variable from whichever encrypted env files exist.
 for file in .env.encrypted .env.development.encrypted; do
   [[ -s ${file} ]] || continue
-  eval "$(sopsy decrypt "${file}" | sed -E '/^#/d; /^$/d; s/^([A-Z])/export \1/g')"
+  while IFS= read -r line; do
+    [[ ${line} =~ ^[[:space:]]*# ]] && continue
+    [[ -z ${line} ]] && continue
+    [[ ${line} =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || continue
+    export "${line}"
+  done < <(sopsy decrypt "${file}")
 done
 
 export LOG_LEVEL=info

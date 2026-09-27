@@ -23,8 +23,9 @@ RSpec.describe "<%= gem.exe %>", type: :aruba do
   end
 
   it "fails on a non-numeric job count" do
-    run_command_and_stop("<%= gem.exe %> demo --jobs many", fail_on_error: false)
+    expect {
+      run_command_and_stop("<%= gem.exe %> demo --jobs many", fail_on_error: false)
+    }.to output(/error: invalid value for Integer\(\): "many"/).to_stderr
     expect(last_command_started).to have_exit_status(1)
-    expect(last_command_started.stderr).to include('error: invalid value for Integer(): "many"')
   end
 end

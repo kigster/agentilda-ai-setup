@@ -143,7 +143,7 @@ module Scaffold
     lines = deps.map { |name, version| %(  spec.add_dependency "#{name}", "#{version}"\n) }
     lines.reject! { |line| text.include?(line.strip) }
     text.sub!(/^\s*# spec\.add_dependency.*\n/) { |example| example + lines.join } or text.sub!(/^end\s*\z/, "#{lines.join}end\n")
-    text.sub!(/^(\s*\w+\.)required_ruby_version\s*=\s*.*$/, '\1required_ruby_version = ">= 4.0"')
+    text.sub!(/^(\s*(?:\w+\.)?)required_ruby_version\s*=\s*.*$/, '\1required_ruby_version = ">= 4.0"')
     File.write(gemspec, text)
   end
 end
