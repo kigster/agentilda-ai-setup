@@ -1073,9 +1073,16 @@ def cmd_install(force:, dry_run:, executables: true)
   end
   say("")
 
-  if force
+  if force && executables
     say(paint("--force: wiping .sources for a clean re-clone", 33))
     FileUtils.rm_rf(STAGING_DIR) unless dry_run
+  elsif force
+    # A command source's output is the one thing in .sources this run cannot
+    # rebuild, so wiping it would leave it to the next run to execute again.
+    say(paint("--force: wiping .sources, keeping command sources' output (--no-executables)", 33))
+    unless dry_run
+      sources.reject(&:command?).each { |source| FileUtils.rm_rf(source.staging_dir) }
+    end
   end
 
   # The previous manifest is read even under --force, which starts the new one
@@ -1323,6 +1330,13 @@ end
 # The `agents` and `executables` verbs: the same reconciliation, restricted to
 # the names asked for, and reporting only unless `install` is written out.
 def cmd_tools(kind, args, dry_run:, force:, executables: true)
+  # Refused before the block is even read, so whether it is empty cannot
+  # change the answer.
+  verb = TOOL_VERBS.include?(args.first) ? args.first : nil
+  if verb && !executables
+    raise ConfigError, "`#{kind} #{verb}` runs installers, which --no-executables forbids"
+  end
+
   tools = load_tools(kind)
   if tools.empty?
     say("")
@@ -1330,11 +1344,7 @@ def cmd_tools(kind, args, dry_run:, force:, executables: true)
     return
   end
 
-  verb = TOOL_VERBS.include?(args.first) ? args.first : nil
   wanted = verb ? args.drop(1) : args
-  if verb && !executables
-    raise ConfigError, "`#{kind} #{verb}` runs installers, which --no-executables forbids"
-  end
   unless wanted.empty?
     unknown = wanted - tools.map(&:name)
     raise ConfigError, "not listed under #{kind}: #{unknown.join(", ")}" unless unknown.empty?

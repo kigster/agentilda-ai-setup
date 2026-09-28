@@ -960,6 +960,31 @@ RSpec.describe "scripts/install-sources" do
       expect(installed_skills).to eq(%w[alpha])
     end
 
+    it "keeps a command source's output when --force wipes .sources" do
+      tally = File.join(tmp, "runs")
+      write_config([{"name" => "cmd", "type" => "command",
+                     "install" => installer(skills: %w[alpha], tally: tally)}])
+      install
+
+      install("-f", "--no-executables")
+      aggregate_failures do
+        expect(File.read(tally).size).to eq(1)
+        expect(installed_skills).to eq(%w[alpha])
+      end
+      install
+      expect(File.read(tally).size).to eq(1)
+    end
+
+    it "refuses a verb even when its block is empty" do
+      File.write(File.join(root, "configuration.yml"), YAML.dump("agents" => [{"name" => "sh"}]))
+
+      output, status = install("--no-executables", "executables", "install")
+      aggregate_failures do
+        expect(status.exitstatus).to eq(78)
+        expect(output).to include("--no-executables forbids")
+      end
+    end
+
     it "refuses the install and update verbs" do
       File.write(File.join(root, "configuration.yml"), YAML.dump(
         "executables" => [{"name" => "definitely-not-a-binary", "installer" => "echo EXE-RAN"}]
