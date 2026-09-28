@@ -6,6 +6,7 @@
 #   scripts/install-sources              # clone what's missing, update the rest
 #   scripts/install-sources --dry-run    # say what it would do, touch nothing
 #   scripts/install-sources -f           # wipe .sources and re-clone everything fresh
+#   scripts/install-sources --no-executables  # run no installer: no agents, executables or commands
 #   scripts/install-sources list         # what's configured, and what's installed
 #
 # Reads configuration.yml, which a first run seeds from the committed
@@ -566,11 +567,20 @@ end
 #
 # @param source [Source]
 # @param dry_run [Boolean]
+# @param executables [Boolean] false under --no-executables: install what an
+#   earlier run left behind, but run nothing to produce more
 # @return [Boolean] whether the output is there to install from
-def run_install(source, dry_run:)
+def run_install(source, dry_run:, executables: true)
   if File.directory?(source.content_dir) && !Dir.empty?(source.content_dir)
     note("#{source.name}: already installed — `-f` runs it again")
     return true
+  end
+
+  unless executables
+    # False, so the source is not counted as reconciled and keeps whatever
+    # links it has: not running a command is not an instruction to uninstall.
+    note("#{source.name}: --no-executables, not running: #{source.install}")
+    return false
   end
 
   note("#{source.name}: $ #{source.install}")
@@ -613,9 +623,10 @@ end
 
 # @param source [Source]
 # @param dry_run [Boolean]
+# @param executables [Boolean]
 # @return [Boolean] whether this source is ready to install from
-def fetch(source, dry_run:)
-  return run_install(source, dry_run:) if source.command?
+def fetch(source, dry_run:, executables: true)
+  return run_install(source, dry_run:, executables:) if source.command?
 
   clone_or_update(source, dry_run:)
 end
@@ -1043,7 +1054,7 @@ def cmd_list
   end
 end
 
-def cmd_install(force:, dry_run:)
+def cmd_install(force:, dry_run:, executables: true)
   # Read the config before anything is written. A configuration.yml this script
   # refuses should not first cost you a `.sources` wipe or an empty `skills/`.
   sources = load_sources
@@ -1054,12 +1065,24 @@ def cmd_install(force:, dry_run:)
 
   # Binaries before skills. A source's `install:` may be one of them, and
   # `bt setup skills` cannot run on a machine that has no `bt`.
-  install_tools(dry_run:, force:)
+  if executables
+    install_tools(dry_run:, force:)
+  else
+    say("")
+    note("--no-executables: agents: and executables: left alone, command sources not run")
+  end
   say("")
 
-  if force
+  if force && executables
     say(paint("--force: wiping .sources for a clean re-clone", 33))
     FileUtils.rm_rf(STAGING_DIR) unless dry_run
+  elsif force
+    # A command source's output is the one thing in .sources this run cannot
+    # rebuild, so wiping it would leave it to the next run to execute again.
+    say(paint("--force: wiping .sources, keeping command sources' output (--no-executables)", 33))
+    unless dry_run
+      sources.reject(&:command?).each { |source| FileUtils.rm_rf(source.staging_dir) }
+    end
   end
 
   # The previous manifest is read even under --force, which starts the new one
@@ -1089,7 +1112,7 @@ def cmd_install(force:, dry_run:)
       next
     end
 
-    next unless fetch(source, dry_run:)
+    next unless fetch(source, dry_run:, executables:)
 
     enumerated = case source.type
     when "skills" then install_skills_source(source, manifest, dry_run:, force:)
@@ -1306,7 +1329,14 @@ end
 
 # The `agents` and `executables` verbs: the same reconciliation, restricted to
 # the names asked for, and reporting only unless `install` is written out.
-def cmd_tools(kind, args, dry_run:, force:)
+def cmd_tools(kind, args, dry_run:, force:, executables: true)
+  # Refused before the block is even read, so whether it is empty cannot
+  # change the answer.
+  verb = TOOL_VERBS.include?(args.first) ? args.first : nil
+  if verb && !executables
+    raise ConfigError, "`#{kind} #{verb}` runs installers, which --no-executables forbids"
+  end
+
   tools = load_tools(kind)
   if tools.empty?
     say("")
@@ -1314,7 +1344,6 @@ def cmd_tools(kind, args, dry_run:, force:)
     return
   end
 
-  verb = TOOL_VERBS.include?(args.first) ? args.first : nil
   wanted = verb ? args.drop(1) : args
   unless wanted.empty?
     unknown = wanted - tools.map(&:name)
@@ -1336,6 +1365,7 @@ def usage
       scripts/install-sources              clone what's missing, update the rest
       scripts/install-sources --dry-run    say what it would do, touch nothing
       scripts/install-sources -f           wipe .sources and re-clone everything
+      scripts/install-sources --no-executables  run no installer at all (see below)
       scripts/install-sources list         what's configured, and what's installed
       scripts/install-sources agents       which coding agents are configured, and installed
       scripts/install-sources agents install [name...]        install the ones that are missing
@@ -1345,6 +1375,11 @@ def usage
     A bare run installs `agents:` and then `executables:` before it looks at a
     single source, because a source's `install:` line may well be one of them.
     An entry already present is skipped; `-f` runs its installer anyway.
+
+    `--no-executables` skips all of that, and every `type: command` source's
+    `install:` too, so no `claude`, `npx`, `curl | sh` or the like runs. A
+    command source whose output is already in .sources is still installed
+    from it; one that never ran keeps whatever links it had.
 
     `update` is never part of that. It runs only when asked for by name, only
     for entries that state an `update:` line, and only for the ones already
@@ -1379,13 +1414,14 @@ end
 
 force = !!(args.delete("-f") || args.delete("--force"))
 dry_run = !!(args.delete("-n") || args.delete("--dry-run"))
+executables = !args.delete("--no-executables")
 verb = args.shift || "install"
 
 begin
   case verb
-  when "install" then cmd_install(force:, dry_run:) if ensure_configuration
+  when "install" then cmd_install(force:, dry_run:, executables:) if ensure_configuration
   when "list" then cmd_list if ensure_configuration
-  when "agents", "executables" then cmd_tools(verb, args, dry_run:, force:) if ensure_configuration
+  when "agents", "executables" then cmd_tools(verb, args, dry_run:, force:, executables:) if ensure_configuration
   else
     out("install-sources: unknown command #{verb.inspect}\n")
     usage

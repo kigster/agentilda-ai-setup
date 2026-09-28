@@ -51,6 +51,42 @@ gem install agentilda agent-lock
 bin/install
 ```
 
+### Using `direnv` 
+
+If you have direnv loaded, run `direnv allow .` and `bin` will be included in the `$PATH`. 
+
+### Full Help Screen
+
+```
+DESCRIPTION:
+  install agentic setup into ~/.agents (by copying desired files), and
+  symlink them from ~/.claude
+
+  NOTE: the tool assembles a local staging folder where it builds, and
+  then copies this checkout into ~/.agents, then link it into ~/.claude.
+
+USAGE:
+  bin/install [ options ]
+
+FLAGS:
+  --force           replace what is already in ~/.agents
+  --dry-run         say what it would do, touch nothing
+  
+  What not to do:
+  --no-sources      skip the build; copy what is already there
+  --no-setup        stop after the copy, skip the linking step
+  --no-executables  build, but run no installer (claude, npx, curl)
+
+  What to install (these can be combined):
+  --skills          copy only skills (new ones, unless --force)
+  --plugins         copy only plugins (new ones, unless --force)
+  --commands        copy only commands (new ones, unless --force)
+
+  To install just skills, for example, use:
+
+  bin/install --skills --no-executables
+```
+
 ### What install does
 
 For your benefit, here is the output of `bin/install --help`:
@@ -72,7 +108,15 @@ bin/install --no-sources
 
 # stop after the copy, skip the linking step
 bin/install --no-setup     
+
+# build, but run no installer: no claude, npx or curl | sh
+bin/install --no-executables
+
+# copy only these folders; the flags combine
+bin/install --skills --plugins --commands --no-executables
 ```
+
+A folder already in `~/.agents` is compared item by item. A skill, command or plugin missing there is copied and named; the ones already there are left alone and only counted. A new skill in `src/skills` reaches `~/.agents` without `--force`; an edited one still needs it.
 
 Three steps, and the checkout is none of them.
 
