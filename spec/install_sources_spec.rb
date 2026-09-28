@@ -917,6 +917,61 @@ RSpec.describe "scripts/install-sources" do
       expect(install.first).not_to include("SHOULD-NOT-RUN")
     end
   end
+
+  describe "--no-executables" do
+    it "runs no agent or executable installer" do
+      File.write(File.join(root, "configuration.yml"), YAML.dump(
+        "agents" => [{"name" => "definitely-not-an-agent", "installer" => "echo AGENT-RAN"}],
+        "executables" => [{"name" => "definitely-not-a-binary", "installer" => "echo EXE-RAN"}],
+        "sources" => []
+      ))
+
+      output, status = install("--no-executables")
+      aggregate_failures do
+        expect(status).to be_success
+        expect(output).not_to include("AGENT-RAN")
+        expect(output).not_to include("EXE-RAN")
+        expect(output).to include("--no-executables")
+      end
+    end
+
+    it "does not run a command source, and keeps what it installed before" do
+      tally = File.join(tmp, "runs")
+      write_config([{"name" => "cmd", "type" => "command",
+                     "install" => installer(skills: %w[alpha], tally: tally)}])
+      install
+      FileUtils.rm_rf(File.join(root, ".sources", "cmd"))
+
+      output, _status = install("--no-executables")
+      aggregate_failures do
+        expect(File.read(tally).size).to eq(1)
+        expect(output).to include("not running")
+        expect(installed_skills).to eq(%w[alpha])
+      end
+    end
+
+    it "still installs what a command source already left behind" do
+      tally = File.join(tmp, "runs")
+      write_config([{"name" => "cmd", "type" => "command",
+                     "install" => installer(skills: %w[alpha], tally: tally)}])
+      install
+
+      install("--no-executables")
+      expect(installed_skills).to eq(%w[alpha])
+    end
+
+    it "refuses the install and update verbs" do
+      File.write(File.join(root, "configuration.yml"), YAML.dump(
+        "executables" => [{"name" => "definitely-not-a-binary", "installer" => "echo EXE-RAN"}]
+      ))
+
+      output, status = install("--no-executables", "executables", "install")
+      aggregate_failures do
+        expect(status.exitstatus).to eq(78)
+        expect(output).not_to include("EXE-RAN")
+      end
+    end
+  end
   describe "agent targeting" do
     def write_config_with_agents(agents, sources)
       File.write(File.join(root, "configuration.yml"),
