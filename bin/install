@@ -1,29 +1,49 @@
 #!/usr/bin/env bash
 #
-# install — build, copy this checkout into ~/.agents, then link it into ~/.claude.
+# DESCRIPTION:
+#   install agentic setup into ~/.agents (by copying desired files), and
+#   symlink them from ~/.claude
+# 
+#   NOTE: the tool assembles a local staging folder where it builds, and
+#   then copies this checkout into ~/.agents, then link it into ~/.claude.
 #
-#   bin/install                   build, copy what is missing, never overwrite
-#   bin/install --force           replace what is already in ~/.agents
-#   bin/install --dry-run         say what it would do, touch nothing
-#   bin/install --no-sources      skip the build; copy what is already there
-#   bin/install --no-setup        stop after the copy, skip the linking step
-#   bin/install --no-executables  build, but run no installer (claude, npx, curl)
-#   bin/install --skills          copy only skills/; also --plugins, --commands,
-#                                 which combine: --skills --commands is both
+# USAGE:
+#   bin/install [ options ]
 #
-# A folder already in ~/.agents is compared item by item: a skill, command or
-# plugin that is not there yet is copied in, one that is there is left alone
-# and only counted. So a new skill in src/skills reaches ~/.agents without
-# --force, and an edited one still needs it.
+# FLAGS:
+#   --force           replace what is already in ~/.agents
+#   --dry-run         say what it would do, touch nothing
+#   
+#   What not to do:
+#   --no-sources      skip the build; copy what is already there
+#   --no-setup        stop after the copy, skip the linking step
+#   --no-executables  build, but run no installer (claude, npx, curl)
 #
-# Three steps, and the checkout is none of them.
+#   What to install (these can be combined):
+#   --skills          copy only skills (new ones, unless --force)
+#   --plugins         copy only plugins (new ones, unless --force)
+#   --commands        copy only commands (new ones, unless --force)
+#
+#   To install just skills, for example, use:
+#
+#   bin/install --skills --no-executables
+#
+# DETAILS:
+#   A folder already in ~/.agents is compared item by item: a skill, command or
+#   plugin that is not there yet is copied in, one that is there is left alone
+#   and only counted. So a new skill in src/skills reaches ~/.agents without
+#   --force, and an edited one still needs it.
+#
+#   Three steps, and the checkout is none of them.
 #
 #   1. scripts/install-sources assembles skills/ and plugins/ in the checkout
 #      from configuration.yml. They are generated: nothing under either is
 #      committed, so on a fresh clone neither exists until this has run.
+#
 #   2. this copies the result into ~/.agents with every symlink resolved, so
 #      ~/.agents holds real files and the checkout can then be moved, renamed
 #      or deleted without anything dangling.
+#
 #   3. bin/setup links ~/.agents into ~/.claude, unchanged. It needs no table
 #      of its own: the copy below is what turns src/commands into commands and
 #      workflow/agents into agents, so what setup walks is the flat tree it
