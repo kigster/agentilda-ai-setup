@@ -2,11 +2,19 @@
 #
 # install — build, copy this checkout into ~/.agents, then link it into ~/.claude.
 #
-#   bin/install                build, copy what is missing, never overwrite
-#   bin/install --force        replace what is already in ~/.agents
-#   bin/install --dry-run      say what it would do, touch nothing
-#   bin/install --no-sources   skip the build; copy what is already there
-#   bin/install --no-setup     stop after the copy, skip the linking step
+#   bin/install                   build, copy what is missing, never overwrite
+#   bin/install --force           replace what is already in ~/.agents
+#   bin/install --dry-run         say what it would do, touch nothing
+#   bin/install --no-sources      skip the build; copy what is already there
+#   bin/install --no-setup        stop after the copy, skip the linking step
+#   bin/install --no-executables  build, but run no installer (claude, npx, curl)
+#   bin/install --skills          copy only skills/; also --plugins, --commands,
+#                                 which combine: --skills --commands is both
+#
+# A folder already in ~/.agents is compared item by item: a skill, command or
+# plugin that is not there yet is copied in, one that is there is left alone
+# and only counted. So a new skill in src/skills reaches ~/.agents without
+# --force, and an edited one still needs it.
 #
 # Three steps, and the checkout is none of them.
 #
@@ -73,8 +81,13 @@ DRY_RUN=0
 FORCE=0
 RUN_SETUP=1
 RUN_SOURCES=1
+EXECUTABLES=1
+
+# Labels from COPY to restrict the copy to. Empty means all of them.
+ONLY=()
 
 copied=0
+existing=0
 skipped=0
 conflicts=0
 
@@ -111,8 +124,50 @@ in_list() {
 }
 
 usage() {
-  sed -n '3,31p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '3,39p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   exit 64
+}
+
+# Whether a COPY label is part of this run: every label, unless --skills,
+# --plugins or --commands narrowed it.
+#
+# @param $1 the label, as the right-hand side of a COPY entry names it
+selected() {
+  [[ ${#ONLY[@]} -eq 0 ]] && return 0
+  in_list "$1" "${ONLY[@]}"
+}
+
+# Copy each child of one directory that the other does not have yet, and count
+# the ones it does. Only what is new is named; the rest is one number.
+#
+# @param $1 source directory in this checkout
+# @param $2 destination directory in ~/.agents, which already exists
+# @param $3 label to report under
+copy_new_items() {
+  local from="$1" to="$2" label="$3"
+  local child name new=0 there=0
+
+  shopt -s nullglob
+  for child in "$from"/*; do
+    name="$(basename "$child")"
+    if [[ -e "$to/$name" || -L "$to/$name" ]]; then
+      there=$((there + 1))
+      continue
+    fi
+    # -L for the same reason as the whole-folder copy below.
+    [[ $DRY_RUN -eq 1 ]] || cp -RL "$child" "$to/$name"
+    new=$((new + 1))
+    ok "$label/$name ${c_dim}new${c_reset}"
+  done
+  shopt -u nullglob
+
+  copied=$((copied + new))
+  existing=$((existing + there))
+  if [[ $new -eq 0 ]]; then
+    note "$label ${c_dim}nothing new, $there already there${c_reset}"
+  else
+    note "$label ${c_dim}$new new, skipped $there already there${c_reset}"
+  fi
 }
 
 while [[ $# -gt 0 ]]; do
@@ -133,6 +188,14 @@ while [[ $# -gt 0 ]]; do
     RUN_SOURCES=0
     shift
     ;;
+  --no-executables)
+    EXECUTABLES=0
+    shift
+    ;;
+  --skills | --plugins | --commands)
+    ONLY+=("${1#--}")
+    shift
+    ;;
   -h | --help) usage ;;
   *)
     printf 'install: unknown argument: %s\n\n' "$1" >&2
@@ -143,11 +206,18 @@ done
 
 # --------------------------------------------------------------------- run --
 
+# The build produces skills/ and plugins/ and nothing else, so a run narrowed
+# to --commands has nothing to wait for it on.
+if [[ ${#ONLY[@]} -gt 0 ]] && ! selected skills && ! selected plugins; then
+  RUN_SOURCES=0
+fi
+
 if [[ $RUN_SOURCES -eq 1 ]]; then
   say ""
   say "${c_bold}Assembling skills and plugins${c_reset}"
   sources_args=()
   [[ $DRY_RUN -eq 1 ]] && sources_args+=(--dry-run)
+  [[ $EXECUTABLES -eq 0 ]] && sources_args+=(--no-executables)
   # --force is deliberately not passed on. Here it means "replace what is in
   # ~/.agents"; to install-sources it means "wipe .sources and re-clone every
   # source from scratch", which is a much bigger thing to do by implication.
@@ -164,6 +234,7 @@ fi
 # What settles it is whether the directory is there.
 if [[ $DRY_RUN -eq 0 ]]; then
   for name in "${REQUIRED[@]}"; do
+    selected "$name" || continue
     [[ -d "$REPO_ROOT/$name" ]] && continue
     say ""
     bad "no $name/ to copy"
@@ -210,6 +281,8 @@ for entry in "${COPY[@]}"; do
   to="$AGENTS_DIR/${entry##*:}"
   label="${entry##*:}"
 
+  selected "$label" || continue
+
   if [[ ! -e "$from" ]]; then
     skipped=$((skipped + 1))
     if in_list "${entry%%:*}" "${GENERATED[@]}"; then
@@ -217,6 +290,13 @@ for entry in "${COPY[@]}"; do
     else
       note "$label ${c_dim}not in this checkout${c_reset}"
     fi
+    continue
+  fi
+
+  # A folder of skills, commands or bundles is a set of independent items, so
+  # one that is already installed still takes the items it lacks.
+  if [[ -d "$from" && -d "$to" && ! -L "$to" && $FORCE -eq 0 ]]; then
+    copy_new_items "$from" "$to" "$label"
     continue
   fi
 
@@ -239,10 +319,10 @@ for entry in "${COPY[@]}"; do
 done
 
 say ""
-printf '  %scopied %d   skipped %d   conflicts %d%s\n' \
-  "$c_bold" "$copied" "$skipped" "$conflicts" "$c_reset" >&2
+printf '  %scopied %d   already there %d   skipped %d   conflicts %d%s\n' \
+  "$c_bold" "$copied" "$existing" "$skipped" "$conflicts" "$c_reset" >&2
 
-if [[ $conflicts -gt 0 && $FORCE -eq 0 ]]; then
+if [[ $((conflicts + existing)) -gt 0 && $FORCE -eq 0 ]]; then
   say ""
   say "  ${c_yellow}Nothing already installed was replaced. Re-run with --force to update.${c_reset}"
 fi

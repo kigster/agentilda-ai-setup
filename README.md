@@ -72,7 +72,15 @@ bin/install --no-sources
 
 # stop after the copy, skip the linking step
 bin/install --no-setup     
+
+# build, but run no installer: no claude, npx or curl | sh
+bin/install --no-executables
+
+# copy only these folders; the flags combine
+bin/install --skills --plugins --commands
 ```
+
+A folder already in `~/.agents` is compared item by item. A skill, command or plugin missing there is copied and named; the ones already there are left alone and only counted. A new skill in `src/skills` reaches `~/.agents` without `--force`; an edited one still needs it.
 
 Three steps, and the checkout is none of them.
 

@@ -138,8 +138,41 @@ RSpec.describe "bin/install" do
       output, _status = install(root:)
 
       aggregate_failures do
-        expect(output).to include("already there").and include("conflicts 7")
+        expect(output).to include("already there").and include("conflicts 1")
         expect(File.read(File.join(agents_dir, "context", "about.md"))).to eq("edited by hand\n")
+      end
+    end
+
+    it "adds what a folder is missing, names only that, and counts the rest" do
+      root = checkout
+      install(root:)
+      write(root, "src/commands/plan-new.md", "# another command\n")
+      write(root, "skills/fresh-skill/SKILL.md", "---\nname: fresh-skill\n---\n")
+      File.write(File.join(agents_dir, "commands", "plan-run.md"), "edited by hand\n")
+
+      output, status = install(root:)
+
+      aggregate_failures do
+        expect(status).to be_success
+        expect(File.file?(File.join(agents_dir, "commands", "plan-new.md"))).to be(true)
+        expect(File.file?(File.join(agents_dir, "skills", "fresh-skill", "SKILL.md"))).to be(true)
+        expect(File.read(File.join(agents_dir, "commands", "plan-run.md"))).to eq("edited by hand\n")
+        expect(output).to include("commands/plan-new.md").and include("skills/fresh-skill")
+        expect(output).not_to include("commands/plan-run.md")
+        expect(output).to include("1 new, skipped 1 already there")
+      end
+    end
+
+    it "copies nothing new under --dry-run, while naming it" do
+      root = checkout
+      install(root:)
+      write(root, "src/commands/plan-new.md", "# another command\n")
+
+      output, _status = install("--dry-run", root:)
+
+      aggregate_failures do
+        expect(output).to include("commands/plan-new.md")
+        expect(File.exist?(File.join(agents_dir, "commands", "plan-new.md"))).to be(false)
       end
     end
 
@@ -369,6 +402,39 @@ RSpec.describe "bin/install" do
   # either is committed, so on a fresh clone neither exists until the build has
   # run. Copying regardless is how you get an installed tree with no skills in
   # it and a run that says it worked.
+  describe "narrowing the copy" do
+    it "copies only commands under --commands, and skips the build" do
+      output, status = install("--commands", "--no-setup")
+
+      aggregate_failures do
+        expect(status).to be_success
+        expect(output).not_to include("stand-in install-sources ran")
+        expect(Dir.children(agents_dir)).to eq(%w[commands])
+      end
+    end
+
+    it "combines --skills and --plugins, and builds for them" do
+      output, status = install("--skills", "--plugins", "--no-setup")
+
+      aggregate_failures do
+        expect(status).to be_success
+        expect(output).to include("stand-in install-sources ran")
+        expect(Dir.children(agents_dir).sort).to eq(%w[plugins skills])
+      end
+    end
+  end
+
+  describe "--no-executables" do
+    it "hands the flag to the build" do
+      root = checkout
+      File.open(File.join(root, "scripts", "install-sources"), "a") { |f| f.puts 'echo "build args: $*" >&2' }
+
+      output, _status = install("--no-executables", "--no-setup", root:)
+
+      expect(output).to include("build args: --no-executables")
+    end
+  end
+
   describe "the build it runs first" do
     it "installs what the build produced, plugins included" do
       install
