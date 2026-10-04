@@ -158,13 +158,17 @@ executables:
   - name: typesafe-agents
     installer: npx skills add typesafe-ai/skills --skill typesafe-ai
 
-
 sources:
   - name: jev
     type: plugin
     repo: https://github.com/typesafe-ai/skills.git
     adopt: [plugins]
     agents: [claude]
+
+      #  - name: agentilda-ai-skills
+      #    type: skills
+      #    repo: git@github.com:kigster/agentilda-ai-setup.git
+      #    path: src/skills
 
   - name: mattpocock
     type: skills

@@ -26,3 +26,8 @@ vendor/bundle/
 # Per-machine, seeded from configuration.example.yml on a first run. Which
 # skills and which agents a machine should have is a property of the machine.
 /configuration.yml
+
+install.log
+/.pi
+/.qwen
+/.zencoder

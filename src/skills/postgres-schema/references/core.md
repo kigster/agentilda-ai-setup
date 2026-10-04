@@ -134,20 +134,6 @@ btc_amount     numeric(24, 8)             -- fractional by nature
 
 In Rails, `t.bigint :amount_cents` plus a value object (or `money-rails`) beats `t.decimal`. If you do use `decimal`, always state precision and scale - an unqualified `numeric` accepts anything and silently stores whatever it is given.
 
-## Migrations
-
-Treat the migration as a production operation, not a schema edit.
-
-> The rules below are the summary. `migrations.md` in this directory is the long form, and it is where reversibility, the mechanics and failure modes of concurrent index builds, transactional DDL, expand/contract and batched backfills are actually explained. Read it before migrating a table that has rows in it.
-
-Install `strong_migrations` - it will catch the classics before your DBA (or your 3am pager) does. The non-negotiables on PostgreSQL: `add_index` on any table with real rows must be `algorithm: :concurrently` with `disable_ddl_transaction!`; never combine that migration with anything else.
-
-Adding a column with a default is safe on PG 11+, but adding `null: false` to an existing column is not - add a `CHECK (col IS NOT NULL) NOT VALID`, `VALIDATE CONSTRAINT` in a separate migration, then `SET NOT NULL`, which PG 12+ will accept using the validated constraint as proof.
-
-Backfills belong in their own batched migration or a rake task, never in the same transaction as DDL. Renaming and dropping columns require the ignored-column dance (`self.ignored_columns +=`, deploy, then drop) because your old app processes are still running mid-deploy.
-
-And switch to `schema_format = :sql`; `schema.rb` silently loses partial indexes, expression indexes, exclusion constraints, generated columns, and every extension you care about.
-
 ### Timeouts, and why a migration takes the site down without ever running
 
 `strong_migrations` catches the dangerous *statements*. It does not save you from the dangerous *wait*, and the wait is what actually causes the outage.
