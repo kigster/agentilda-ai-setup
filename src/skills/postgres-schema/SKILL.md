@@ -99,9 +99,11 @@ Most frameworks have some form of migrations. Rails has them, _sqlx for Rust has
 
    1. ###### **`just db-migrate`,**
 
-   2. ###### `just db-migrate-up <migration-number>`
+   2. ###### `just db-migrate-up [ <migration-number> ]` 
 
-   3. **`just db-migration-down <migration-number>`**
+   3. **`just db-migration-down [ <migration-number> ]`**
+
+   4. If migration number is not specified, assume the last migration. So **`just db-migrate-down`** applies to the last applied migration.
 
 4. Keep migrations short: no more than a single table create, modify, or backfill + constraints, indexes and foreign keys. 
 
