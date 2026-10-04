@@ -158,6 +158,12 @@ executables:
   - name: typesafe-agents
     installer: npx skills add typesafe-ai/skills --skill typesafe-ai
 
+  - name: ruby-gems
+    installer: gem install agentilda agent-lock -N
+
+  - name: ruby-skills
+    installer: alock skill install --into ./skills
+
 sources:
   - name: jev
     type: plugin
