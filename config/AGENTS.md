@@ -26,6 +26,8 @@ R4. DO NOT EVER DO ANYTHING ILLEGAL, SUCH AS HACKING INTO SERVERS ON A LOCAL NET
 
 R5: WHEN WORKING WITH THIRD PARTIES DO SCAN THEIR TERMS AND CONDITIONS and PRIVACY POLICY AND IF ANYTHING UNUSUAL OR QUESTIONABLE IS FOUND, YOU WILL NOTIFY THE USER (HUMAN) AND LET THEM DECIDE HOW TO PROCEED.
 
+R6: DO NOT EVER LEAVE ATTRIBUTION ON COMMIT DESCRIPTION OR A PR DESCRIPTION THAT READS SOMETHING ALONG THE LINES OF "Co-Authored by Claude..... ". Your github user is already in Co-Authors, so this is unecessary slop.
+
 ## Plugins and skills
 
 The plugins and skills should be installed using the repo `agentilda-ai-setup` which provides a configuration file that lists every single plugin/skill repo we are using. 
@@ -91,8 +93,8 @@ A fresh worktree holds every **tracked** file and nothing else, so anything git 
 
 ```bash
 $ cd ~/.agents.worktrees/fix-dsl-alignment-bug
-$ ~/.agents/bin/setup-worktree              # copy .env* and credential keys from the main checkout
-$ ~/.agents/bin/setup-worktree --dry-run    # look first
+$ ~/.claude/bin/setup-worktree              # copy .env* and credential keys from the main checkout
+$ ~/.claude/bin/setup-worktree --dry-run    # look first
 ```
 
 It copies only files git ignores, so it can add what a checkout was missing and can never shadow tracked content with a stale local copy. It refuses to overwrite an existing file without `--force`, and production credential keys are opt-in via `--production`.
@@ -115,6 +117,20 @@ git log --oneline origin/main..HEAD     # what is on the branch and not on main
 ```
 
 If `gh pr list` prints nothing, the work is not submitted, whatever the push said. Open one. If the branch's pull request is already merged, branch again from `main`, move the commits across, and open a new one.
+
+### Review comments
+
+A pull request you authored or co-authored is not finished while it has an unanswered review comment. Every review comment, from a human or a bot (CodeRabbit, Copilot and the like), gets a reply in its own thread:
+
+- **You agree:** fix it, push, and reply "Fixed in `<short sha>`", naming the commit that fixed it.
+- **You disagree:** do not change the code; reply explaining why, with the evidence (a spec, a test, a measurement), and leave the thread for the human to resolve.
+
+Read them before merging and before calling the work done:
+
+```bash
+gh api repos/{owner}/{repo}/pulls/<n>/comments   # inline review comments
+gh pr view <n> --comments                        # review summaries and conversation
+```
 
 ## **Tools**
 
