@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+# vim: ft=bash
+#
+# Review state of the current user's open pull requests, and the two GitHub
+# mutations that answer a review thread. Run inside the repository's checkout.
+#
+#   pr-reviews pending [PR...]       JSON, one object per open PR authored by @me
+#   pr-reviews reply <thread-id> <body-file>
+#   pr-reviews resolve <thread-id>
+#   pr-reviews comment <PR> <body-file>
+#   pr-reviews wait [--idle SECS] [--interval SECS] [--deadline EPOCH]
+#
+# `pending` derives everything from GitHub, so it holds no state between runs:
+#   - a thread needs a response when it is unresolved and its last comment is
+#     not ours;
+#   - a review body or conversation comment needs one when someone else posted
+#     it after our latest conversation comment.
+# Bot notices that a review did not happen ("Review limit reached", "Review
+# skipped") are not reviews: they need no answer and do not count as one.
+# A PR named on the command line that is no longer open reports "merged" or
+# "closed": a push to its branch would succeed and land where nobody looks.
+# A PR is "unreviewed" when nobody else has reviewed, commented or opened a
+# thread on it yet.
+#
+# `wait` snapshots every item `pending` reports, then polls. It prints the
+# `pending` JSON and exits 0 as soon as an item appears that was not in the
+# snapshot, or exits 3 once --idle seconds (default 300) pass with nothing new
+# or --deadline (epoch seconds) is reached, whichever comes first.
+
+# GraphQL variables ($t, $b) are meant literally inside single quotes.
+# shellcheck disable=SC2016
+set -euo pipefail
+
+# A stale GH_TOKEN shadows the keyring login and fails every call with 401.
+unset GH_TOKEN
+
+usage() {
+  sed -n '7,11p' "$0" | sed 's/^#  //' >&2
+  exit 2
+}
+
+read -r -d '' PR_QUERY <<'GRAPHQL' || true
+query($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $number) {
+      number title url state headRefName headRefOid isDraft reviewDecision
+      author { login }
+      reviews(first: 100) {
+        nodes { id state body submittedAt url author { login } }
+      }
+      comments(last: 100) {
+        nodes { id databaseId body createdAt url author { login } }
+      }
+      reviewThreads(first: 100) {
+        nodes {
+          id isResolved isOutdated path line
+          comments(last: 20) {
+            nodes { databaseId body createdAt url author { login } }
+          }
+        }
+      }
+    }
+  }
+}
+GRAPHQL
+
+# Reduces one pullRequest object to what an agent acts on.
+read -r -d '' SUMMARY <<'JQ' || true
+def notice: (.body // "") | test("Review limit reached|Review skipped");
+.data.repository.pullRequest as $pr
+| ([$pr.comments.nodes[] | select(.author.login == $me) | .createdAt] | max // "") as $answered_at
+| ([$pr.reviewThreads.nodes[]
+    | select(.isResolved | not)
+    | select(.comments.nodes[-1].author.login != $me)
+    | {
+        thread_id: .id, path, line, outdated: .isOutdated,
+        url: .comments.nodes[0].url,
+        conversation: [.comments.nodes[] | {author: .author.login, body, at: .createdAt}]
+      }]) as $threads
+| ([$pr.reviews.nodes[]
+    | select(.author.login != $me and (.body | length) > 0 and .submittedAt > $answered_at)
+    | select(notice | not)
+    | {review_id: .id, author: .author.login, state, body, url, at: .submittedAt}]) as $reviews
+| ([$pr.comments.nodes[]
+    | select(.author.login != $me and .createdAt > $answered_at)
+    | select(notice | not)
+    | {comment_id: .id, author: .author.login, body, url, at: .createdAt}]) as $comments
+| ([$pr.reviews.nodes[], $pr.comments.nodes[], $pr.reviewThreads.nodes[].comments.nodes[]]
+    | map(select(.author.login != $me and (notice | not))) | length) as $outside
+| {
+    number: $pr.number, title: $pr.title, url: $pr.url,
+    branch: $pr.headRefName, head: $pr.headRefOid, draft: $pr.isDraft,
+    review_decision: $pr.reviewDecision,
+    state: $pr.state,
+    status: (if $pr.state != "OPEN" then ($pr.state | ascii_downcase)
+             elif $outside == 0 then "unreviewed"
+             elif ($threads + $reviews + $comments | length) > 0 then "needs-response"
+             else "answered" end),
+    unanswered_threads: $threads,
+    unanswered_reviews: $reviews,
+    unanswered_comments: $comments
+  }
+JQ
+
+repo_coords() {
+  gh repo view --json owner,name -q '.owner.login + " " + .name'
+}
+
+pending() {
+  local owner repo me numbers
+  read -r owner repo < <(repo_coords)
+  me=$(gh api user -q .login)
+  if [[ $# -gt 0 ]]; then
+    numbers=("$@")
+  else
+    mapfile -t numbers < <(gh pr list --author @me --state open --limit 100 --json number -q '.[].number')
+  fi
+  for n in "${numbers[@]}"; do
+    gh api graphql -f query="$PR_QUERY" -F owner="$owner" -F repo="$repo" -F number="$n" \
+      | jq --arg me "$me" "$SUMMARY"
+  done | jq -s '.'
+}
+
+reply() {
+  local thread=$1 body_file=$2
+  [[ -s $body_file ]] || { echo "pr-reviews: empty body file: $body_file" >&2; exit 2; }
+  gh api graphql \
+    -f query='mutation($t: ID!, $b: String!) { addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $t, body: $b}) { comment { url } } }' \
+    -F t="$thread" -F b=@"$body_file" \
+    -q '.data.addPullRequestReviewThreadReply.comment.url'
+}
+
+resolve() {
+  gh api graphql \
+    -f query='mutation($t: ID!) { resolveReviewThread(input: {threadId: $t}) { thread { isResolved } } }' \
+    -F t="$1" \
+    -q '.data.resolveReviewThread.thread.isResolved'
+}
+
+# One line per item that needs a response; a reviewer's new reply on a thread
+# changes the thread's line, so it counts as new.
+fingerprints() {
+  jq -r '.[] | .number as $n
+    | (.unanswered_threads[] | "\($n) thread \(.thread_id) \(.conversation[-1].at)"),
+      (.unanswered_reviews[] | "\($n) review \(.review_id)"),
+      (.unanswered_comments[] | "\($n) comment \(.comment_id)")' | sort
+}
+
+wait_for_reviews() {
+  local idle=300 interval=60 deadline=0
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --idle) idle=$2; shift 2 ;;
+      --interval) interval=$2; shift 2 ;;
+      --deadline) deadline=$2; shift 2 ;;
+      *) usage ;;
+    esac
+  done
+  local stop=$(( $(date +%s) + idle ))
+  (( deadline > 0 && deadline < stop )) && stop=$deadline
+  local before now
+  before=$(pending | fingerprints)
+  while (( $(date +%s) + interval <= stop )); do
+    sleep "$interval"
+    now=$(pending)
+    if comm -13 <(echo "$before") <(echo "$now" | fingerprints) | grep -q .; then
+      echo "$now"
+      return 0
+    fi
+  done
+  echo "pr-reviews: nothing new for ${idle}s, or the deadline passed" >&2
+  return 3
+}
+
+case "${1:-}" in
+  pending) shift; pending "$@" ;;
+  reply) [[ $# -eq 3 ]] || usage; reply "$2" "$3" ;;
+  resolve) [[ $# -eq 2 ]] || usage; resolve "$2" ;;
+  comment) [[ $# -eq 3 ]] || usage; gh pr comment "$2" --body-file "$3" ;;
+  wait) shift; wait_for_reviews "$@" ;;
+  *) usage ;;
+esac
