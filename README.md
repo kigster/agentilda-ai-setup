@@ -152,6 +152,14 @@ The trade, deliberately: an edit to `src/skills/foo` reaches `~/.claude` only wh
 
 `configuration.yml` is the file the installer reads. It is git-ignored and per machine, because which skills and which coding agents a machine should have is a property of that machine. A first run copies `configuration.example.yml` across and then stops, so you get to read it before it installs anything.
 
+The installer reads the first of these that exists, and only seeds the last one:
+
+1. `~/.local/config/agentilda-configuration.yml`
+1. `~/.agentilda-configuration.yml`
+1. `configuration.yml` in the checkout
+
+A file under `$HOME` outlives any one clone or worktree, so a fresh checkout installs the machine's list instead of seeding a new one. The run says `reading ~/…` whenever one of the two shadows the checkout's own file.
+
 It has two top-level keys. `agents:` names the coding agents themselves and the vendor's own install line for each:
 
 ```bash

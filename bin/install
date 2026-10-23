@@ -261,7 +261,10 @@ if [[ $DRY_RUN -eq 0 ]]; then
     say ""
     say "  ${c_yellow}$name/ is generated from configuration.yml, not committed, so a${c_reset}"
     say "  ${c_yellow}fresh clone has none until scripts/install-sources builds it.${c_reset}"
-    if [[ ! -f "$REPO_ROOT/configuration.yml" ]]; then
+    # The same three install-sources looks for, in its order.
+    if [[ ! -f "$HOME/.local/config/agentilda-configuration.yml" &&
+          ! -f "$HOME/.agentilda-configuration.yml" &&
+          ! -f "$REPO_ROOT/configuration.yml" ]]; then
       say "  ${c_yellow}There is no configuration.yml yet either — install-sources seeds${c_reset}"
       say "  ${c_yellow}one from configuration.example.yml and stops so you can read it.${c_reset}"
     fi

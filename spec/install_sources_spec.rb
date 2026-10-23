@@ -57,7 +57,7 @@ RSpec.describe "scripts/install-sources" do
   #
   # @return [Array(String, Process::Status)] stderr and the exit status
   def install(*)
-    env = {"INSTALL_SOURCES_ROOT" => root, "NO_COLOR" => "1", "RUBYOPT" => "-W0"}
+    env = {"INSTALL_SOURCES_ROOT" => root, "HOME" => home, "NO_COLOR" => "1", "RUBYOPT" => "-W0"}
     out, err, status = Open3.capture3(env, script, *)
     [out + err, status]
   end
@@ -115,12 +115,14 @@ RSpec.describe "scripts/install-sources" do
     Dir.mktmpdir("install-sources") do |tmp|
       @tmp = tmp
       @root = File.join(tmp, "repo")
+      @home = File.join(tmp, "home")
+      FileUtils.mkdir_p(@home)
       FileUtils.mkdir_p(@root)
       example.run
     end
   end
 
-  attr_reader :tmp, :root
+  attr_reader :tmp, :root, :home
 
   describe "with no filter" do
     it "installs every skill the source carries" do
@@ -645,8 +647,65 @@ RSpec.describe "scripts/install-sources" do
       output, status = install
       aggregate_failures do
         expect(status.exitstatus).to eq(78)
-        expect(output).to include("no configuration.yml")
+        expect(output).to include("no configuration (")
       end
+    end
+  end
+
+  describe "where the configuration is read from" do
+    let(:xdg_file) { File.join(home, ".local", "config", "agentilda-configuration.yml") }
+    let(:dot_file) { File.join(home, ".agentilda-configuration.yml") }
+
+    # @param path [String] where the configuration goes
+    # @param skills [Array<String>] what its one source installs
+    def config_at(path, skills)
+      repo = upstream(File.join(tmp, File.basename(path, ".yml") + "-up"), skills)
+      FileUtils.mkdir_p(File.dirname(path))
+      File.write(path, YAML.dump("sources" => [{"name" => "up", "type" => "skills", "repo" => repo, "path" => "skills"}]))
+    end
+
+    it "prefers ~/.local/config/agentilda-configuration.yml over the other two" do
+      config_at(xdg_file, %w[xdg])
+      config_at(dot_file, %w[dot])
+      config_at(File.join(root, "configuration.yml"), %w[local])
+
+      output, status = install
+      aggregate_failures do
+        expect(status).to be_success
+        expect(output).to include("reading ~/.local/config/agentilda-configuration.yml")
+        expect(installed_skills).to eq(%w[xdg])
+      end
+    end
+
+    it "falls back to ~/.agentilda-configuration.yml before the checkout's own file" do
+      config_at(dot_file, %w[dot])
+      config_at(File.join(root, "configuration.yml"), %w[local])
+
+      output, status = install
+      aggregate_failures do
+        expect(status).to be_success
+        expect(output).to include("reading ~/.agentilda-configuration.yml")
+        expect(installed_skills).to eq(%w[dot])
+      end
+    end
+
+    it "reads the checkout's configuration.yml without announcing it" do
+      config_at(File.join(root, "configuration.yml"), %w[local])
+
+      output, status = install
+      aggregate_failures do
+        expect(status).to be_success
+        expect(output).not_to include("reading ")
+        expect(installed_skills).to eq(%w[local])
+      end
+    end
+
+    it "seeds nothing when a home configuration exists" do
+      config_at(dot_file, %w[dot])
+      write_example([])
+
+      install
+      expect(File.exist?(File.join(root, "configuration.yml"))).to be(false)
     end
   end
   # `sh` stands in for an installed agent: every machine that can run this
