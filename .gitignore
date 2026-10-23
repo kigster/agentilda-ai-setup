@@ -28,6 +28,14 @@ vendor/bundle/
 /configuration.yml
 
 install.log
+
 /.pi
 /.qwen
 /.zencoder
+/.agents
+/.claude
+/.grok
+/.hermes
+/.kiro
+
+skills-lock.json
