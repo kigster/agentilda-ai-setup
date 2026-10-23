@@ -160,6 +160,8 @@ The installer reads the first of these that exists, and only seeds the last one:
 
 A file under `$HOME` outlives any one clone or worktree, so a fresh checkout installs the machine's list instead of seeding a new one. The run says `reading ~/…` whenever one of the two shadows the checkout's own file.
 
+`bin/config` makes the move: unless a home file already exists, it copies the checkout's `configuration.yml` (or the example) to `~/.local/config/agentilda-configuration.yml`, opens it for editing, and reopens it until `scripts/install-sources check` accepts it. `bin/config --overwrite` seeds it again, backing the old file up to a temp directory first.
+
 It has two top-level keys. `agents:` names the coding agents themselves and the vendor's own install line for each:
 
 ```bash

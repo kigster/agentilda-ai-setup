@@ -463,6 +463,10 @@ def config
   return {} unless File.file?(CONFIG_FILE)
 
   (YAML.safe_load_file(CONFIG_FILE) || {}).tap do |c|
+    # Half an edit is often a bare scalar or a list, and `keys` on either
+    # would end the run on a NoMethodError rather than say what is wrong.
+    raise ConfigError, "the top level is a #{c.class.name.downcase}, not a mapping of keys" unless c.is_a?(Hash)
+
     reject_unknown_keys(c, TOP_LEVEL_KEYS, "keys nothing reads at the top level")
 
     # Both blocks, whichever one this run is about. A misspelled key is wrong
@@ -1385,6 +1389,20 @@ end
 
 # ------------------------------------------------------------------- cli --
 
+# Everything `install` would refuse, refused without touching the disk:
+# `bin/config` runs this after every edit, and seeding here would turn a
+# missing file into a valid one.
+def cmd_check
+  unless File.file?(CONFIG_FILE)
+    bad("no #{config_label} to check")
+    exit 78
+  end
+
+  load_sources
+  TOOL_KINDS.each { |kind| load_tools(kind) }
+  ok("#{config_label} is valid")
+end
+
 def usage
   puts <<~USAGE
     install-sources — pull external skills and plugins into this repo
@@ -1394,6 +1412,7 @@ def usage
       scripts/install-sources -f           wipe .sources and re-clone everything
       scripts/install-sources --no-executables  run no installer at all (see below)
       scripts/install-sources list         what's configured, and what's installed
+      scripts/install-sources check        validate the configuration, install nothing
       scripts/install-sources agents       which coding agents are configured, and installed
       scripts/install-sources agents install [name...]        install the ones that are missing
       scripts/install-sources agents update [name...]         run each entry's update: line
@@ -1448,13 +1467,14 @@ begin
   case verb
   when "install" then cmd_install(force:, dry_run:, executables:) if ensure_configuration
   when "list" then cmd_list if ensure_configuration
+  when "check" then cmd_check
   when "agents", "executables" then cmd_tools(verb, args, dry_run:, force:, executables:) if ensure_configuration
   else
     out("install-sources: unknown command #{verb.inspect}\n")
     usage
     exit 64
   end
-rescue ConfigError => e
-  bad("configuration.yml: #{e.message}")
+rescue ConfigError, Psych::SyntaxError => e
+  bad("#{config_label}: #{e.message}")
   exit 78
 end

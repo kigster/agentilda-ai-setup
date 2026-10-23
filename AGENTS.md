@@ -41,7 +41,7 @@ just docs                                # regenerate context/feature-building/a
 
 `standard`, not `rubocop`, is the linter (see Gemfile comment: "standard is rubocop with the arguing removed"). `standardrb` ignores `skills/`, `plugins/`, `coverage/`, `tmp/` (see `.standard.yml`). One config at the root governs the whole tree: lint runs from here so it sees `scripts/` and `workflow/` alike, with `BUNDLE_GEMFILE` pointed at the gem.
 
-Executables sit in three places, by what they need in order to run. `bin/` holds **Bash**, `scripts/` holds the one **Ruby** executable that must work on a machine with no bundle yet, and `workflow/exe/` holds the gem's, which resolve `BUNDLE_GEMFILE` from their own location and so run the same from `PATH` as from another project's root. `.envrc` puts all three on `PATH`; run `direnv allow .` after cloning or after editing `.envrc`.
+Executables sit in three places, by what they need in order to run. `bin/` holds **Bash**, except `bin/config`, plain-stdlib Ruby that moves a machine's configuration to `~/.local/config/agentilda-configuration.yml` and validates each edit with `scripts/install-sources check`; `scripts/` holds the one **Ruby** executable that must work on a machine with no bundle yet, and `workflow/exe/` holds the gem's, which resolve `BUNDLE_GEMFILE` from their own location and so run the same from `PATH` as from another project's root. `.envrc` puts all three on `PATH`; run `direnv allow .` after cloning or after editing `.envrc`.
 
 The `agentilda` CLI itself (`workflow/exe/agentilda`), which also answers to `tilda`, a symlink beside it for the times you are typing it twenty times an hour:
 
