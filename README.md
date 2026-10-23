@@ -21,14 +21,31 @@ ______________________________________________________________________
 
 ## Customizing Configuration
 
-Before you proceed to install anything, it is strongly recommended that you copy the [example configuration file](https://github.com/kigster/agentilda-ai-setup/blob/main/configuration.example.yml) to `configuration.yml`:
+> [!IMPORTANT]
+> **Your configuration lives in your home directory, not in this checkout.** Run `bin/config` before anything else. The installer reads the first of these that exists:
+>
+> 1. `~/.local/config/agentilda-configuration.yml` (what `bin/config` creates)
+> 1. `~/.agentilda-configuration.yml`
+> 1. `configuration.yml` in this checkout (legacy; still read when neither home file exists)
+>
+> A home file outlives any clone or worktree, so every checkout on the machine installs the same list. When a home file shadows a `configuration.yml` sitting in the checkout, `scripts/install-sources` says `reading ~/…`, and the checkout's file is ignored.
 
 ```bash
-cp configuration.example.yml configuration.yml
-vim configuration.yml
+bin/config                          # create ~/.local/config/agentilda-configuration.yml and edit it
+bin/config --overwrite              # start it over; the old file is backed up to a temp directory first
+scripts/install-sources check       # validate whichever file the installer would read
 ```
 
-Configuration file defines what skills and plugins and going to get installed in you two global directories:
+What `bin/config` does:
+
+- **Exits 0 and changes nothing** when `~/.local/config/agentilda-configuration.yml` or `~/.agentilda-configuration.yml` already exists.
+- Otherwise **creates `~/.local/config/agentilda-configuration.yml`**, copied from the checkout's `configuration.yml` when there is one (so the list you already install carries over), and from [`configuration.example.yml`](https://github.com/kigster/agentilda-ai-setup/blob/main/configuration.example.yml) when there is not. The checkout's `configuration.yml` is left in place, but no longer read.
+- **Waits for a keypress** (no Enter needed; Ctrl-C aborts and keeps the new file), then opens the file: on macOS it opens the folder in Finder and the file in `$EDITOR`, or with `open` when `$EDITOR` is unset; elsewhere it uses `$EDITOR`, or opens the folder when `$EDITOR` is unset.
+- **Validates every save** with `scripts/install-sources check`, and reopens the file until it passes. `check` catches YAML syntax errors as well as misspelled keys, unknown source types and bad filters: the same rules `install` enforces.
+- Without a terminal (cron, CI, an agent harness) it creates the file and stops, without opening an editor.
+- `--overwrite` is the only path that replaces an existing home file, and it always backs that file up first.
+
+The configuration file defines what skills and plugins are going to get installed in your two global directories:
 
 - `~/.agents` (receivies actual files — eg copies of skills, plugins, etc, does not depend on this repo checkout post install)
 - `~/.claude/` (receive symlinks into `~/.agents` to reduce duplication, although some claude-specific plugins are supported as well.)
@@ -47,13 +64,16 @@ Configuration file defines what skills and plugins and going to get installed in
 # pre-requisite
 gem install agentilda agent-lock
 
+# create and edit ~/.local/config/agentilda-configuration.yml
+bin/config
+
 # now install these skills and plugins
 bin/install
 ```
 
-### Using `direnv` 
+### Using `direnv`
 
-If you have direnv loaded, run `direnv allow .` and `bin` will be included in the `$PATH`. 
+If you have direnv loaded, run `direnv allow .` and `bin` will be included in the `$PATH`.
 
 ### Full Help Screen
 
@@ -150,17 +170,7 @@ The trade, deliberately: an edit to `src/skills/foo` reaches `~/.claude` only wh
 
 ### Configuring what gets installed
 
-`configuration.yml` is the file the installer reads. It is git-ignored and per machine, because which skills and which coding agents a machine should have is a property of that machine. A first run copies `configuration.example.yml` across and then stops, so you get to read it before it installs anything.
-
-The installer reads the first of these that exists, and only seeds the last one:
-
-1. `~/.local/config/agentilda-configuration.yml`
-1. `~/.agentilda-configuration.yml`
-1. `configuration.yml` in the checkout
-
-A file under `$HOME` outlives any one clone or worktree, so a fresh checkout installs the machine's list instead of seeding a new one. The run says `reading ~/…` whenever one of the two shadows the checkout's own file.
-
-`bin/config` makes the move: unless a home file already exists, it copies the checkout's `configuration.yml` (or the example) to `~/.local/config/agentilda-configuration.yml`, opens it for editing, and reopens it until `scripts/install-sources check` accepts it. `bin/config --overwrite` seeds it again, backing the old file up to a temp directory first.
+The configuration is per machine, because which skills and which coding agents a machine should have is a property of that machine. It lives in `~/.local/config/agentilda-configuration.yml`, which `bin/config` creates (see [Customizing Configuration](#customizing-configuration) for the full lookup order). If you skip `bin/config` and no home file exists, a first `scripts/install-sources` run falls back to the old behaviour: it copies `configuration.example.yml` to a git-ignored `configuration.yml` in the checkout and stops, so you get to read it before it installs anything.
 
 It has two top-level keys. `agents:` names the coding agents themselves and the vendor's own install line for each:
 
@@ -216,21 +226,21 @@ ______________________________________________________________________
 
 ## What is in here
 
-| Path                        | What it is                                                                                                                         |
-| :-------------------------- | :--------------------------------------------------------------------------------------------------------------------------------- |
-| `config/AGENTS.md`          | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md`                                           |
-| `context/`                  | What every agent gets regardless, including about.md which you should update to be about you.                                      |
-| `src/skills/`               | Skills authored in this repo (committed); folded into `skills/` by `install-sources`                                               |
-| `src/commands/`             | Slash commands that wrap `agentilda` with the right guardrails baked in                                                            |
-| `skills/`                   | Claude skills, **generated**, one directory per skill, symlinked into `~/.claude/skills/`                                          |
-| `plugins/`                  | External plugin bundles (e.g. `pstack`), also generated, not committed                                                             |
-| `configuration.example.yml` | Committed template for the git-ignored `configuration.yml`, the list `scripts/install-sources` pulls `skills/` and `plugins/` from |
-| `bin/`                      | **Bash** executables. `setup` is a pure symlink reconciler                                                                         |
-| `scripts/`                  | **Ruby**: `install-sources`, which runs before there is a bundle to run it in                                                      |
-| `docs/`                     | Documentation for people rather than context for agents: runbooks, the coverage badge, usage notes                                 |
-|                             |                                                                                                                                    |
+| Path                        | What it is                                                                                                                                                           |
+| :-------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config/AGENTS.md`          | The instructions every agent reads. Symlinked to `~/AGENTS.md` and `~/.claude/CLAUDE.md`                                                                             |
+| `context/`                  | What every agent gets regardless, including about.md which you should update to be about you.                                                                        |
+| `src/skills/`               | Skills authored in this repo (committed); folded into `skills/` by `install-sources`                                                                                 |
+| `src/commands/`             | Slash commands that wrap `agentilda` with the right guardrails baked in                                                                                              |
+| `skills/`                   | Claude skills, **generated**, one directory per skill, symlinked into `~/.claude/skills/`                                                                            |
+| `plugins/`                  | External plugin bundles (e.g. `pstack`), also generated, not committed                                                                                               |
+| `configuration.example.yml` | Committed template that `bin/config` copies to `~/.local/config/agentilda-configuration.yml`, the list `scripts/install-sources` pulls `skills/` and `plugins/` from |
+| `bin/`                      | **Bash** executables, plus `bin/config` (plain Ruby). `setup` is a pure symlink reconciler                                                                           |
+| `scripts/`                  | **Ruby**: `install-sources`, which runs before there is a bundle to run it in                                                                                        |
+| `docs/`                     | Documentation for people rather than context for agents: runbooks, the coverage badge, usage notes                                                                   |
+|                             |                                                                                                                                                                      |
 
-Executables sit in three places, by what each needs in order to run. `bin/` holds shell, `scripts/` holds the one Ruby executable that must work before a bundle exists.
+Executables sit in three places, by what each needs in order to run. `bin/` holds shell, except `bin/config`, which is standard-library Ruby so it runs before a bundle exists; `scripts/` holds `install-sources`, the Ruby executable that must work before a bundle exists.
 
 `skills/` and `plugins/` are **not committed**. Both are entirely regenerable from `configuration.yml` plus `src/skills/` (which is committed, since it's this repo's own work). A skill that went stale with no way to tell where it came from was the exact problem `install-sources` exists to solve:
 
