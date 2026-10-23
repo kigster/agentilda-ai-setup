@@ -4,10 +4,10 @@ source "https://rubygems.org"
 
 gem "rake"
 gem "yard"
+gem "colored2"
+gem "dupervisor"
 
 group :development do
-  gem "colored2"
-  gem "irb"
   gem "standard" # standard is rubocop with the arguing removed
 end
 
