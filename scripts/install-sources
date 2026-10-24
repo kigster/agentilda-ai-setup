@@ -9,7 +9,9 @@
 #   scripts/install-sources --no-executables  # run no installer: no agents, executables or commands
 #   scripts/install-sources list         # what's configured, and what's installed
 #
-# Reads configuration.yml, which a first run seeds from the committed
+# Reads the first of ~/.local/config/agentilda-configuration.yml,
+# ~/.agentilda-configuration.yml and configuration.yml that exists; with none
+# of them, a first run seeds configuration.yml from the committed
 # configuration.example.yml beside it. Each source is cloned into `.sources/<name>`
 # (gitignored — kept only so a plain `install-sources` can `git pull` instead
 # of re-cloning) and installed into `skills/` or `plugins/` — both also
@@ -49,9 +51,20 @@ require "shellwords"
 # disagreed about the spelling would each read the other's links as stale.
 ROOT = File.realpath(ENV.fetch("INSTALL_SOURCES_ROOT") { File.expand_path("..", __dir__) })
 # What the installer reads, and the committed file it is seeded from. The
-# read one is per-machine and git-ignored: which skills and which agents a
-# machine should have is a property of that machine, not of this repo.
-CONFIG_FILE = File.join(ROOT, "configuration.yml")
+# read one is per-machine: which skills and which agents a machine should
+# have is a property of that machine, not of this repo.
+#
+# The first of these that exists wins. The two under $HOME outlive any one
+# checkout, so a fresh clone or a worktree picks up the machine's list rather
+# than seeding a new one; the git-ignored file in the checkout is the
+# fallback, and the only one a first run seeds.
+LOCAL_CONFIG_FILE = File.join(ROOT, "configuration.yml")
+CONFIG_CANDIDATES = [
+  File.join(Dir.home, ".local", "config", "agentilda-configuration.yml"),
+  File.join(Dir.home, ".agentilda-configuration.yml"),
+  LOCAL_CONFIG_FILE
+].freeze
+CONFIG_FILE = CONFIG_CANDIDATES.find { |f| File.file?(f) } || LOCAL_CONFIG_FILE
 EXAMPLE_FILE = File.join(ROOT, "configuration.example.yml")
 STAGING_DIR = File.join(ROOT, ".sources")
 SKILLS_DIR = File.join(ROOT, "skills")
@@ -450,6 +463,10 @@ def config
   return {} unless File.file?(CONFIG_FILE)
 
   (YAML.safe_load_file(CONFIG_FILE) || {}).tap do |c|
+    # Half an edit is often a bare scalar or a list, and `keys` on either
+    # would end the run on a NoMethodError rather than say what is wrong.
+    raise ConfigError, "the top level is a #{c.class.name.downcase}, not a mapping of keys" unless c.is_a?(Hash)
+
     reject_unknown_keys(c, TOP_LEVEL_KEYS, "keys nothing reads at the top level")
 
     # Both blocks, whichever one this run is about. A misspelled key is wrong
@@ -476,10 +493,16 @@ def load_sources = (config["sources"] || []).map { |h| Source.from_yaml(h) }
 #
 # @return [Boolean] whether the caller should go on and install
 def ensure_configuration
-  return true if File.file?(CONFIG_FILE)
+  if File.file?(CONFIG_FILE)
+    # Said only when it is not the checkout's own file: one under $HOME
+    # quietly shadows a configuration.yml sitting right there in the tree.
+    note("reading #{config_label}") unless CONFIG_FILE == LOCAL_CONFIG_FILE
+    return true
+  end
 
   unless File.file?(EXAMPLE_FILE)
-    bad("no configuration.yml, and no configuration.example.yml to seed one from")
+    bad("no configuration (#{CONFIG_CANDIDATES.map { |f| config_label(f) }.join(", ")}), " \
+      "and no configuration.example.yml to seed one from")
     exit 78
   end
 
@@ -499,9 +522,17 @@ def ensure_configuration
     note("opening it in #{editor} — run again when you are happy with it")
     system(*Shellwords.split(editor), CONFIG_FILE)
   else
-    note("edit #{CONFIG_FILE.sub("#{ROOT}/", "")} and run again")
+    note("edit #{config_label} and run again")
   end
   false
+end
+
+# @param path [String] one of CONFIG_CANDIDATES
+# @return [String] relative to the checkout when inside it, `~/…` when under $HOME
+def config_label(path = CONFIG_FILE)
+  return path.delete_prefix("#{ROOT}/") if path.start_with?("#{ROOT}/")
+
+  path.sub(/\A#{Regexp.escape(Dir.home)}/, "~")
 end
 
 def load_manifest
@@ -1035,7 +1066,7 @@ def cmd_list
 
   say(paint("Configured sources", 1))
   if sources.empty?
-    note("none — add one to #{CONFIG_FILE.sub("#{ROOT}/", "")}")
+    note("none — add one to #{config_label}")
   else
     sources.each do |s|
       say("  #{s.name.ljust(14)} #{s.type.ljust(7)} #{origin_of(s)}  [#{state_of(s)}]")
@@ -1340,7 +1371,7 @@ def cmd_tools(kind, args, dry_run:, force:, executables: true)
   tools = load_tools(kind)
   if tools.empty?
     say("")
-    note("no #{kind}: block in #{CONFIG_FILE.sub("#{ROOT}/", "")}")
+    note("no #{kind}: block in #{config_label}")
     return
   end
 
@@ -1358,6 +1389,20 @@ end
 
 # ------------------------------------------------------------------- cli --
 
+# Everything `install` would refuse, refused without touching the disk:
+# `bin/config` runs this after every edit, and seeding here would turn a
+# missing file into a valid one.
+def cmd_check
+  unless File.file?(CONFIG_FILE)
+    bad("no #{config_label} to check")
+    exit 78
+  end
+
+  load_sources
+  TOOL_KINDS.each { |kind| load_tools(kind) }
+  ok("#{config_label} is valid")
+end
+
 def usage
   puts <<~USAGE
     install-sources — pull external skills and plugins into this repo
@@ -1367,6 +1412,7 @@ def usage
       scripts/install-sources -f           wipe .sources and re-clone everything
       scripts/install-sources --no-executables  run no installer at all (see below)
       scripts/install-sources list         what's configured, and what's installed
+      scripts/install-sources check        validate the configuration, install nothing
       scripts/install-sources agents       which coding agents are configured, and installed
       scripts/install-sources agents install [name...]        install the ones that are missing
       scripts/install-sources agents update [name...]         run each entry's update: line
@@ -1421,13 +1467,14 @@ begin
   case verb
   when "install" then cmd_install(force:, dry_run:, executables:) if ensure_configuration
   when "list" then cmd_list if ensure_configuration
+  when "check" then cmd_check
   when "agents", "executables" then cmd_tools(verb, args, dry_run:, force:, executables:) if ensure_configuration
   else
     out("install-sources: unknown command #{verb.inspect}\n")
     usage
     exit 64
   end
-rescue ConfigError => e
-  bad("configuration.yml: #{e.message}")
+rescue ConfigError, Psych::SyntaxError => e
+  bad("#{config_label}: #{e.message}")
   exit 78
 end

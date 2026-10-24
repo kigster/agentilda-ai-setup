@@ -1,0 +1,205 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# config — give this machine a configuration under $HOME, then edit it.
+#
+#   bin/config               seed ~/.local/config/agentilda-configuration.yml unless one exists
+#   bin/config --overwrite   seed it again, backing the current one up first
+#
+# scripts/install-sources reads the first of ~/.local/config/agentilda-configuration.yml,
+# ~/.agentilda-configuration.yml and the checkout's configuration.yml. A file
+# under $HOME outlives any one clone or worktree, which is the point of
+# moving it there. The seed is the checkout's configuration.yml when there is
+# one, so the list a machine already installs carries over, and
+# configuration.example.yml otherwise.
+#
+# Ruby, unlike the rest of bin/, because it shares install-sources' rule of
+# loading nothing outside the standard library: it runs before `bundle
+# install` has. Validation is install-sources' own `check`, so an edit is
+# judged by the same code that will later read it.
+#
+# © 2026 Konstantin Gredeskoul
+
+require "fileutils"
+require "io/console"
+require "open3"
+require "rbconfig"
+require "shellwords"
+require "tmpdir"
+
+# Overridable for the suite, exactly as install-sources' is.
+ROOT = File.realpath(ENV.fetch("INSTALL_SOURCES_ROOT") { File.expand_path("..", __dir__) })
+CONFIG_DIR = File.join(Dir.home, ".local", "config")
+CONFIG_FILE = File.join(CONFIG_DIR, "agentilda-configuration.yml")
+HOME_FILES = [CONFIG_FILE, File.join(Dir.home, ".agentilda-configuration.yml")].freeze
+LOCAL_FILE = File.join(ROOT, "configuration.yml")
+EXAMPLE_FILE = File.join(ROOT, "configuration.example.yml")
+# Beside this script rather than under ROOT: the suite points ROOT at a tree
+# that holds a configuration and nothing else.
+CHECKER = File.expand_path("../scripts/install-sources", __dir__)
+
+COLOR = $stderr.tty? && !ENV.key?("NO_COLOR")
+def paint(text, code) = COLOR ? "\e[#{code}m#{text}\e[0m" : text.to_s
+
+# standard:disable Style/StderrPuts -- Kernel#warn is a no-op under RUBYOPT=-W0
+def out(msg = "") = $stderr.puts(msg)
+# standard:enable Style/StderrPuts
+def ok(msg) = out("  #{paint("✓", 32)} #{msg}")
+def note(msg) = out("  #{paint("·", 2)} #{msg}")
+def bad(msg) = out("  #{paint("✗", 31)} #{msg}")
+
+# @param path [String] absolute
+# @return [String] the same path with $HOME spelled `~`
+def tilde(path) = path.sub(/\A#{Regexp.escape(Dir.home)}/, "~")
+
+# @param path [String] the folder to show in the desktop's file manager
+# @return [Boolean, nil] what `system` said
+def open_folder(path)
+  os = RbConfig::CONFIG["host_os"]
+
+  case os
+  when /mswin|msys|mingw|cygwin|bccwin|wince|emc/
+    system("explorer", path.tr("/", "\\"))
+  when /darwin/
+    system("open", path)
+  when /linux|bsd/
+    system("xdg-open", path)
+  else
+    raise "Unsupported operating system: #{os}"
+  end
+end
+
+def darwin? = RbConfig::CONFIG["host_os"].match?(/darwin/)
+
+# One keypress, no Enter. Raw mode turns Ctrl-C into a character rather than
+# a signal, so it is checked for by hand.
+#
+# @param prompt [String]
+# @return [void]
+def wait_for_key(prompt)
+  $stderr.print paint(prompt, 93)
+  key = $stdin.getch
+  out
+  raise Interrupt if key == "\u0003"
+end
+
+# @return [void]
+def seed
+  source = File.file?(LOCAL_FILE) ? LOCAL_FILE : EXAMPLE_FILE
+  unless File.file?(source)
+    bad("no configuration.yml or configuration.example.yml in #{ROOT} to seed from")
+    exit 78
+  end
+
+  if File.file?(CONFIG_FILE)
+    backup = File.join(Dir.mktmpdir("agentilda-configuration-"), File.basename(CONFIG_FILE))
+    FileUtils.cp(CONFIG_FILE, backup)
+    ok("backed up #{tilde(CONFIG_FILE)} to #{backup}")
+  end
+
+  FileUtils.mkdir_p(CONFIG_DIR)
+  FileUtils.cp(source, CONFIG_FILE)
+  ok("copied #{source.delete_prefix("#{ROOT}/")} to #{tilde(CONFIG_FILE)}")
+end
+
+# @return [void]
+def announce
+  out
+  out(paint("Your configuration file has moved to #{tilde(CONFIG_FILE)}.", 1))
+  out("From now on it defines what scripts/install-sources and bin/install put on this machine.")
+  if File.file?(LOCAL_FILE)
+    out("#{LOCAL_FILE.delete_prefix("#{ROOT}/")} in the checkout is no longer read; it is left where it was.")
+  end
+  out
+  out(paint(<<~MSG, 93).sub("bin/install", paint("bin/install", 32) + (COLOR ? "\e[93m" : "")))
+    Please edit the file and update it with skills, commands, and coding agents you want on this system.
+    The bin/install command will not remove anything from your ~/.agents or ~/.claude, but will
+    install what you've defined into ~/.agents folder, symlinking all the skills from ~/.claude.
+
+    Next you have a chance to edit the config file.
+  MSG
+end
+
+# One pass of the editor, chosen per platform. `open` and `xdg-open` return
+# before anything is saved, so those branches wait for a key instead.
+#
+# @param first [Boolean] whether to show the folder: once is enough
+# @return [void]
+def edit(first:)
+  editor = ENV["EDITOR"].to_s.strip
+  if darwin?
+    open_folder(CONFIG_DIR) if first
+    if editor.empty?
+      system("open", CONFIG_FILE)
+      wait_for_key("Press any key once you have saved it... (or Ctrl-C to abort) ")
+    else
+      system(*Shellwords.split(editor), CONFIG_FILE)
+    end
+  elsif !editor.empty?
+    system(*Shellwords.split(editor), CONFIG_FILE)
+  else
+    open_folder(CONFIG_DIR) if first
+    note("open #{tilde(CONFIG_FILE)} in your editor")
+    wait_for_key("Press any key once you have saved it... (or Ctrl-C to abort) ")
+  end
+end
+
+# @return [Boolean] whether install-sources accepts the file
+def valid?
+  report, status = Open3.capture2e(CHECKER, "check")
+  out(report)
+  status.success?
+end
+
+def usage
+  puts <<~USAGE
+    config — give this machine a configuration under $HOME, then edit it
+
+      bin/config               seed #{tilde(CONFIG_FILE)} unless it or ~/.agentilda-configuration.yml exists
+      bin/config --overwrite   seed it again, backing the current one up to a temp directory first
+  USAGE
+end
+
+args = ARGV.dup
+if args.delete("-h") || args.delete("--help")
+  usage
+  exit 0
+end
+overwrite = !!args.delete("--overwrite")
+unless args.empty?
+  out("config: unknown argument #{args.first.inspect}\n")
+  usage
+  exit 64
+end
+
+existing = HOME_FILES.find { |f| File.file?(f) }
+if existing && !overwrite
+  ok("#{tilde(existing)} is already in place")
+  exit 0
+end
+
+seed
+announce
+
+# Nobody to press a key for, as under cron or an agent harness: the file is
+# in place, and editing it is left to whoever reads this.
+unless $stdin.tty?
+  note("no terminal, so no editor: edit #{tilde(CONFIG_FILE)} and run scripts/install-sources check")
+  exit 0
+end
+
+begin
+  wait_for_key("Press any key to continue... (or Ctrl-C to abort) ")
+  first = true
+  loop do
+    edit(first:)
+    first = false
+    break if valid?
+
+    bad("#{tilde(CONFIG_FILE)} is not valid yet; opening it again")
+  end
+rescue Interrupt
+  out
+  note("aborted; #{tilde(CONFIG_FILE)} stays as it is, and scripts/install-sources check will validate it")
+  exit 130
+end
