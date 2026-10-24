@@ -1,6 +1,6 @@
 ---
 name: pr-review-respond
-description: Answer review comments on your open pull requests, from humans or bots (Copilot, CodeRabbit), fixing what is right and rebutting what is not, then wait for reviews still in flight. Use when asked to respond to, address or handle PR review comments or feedback, or when your pull requests are being reviewed while you work.
+description: Respond to a pull request review. Answer review comments on your open pull requests, from humans or bots (Copilot, CodeRabbit), fixing what is right and rebutting what is not, then wait for reviews still in flight. Use when asked to respond to, address or handle PR review comments or feedback, or when your pull requests are being reviewed while you work. 
 ---
 
 # Respond to pull request reviews
@@ -113,3 +113,7 @@ It polls every 60 seconds and blocks for up to 5 minutes, so give the command at
 ## 4. Report
 
 One line per pull request: its number, what you fixed (with SHAs), what you rebutted, what you answered, what you skipped and why, and any still `unreviewed` when you stopped.
+
+## 5. Github Labels
+
+If the PR was labelled as "review-rejected", upon fixing all the issues with high confidence, remove this label from the PR and attach a different label, creating it if needed: "review-addressed" (with the background color of #A2fF02).

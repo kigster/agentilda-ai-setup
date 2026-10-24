@@ -126,6 +126,8 @@ agents:
   - name: cursor
     installer: curl https://cursor.com/install -fsS | bash
     exists: command -V cursor >/dev/null
+  - name: antigravity
+    installer: curl -fsSL https://antigravity.google/cli/install.sh | bash
 
 # Everything else this machine should have on PATH. Same shape as `agents:`,
 # same `exists:`/`installer:` rules, installed straight after it and before
@@ -150,6 +152,9 @@ executables:
     installer: curl -fsSL https://bt.dev/cli/install.sh | bash
     exists: command -V bt >/dev/null
     update: bt update && bt --version
+
+  - name: lavish
+    installer: npx skills add kunchenguid/lavish-axi --skill lavish; npm install -g lavish-axi; hash -r && lavish-axi setup plugin
 
   - name: typesafe-claude
     installer: claude plugin marketplace add typesafe-ai/skills && claude plugin install typesafe@typesafe-ai
@@ -241,7 +246,6 @@ sources:
     type: skills
     repo: https://github.com/vercel-labs/agent-skills.git
     path: skills
-    include_skills: /\Aweb-design-guidelines\z/
 
   # 72 skills, one per test framework or API concern, so this is all filter.
   #

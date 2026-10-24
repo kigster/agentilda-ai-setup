@@ -2,12 +2,12 @@
 name: print-plan-folders
 description: "Print the status of all folders under .plans and their corresponding PRs"
 allowed-tools: [
-  "Bash(spec-plan-build *)",
+  "Bash(tilda *)",
   "Bash(/usr/bin/find . -type d -and \( -name ".plans" -or -name "plans" \) -print )",
   "Bash(grep -v worktree)",
   "Bash(head -1)",
-  "Bash(command -V spec-plan-build >/dev/null || { export PATH=\"${HOME}/.agents/scripts:${HOME}/.claude/scripts:${PATH}\"; })",
-  "Bash(command -V spec-plan-build >/dev/null || { echo \"spec-plan-build is not in the PATH. Please ensure it is installed and available.\"; exit 1; })"
+  "Bash(command -V tilda >/dev/null || { export PATH=\"${HOME}/.agents/scripts:${HOME}/.claude/scripts:${PATH}\"; })",
+  "Bash(command -V tilda >/dev/null || { echo \"tilda is not in the PATH. Please ensure it is installed and available.\"; exit 1; })"
 ]
 ---
 
@@ -15,7 +15,7 @@ allowed-tools: [
 
 > [!NOTE]
 >
-> This skill is part of the **Spec → Plan → Build** workflow. It is used to print the status of all folders under `.plans` and their corresponding PRs.
+> This skill is part of the **Spec → Plan → Build** workflow provided by the Ruby Gem `agentilda` (or `tilda` for short). It is used to print the status of all folders under `.plans` and their corresponding PRs.
 
 ## When to use
 
@@ -23,7 +23,7 @@ allowed-tools: [
 
 ## The tool
 
-A Ruby script `spec-plan-build` must live in the global `PATH`. Within `.agents` with `direnv` enabled it will be added to the `$PATH`, but reliably the LLM should append to the shell initializer a statement that adds the path of the script: `${HOME}/.agents/scripts` (and `bin` as well) if you need it.
+A Ruby script `tilda` must live in the global `PATH`. Within `.agents` with `direnv` enabled it will be added to the `$PATH`, but reliably the LLM should append to the shell initializer a statement that adds the path of the script: `${HOME}/.agents/scripts` (and `bin` as well) if you need it.
 
 Therefore, it's critical that you check if this script is available in the `$PATH`, otherwise you need to:
 
@@ -31,7 +31,7 @@ Therefore, it's critical that you check if this script is available in the `$PAT
 2. Add the `${HOME}/.agents/scripts` and `${HOME}/.agents/bin` to the `$PATH` in their dot file (either `~/.zshrc` or `~/.bashrc` for those two shells)
 3. Source the modified shell initialization file
 4. You may need to execute `hash -r`
-5. Ensure that the script is now in the path by running `command -v spec-plan-build`
+5. Ensure that the script is now in the path by running `command -v tilda`
 
 Now we are ready to perform one of several requests this skill provides. 
 
@@ -40,22 +40,22 @@ Now we are ready to perform one of several requests this skill provides.
 First, cd to the root of the project tree and run the following bash script: 
 
 ```bash
-command -V spec-plan-build >/dev/null || { 
+command -V tilda >/dev/null || { 
   export PATH="${HOME}/.agents/scripts:${HOME}/.claude/scripts:${PATH}"
 }
-command -V spec-plan-build >/dev/null || {
-  echo "spec-plan-build is not in the PATH. Please ensure it is installed and available."
+command -V tilda >/dev/null || {
+  echo "tilda is not in the PATH. Please ensure it is installed and available."
   exit 1
 }
 if [[ -d .plans ]]; then
-  spec-plan-build list-plans                     # every plan, its state, its PRs
+  tilda list-plans                     # every plan, its state, its PRs
 else
   dir=`/usr/bin/find . -type d -and \( -name ".plans" -or -name "plans" \) -print \
       | grep -v worktree \
       | head -1 || \
       { echo "No .plans folder found. Please ensure you are in the root of the project tree."; exit 1 }`
   if [[ -n ${dir} ]]; then
-    cd "${dir}" && spec-plan-build list-plans
+    cd "${dir}" && tilda list-plans
   else
     echo "No .plans folder found. Please ensure you are in the root of the project tree."
   fi
@@ -64,5 +64,5 @@ fi
 
 ## Reference files
 
-- [`${HOME}/.agents/context/feature-building/spec-plan-build.md`](${HOME}/.agents/context/feature-building/spec-plan-build.md) — the
+- [`${HOME}/.agents/context/feature-building/tilda.md`](${HOME}/.agents/context/feature-building/tilda.md) — the
   specification structure.

@@ -49,7 +49,7 @@ config:
   layout: elk
   theme: forest
 ---
-flowchart TB
+flowchart LR
     A[PostgreSQL work starts] --> B[postgres-schema: read references/core.md]
     B --> C{Class stated in AGENTS.md or CLAUDE.md?}
     C -->|No| D[Ask the developers, then record it there]
